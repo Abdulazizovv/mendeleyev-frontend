@@ -14,6 +14,7 @@ import { PhoneInput } from "@/components/auth/PhoneInput";
 import { OTPInput } from "@/components/auth/OTPInput";
 import { useAuth } from "@/lib/hooks";
 import { authApi } from "@/lib/api";
+import { roleToPath } from "@/lib/utils/roleMapping";
 import { parseBackendError, SUCCESS_MESSAGES } from "@/lib/error-messages";
 import { translateBranchType, translateRole } from "@/lib/translations";
 import { toast } from "sonner";
@@ -209,7 +210,11 @@ export default function LoginPage() {
         
         if (result.success) {
           toast.success(SUCCESS_MESSAGES.login_success);
-          router.push("/dashboard");
+          
+          // Redirect based on role
+          const meData = await authApi.getMe();
+          const role = meData.current_branch?.role || "student";
+          router.push(`/${roleToPath(role)}`);
         }
       }
     } catch (error: any) {
@@ -233,7 +238,11 @@ export default function LoginPage() {
 
       if (result.success) {
         toast.success(SUCCESS_MESSAGES.login_success);
-        router.push("/dashboard");
+        
+        // Redirect based on role
+        const meData = await authApi.getMe();
+        const role = meData.current_branch?.role || "student";
+        router.push(`/${roleToPath(role)}`);
       }
     } catch (error: any) {
       const errorMessage = parseBackendError(error);

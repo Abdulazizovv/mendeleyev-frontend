@@ -1,0 +1,324 @@
+/**
+ * School Module Types - Backend API ga mos ravishda
+ */
+
+// Pagination Types
+export interface PaginatedResponse<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
+// Academic Year Types
+export interface Quarter {
+  id: string;
+  name: string;
+  number: number;
+  start_date: string;
+  end_date: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AcademicYear {
+  id: string;
+  branch: string;
+  branch_name: string;
+  name: string;
+  start_date: string;
+  end_date: string;
+  is_active: boolean;
+  quarters: Quarter[];
+  created_at: string;
+  updated_at: string;
+}
+
+// Class Types
+export interface Class {
+  id: string;
+  branch: string;
+  branch_name: string;
+  academic_year: string;
+  academic_year_name: string;
+  name: string;
+  grade_level: number;
+  section?: string;
+  class_teacher?: string;
+  class_teacher_name?: string;
+  max_students: number;
+  current_students_count: number;
+  can_add_student: boolean;
+  room?: string;
+  room_name?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ClassStudent {
+  id: string;
+  class_obj: string;
+  membership: string;
+  membership_id: string;
+  student_id: string;
+  student_name: string;
+  student_phone: string;
+  enrollment_date: string;
+  is_active: boolean;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// Subject Types
+export interface Subject {
+  id: string;
+  branch: string;
+  branch_name: string;
+  name: string;
+  code?: string;
+  description?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ClassSubject {
+  id: string;
+  class_obj: string;
+  class_name: string;
+  subject: string;
+  subject_name: string;
+  subject_code?: string;
+  teacher?: string;
+  teacher_name?: string;
+  hours_per_week: number;
+  quarter?: string;
+  quarter_name?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// Room Types
+export type RoomType = "classroom" | "lab" | "library" | "gym" | "office" | "auditorium" | "other";
+
+export interface Building {
+  id: string;
+  branch: string;
+  branch_name: string;
+  name: string;
+  address?: string;
+  floors: number;
+  description?: string;
+  is_active: boolean;
+  rooms_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Room {
+  id: string;
+  branch: string;
+  branch_name: string;
+  building: string;
+  building_name: string;
+  name: string;
+  room_type: RoomType;
+  room_type_display: string;
+  floor: number;
+  capacity: number;
+  equipment?: Record<string, any>;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// Dashboard Types - Teacher
+export interface TeacherClass {
+  id: string;
+  branch: string;
+  branch_name: string;
+  academic_year: string;
+  academic_year_name: string;
+  name: string;
+  grade_level: number;
+  section?: string;
+  max_students: number;
+  current_students_count: number;
+  subjects_count?: number;
+  room?: string;
+  room_name?: string;
+  is_active: boolean;
+}
+
+export interface TeacherSubject {
+  id: string;
+  subject: string;
+  subject_name: string;
+  subject_code?: string;
+  class_obj: string;
+  class_id: string;
+  class_name: string;
+  academic_year_name: string;
+  hours_per_week: number;
+  quarter?: string;
+  quarter_name?: string;
+  students_count: number;
+  is_active: boolean;
+}
+
+export interface TeacherStudent {
+  id: string;
+  student_id: string;
+  student_name: string;
+  student_phone: string;
+  class_obj: string;
+  class_id: string;
+  class_name: string;
+  academic_year_name: string;
+  enrollment_date: string;
+  is_active: boolean;
+}
+
+// Dashboard Types - Student
+export interface StudentClassSubject {
+  id: string;
+  subject_id: string;
+  subject_name: string;
+  subject_code?: string;
+  teacher_id?: string;
+  teacher_name?: string;
+  hours_per_week: number;
+  quarter_id?: string;
+  quarter_name?: string;
+}
+
+export interface StudentClass {
+  id: string;
+  branch: string;
+  branch_name: string;
+  academic_year: string;
+  academic_year_name: string;
+  name: string;
+  grade_level: number;
+  section?: string;
+  class_teacher?: string;
+  class_teacher_name?: string;
+  max_students: number;
+  students_count: number;
+  room?: string;
+  room_name?: string;
+  subjects: StudentClassSubject[];
+  is_active: boolean;
+}
+
+export interface StudentSubject {
+  id: string;
+  subject: string;
+  subject_name: string;
+  subject_code?: string;
+  teacher?: string;
+  teacher_id?: string;
+  teacher_name?: string;
+  hours_per_week: number;
+  quarter?: string;
+  quarter_name?: string;
+  is_active: boolean;
+}
+
+// Student Types
+export interface Student {
+  id: string;
+  personal_number: string | null;
+  user_id: string;
+  phone_number: string;
+  first_name: string;
+  last_name: string;
+  middle_name: string;
+  full_name: string;
+  email: string;
+  branch_id: string;
+  branch_name: string;
+  gender: "male" | "female";
+  date_of_birth: string;
+  address: string;
+  birth_certificate: string | null;
+  additional_fields: Record<string, any>;
+  current_class: {
+    id: string;
+    name: string;
+    academic_year: string;
+  } | null;
+  relatives_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// Request Types
+export interface CreateAcademicYearRequest {
+  name: string;
+  start_date: string;
+  end_date: string;
+  is_active: boolean;
+}
+
+export interface CreateQuarterRequest {
+  name: string;
+  number: number;
+  start_date: string;
+  end_date: string;
+  is_active: boolean;
+}
+
+export interface CreateClassRequest {
+  academic_year: string;
+  name: string;
+  grade_level: number;
+  section?: string;
+  class_teacher?: string;
+  max_students: number;
+  room?: string;
+  is_active: boolean;
+}
+
+export interface AddStudentToClassRequest {
+  membership: string;
+  is_active: boolean;
+  notes?: string;
+}
+
+export interface CreateSubjectRequest {
+  name: string;
+  code?: string;
+  description?: string;
+  is_active: boolean;
+}
+
+export interface AddSubjectToClassRequest {
+  subject: string;
+  teacher?: string;
+  hours_per_week: number;
+  quarter?: string;
+  is_active: boolean;
+}
+
+export interface CreateBuildingRequest {
+  name: string;
+  address?: string;
+  floors: number;
+  description?: string;
+  is_active: boolean;
+}
+
+export interface CreateRoomRequest {
+  building: string;
+  name: string;
+  room_type: RoomType;
+  floor: number;
+  capacity: number;
+  equipment?: Record<string, any>;
+  is_active: boolean;
+}

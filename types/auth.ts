@@ -29,6 +29,7 @@ export interface User {
   email?: string;
   is_staff: boolean;
   date_joined: string;
+  avatar?: string;
 }
 
 export interface Profile {
