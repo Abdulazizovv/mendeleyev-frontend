@@ -393,3 +393,4 @@ const filterClasses = async (gradeLevel, isActive) => {
 - Paginatsiya default: 20 element, max: 100 element
 - Barcha API-lar DRF ning built-in filtering, search va ordering funksiyalaridan foydalanadi
 
+

@@ -20,6 +20,11 @@ export type {
 	StudentClass,
 	StudentSubject,
 	Student,
+	StudentProfileSummary,
+	StudentPhoneCheckBranchData,
+	StudentPhoneCheckResponse,
+	StudentRelative,
+	RelationshipType,
 	CreateAcademicYearRequest,
 	CreateQuarterRequest,
 	CreateClassRequest,
@@ -28,4 +33,6 @@ export type {
 	AddSubjectToClassRequest,
 	CreateBuildingRequest,
 	CreateRoomRequest,
+	CreateStudentRequest,
+	CreateStudentRelativeRequest,
 } from "./school";

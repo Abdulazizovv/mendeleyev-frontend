@@ -7,11 +7,18 @@ export { branchApi } from "./branch";
 export type { Role, MembershipDetail, BalanceUpdateRequest, RoleRequest, BranchStatistics } from "./branch";
 export type { 
   Student, 
+  StudentProfileSummary,
+  StudentPhoneCheckBranchData,
+  StudentPhoneCheckResponse,
+  StudentRelative,
   PaginatedResponse, 
   Class, 
   AcademicYear,
   Quarter,
   Subject,
   Room,
-  Building
+  Building,
+  CreateStudentRequest,
+  CreateStudentRelativeRequest,
+  RelationshipType
 } from "@/types/school";

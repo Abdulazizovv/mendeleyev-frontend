@@ -242,7 +242,9 @@ export interface Student {
   email: string;
   branch_id: string;
   branch_name: string;
-  gender: "male" | "female";
+  gender: "male" | "female" | "other" | "unspecified";
+  status: "active" | "archived" | "suspended" | "graduated" | "transferred";
+  status_display?: string;
   date_of_birth: string;
   address: string;
   birth_certificate: string | null;
@@ -253,8 +255,101 @@ export interface Student {
     academic_year: string;
   } | null;
   relatives_count: number;
+  balance?: {
+    id: string;
+    balance: number;
+    notes?: string;
+    updated_at?: string;
+  };
+  transactions_summary?: {
+    total_income: number;
+    total_expense: number;
+    net_balance: number;
+    transactions_count: number;
+  };
+  payments_summary?: {
+    total_payments: number;
+    payments_count: number;
+    last_payment?: {
+      id: string;
+      amount: number;
+      date: string;
+      period: string;
+    };
+  };
   created_at: string;
   updated_at: string;
+}
+
+// Relative Types
+export type RelationshipType = 
+  | "father" 
+  | "mother" 
+  | "brother" 
+  | "sister" 
+  | "grandfather" 
+  | "grandmother" 
+  | "uncle" 
+  | "aunt" 
+  | "guardian" 
+  | "other";
+
+export interface StudentRelative {
+  id: string;
+  student_profile: string;
+  relationship_type: RelationshipType;
+  relationship_type_display: string;
+  first_name: string;
+  last_name: string;
+  middle_name?: string;
+  full_name: string;
+  phone_number?: string;
+  email?: string;
+  gender?: "male" | "female" | "other" | "unspecified";
+  date_of_birth?: string;
+  address?: string;
+  workplace?: string;
+  position?: string;
+  passport_number?: string;
+  photo?: string | null;
+  is_primary_contact: boolean;
+  is_guardian: boolean;
+  additional_info?: Record<string, any>;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StudentProfileSummary {
+  id: string;
+  personal_number?: string | null;
+  full_name: string;
+  status?: Student["status"];
+  status_display?: string;
+  gender?: Student["gender"];
+  date_of_birth?: string | null;
+  phone_number?: string;
+  email?: string | null;
+  first_name?: string;
+  last_name?: string;
+  middle_name?: string;
+}
+
+export interface StudentPhoneCheckBranchData {
+  branch_id: string;
+  branch_name: string;
+  role: string;
+  role_display: string;
+  is_active: boolean;
+  created_at: string;
+  student_profile?: StudentProfileSummary | null;
+}
+
+export interface StudentPhoneCheckResponse {
+  exists_in_branch: boolean;
+  exists_globally: boolean;
+  branch_data: StudentPhoneCheckBranchData | null;
+  all_branches_data: StudentPhoneCheckBranchData[];
 }
 
 // Request Types
@@ -321,4 +416,41 @@ export interface CreateRoomRequest {
   capacity: number;
   equipment?: Record<string, any>;
   is_active: boolean;
+}
+
+// Student Request Types
+export interface CreateStudentRelativeRequest {
+  relationship_type: RelationshipType;
+  first_name: string;
+  last_name: string;
+  middle_name?: string;
+  phone_number?: string;
+  email?: string;
+  gender?: "male" | "female" | "other" | "unspecified";
+  date_of_birth?: string;
+  address?: string;
+  workplace?: string;
+  position?: string;
+  passport_number?: string;
+  is_primary_contact?: boolean;
+  is_guardian?: boolean;
+  additional_info?: Record<string, any>;
+  notes?: string;
+}
+
+export interface CreateStudentRequest {
+  phone_number: string;
+  first_name: string;
+  last_name?: string;
+  middle_name?: string;
+  email?: string;
+  password?: string;
+  gender?: "male" | "female" | "other" | "unspecified";
+  status?: "active" | "archived" | "suspended" | "graduated" | "transferred";
+  date_of_birth?: string;
+  address?: string;
+  birth_certificate?: string | null;
+  additional_fields?: Record<string, any>;
+  class_id?: string;
+  relatives?: CreateStudentRelativeRequest[];
 }

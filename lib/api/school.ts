@@ -14,6 +14,8 @@ import type {
   StudentClass,
   StudentSubject,
   Student,
+  StudentRelative,
+  StudentPhoneCheckResponse,
   PaginatedResponse,
   CreateAcademicYearRequest,
   CreateQuarterRequest,
@@ -23,7 +25,19 @@ import type {
   AddSubjectToClassRequest,
   CreateBuildingRequest,
   CreateRoomRequest,
+  CreateStudentRequest,
+  CreateStudentRelativeRequest,
 } from "@/types";
+
+const unwrapResults = <T>(payload: T[] | PaginatedResponse<T>): T[] => {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+  if (payload && Array.isArray(payload.results)) {
+    return payload.results;
+  }
+  return [];
+};
 
 /**
  * School API Service
@@ -36,10 +50,10 @@ export const schoolApi = {
    * Filialdagi barcha akademik yillarni olish
    */
   getAcademicYears: async (branchId: string): Promise<AcademicYear[]> => {
-    const response = await apiClient.get<AcademicYear[]>(
+    const response = await apiClient.get<AcademicYear[] | PaginatedResponse<AcademicYear>>(
       `/school/branches/${branchId}/academic-years/`
     );
-    return response.data;
+    return unwrapResults(response.data);
   },
 
   /**
@@ -149,10 +163,13 @@ export const schoolApi = {
       is_active?: boolean;
     }
   ): Promise<Class[]> => {
-    const response = await apiClient.get<Class[]>(`/school/branches/${branchId}/classes/`, {
-      params,
-    });
-    return response.data;
+    const response = await apiClient.get<Class[] | PaginatedResponse<Class>>(
+      `/school/branches/${branchId}/classes/`,
+      {
+        params,
+      }
+    );
+    return unwrapResults(response.data);
   },
 
   /**
@@ -447,6 +464,8 @@ export const schoolApi = {
       search?: string;
       gender?: "male" | "female";
       class_id?: string;
+      status?: Student["status"];
+      academic_year_id?: string;
       ordering?: string;
     }
   ): Promise<PaginatedResponse<Student>> => {
@@ -476,6 +495,24 @@ export const schoolApi = {
     return response.data;
   },
 
+  /**
+   * O'quvchi yaratish
+   * API: POST /api/v1/school/students/create/
+   */
+  createStudent: async (
+    branchId: string,
+    data: CreateStudentRequest
+  ): Promise<Student> => {
+    const response = await apiClient.post<Student>(
+      `/school/students/create/`,
+      {
+        ...data,
+        branch_id: branchId,
+      }
+    );
+    return response.data;
+  },
+
   // ==================== DASHBOARDS ====================
 
   /**
@@ -485,6 +522,54 @@ export const schoolApi = {
     const response = await apiClient.get<StudentSubject[]>(
       `/school/dashboard/student/subjects/`,
       { params }
+    );
+    return response.data;
+  },
+
+  // ==================== STUDENT RELATIVES ====================
+
+  /**
+   * O'quvchi yaqinlarini olish
+   * API: GET /api/v1/school/students/{studentId}/relatives/
+   */
+  getStudentRelatives: async (studentId: string): Promise<StudentRelative[]> => {
+    const response = await apiClient.get<StudentRelative[]>(
+      `/school/students/${studentId}/relatives/`
+    );
+    return response.data;
+  },
+
+  /**
+   * O'quvchiga yaqin qo'shish
+   * API: POST /api/v1/school/students/{studentId}/relatives/
+   */
+  addStudentRelative: async (
+    studentId: string,
+    data: CreateStudentRelativeRequest
+  ): Promise<StudentRelative> => {
+    const response = await apiClient.post<StudentRelative>(
+      `/school/students/${studentId}/relatives/`,
+      data
+    );
+    return response.data;
+  },
+
+  /**
+   * Telefon raqami orqali mavjud o'quvchini tekshirish
+   * API: GET /api/v1/school/students/check-user/
+   */
+  checkStudentByPhone: async (
+    phoneNumber: string,
+    branchId?: string
+  ): Promise<StudentPhoneCheckResponse> => {
+    const response = await apiClient.get<StudentPhoneCheckResponse>(
+      `/school/students/check-user/`,
+      {
+        params: {
+          phone_number: phoneNumber,
+          branch_id: branchId,
+        },
+      }
     );
     return response.data;
   },
