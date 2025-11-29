@@ -316,6 +316,10 @@ export default function StudentsManagement() {
   const handleStudentClick = React.useCallback(
     async (studentId: string, options: { updateUrl?: boolean } = {}) => {
       if (!currentBranch?.branch_id) return;
+      // Avoid duplicate opens for the same student while loading
+      if (selectedStudent?.id === studentId && (loadingStudent || loadingRelatives)) {
+        return;
+      }
       
       try {
         setLoadingStudent(true);
@@ -343,9 +347,15 @@ export default function StudentsManagement() {
     [currentBranch?.branch_id, updateQueryParams]
   );
 
+  const preventAutoOpenRef = React.useRef(false);
+
   React.useEffect(() => {
     const studentIdFromQuery = searchParams.get("studentId");
-    if (studentIdFromQuery && studentIdFromQuery !== selectedStudent?.id) {
+    if (
+      studentIdFromQuery &&
+      studentIdFromQuery !== selectedStudent?.id &&
+      !preventAutoOpenRef.current
+    ) {
       handleStudentClick(studentIdFromQuery, { updateUrl: false });
     }
   }, [searchParams, selectedStudent?.id, handleStudentClick]);
@@ -363,9 +373,14 @@ export default function StudentsManagement() {
 
   const handleStudentDialogOpenChange = (open: boolean) => {
     if (!open) {
+      // Prevent immediate re-open triggered by useEffect while URL updates propagate
+      preventAutoOpenRef.current = true;
       setSelectedStudent(null);
       setSelectedStudentRelatives([]);
       updateQueryParams((params) => params.delete("studentId"));
+      setTimeout(() => {
+        preventAutoOpenRef.current = false;
+      }, 300);
     }
   };
 

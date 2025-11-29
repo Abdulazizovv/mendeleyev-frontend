@@ -18,34 +18,45 @@ const formatPhoneNumber = (value: string): string => {
   // Remove all non-digit characters
   const digits = value.replace(/\D/g, "");
 
-  // Format: +998 (XX) XXX-XX-XX
+  // If empty, return empty
   if (digits.length === 0) return "";
 
+  // Extract the actual phone digits (skip 998 prefix if present)
+  let phoneDigits = digits;
+  if (digits.startsWith("998") && digits.length > 3) {
+    phoneDigits = digits.substring(3);
+  }
+
+  // Format: +998 (XX) XXX-XX-XX
   let formatted = "+998";
 
-  if (digits.length > 3) {
-    formatted += ` (${digits.substring(3, 5)}`;
+  if (phoneDigits.length > 0) {
+    formatted += ` (${phoneDigits.substring(0, 2)}`;
   }
-  if (digits.length > 5) {
-    formatted += `) ${digits.substring(5, 8)}`;
+  if (phoneDigits.length > 2) {
+    formatted += `) ${phoneDigits.substring(2, 5)}`;
   }
-  if (digits.length > 8) {
-    formatted += `-${digits.substring(8, 10)}`;
+  if (phoneDigits.length > 5) {
+    formatted += `-${phoneDigits.substring(5, 7)}`;
   }
-  if (digits.length > 10) {
-    formatted += `-${digits.substring(10, 12)}`;
+  if (phoneDigits.length > 7) {
+    formatted += `-${phoneDigits.substring(7, 9)}`;
   }
 
   return formatted;
 };
 
 const unformatPhoneNumber = (value: string): string => {
-  // Keep only digits and prefix
+  // Keep only digits
   const digits = value.replace(/\D/g, "");
-  if (digits.startsWith("998")) {
-    return `+${digits}`;
+  
+  // Extract phone digits (skip 998 prefix if present)
+  let phoneDigits = digits;
+  if (digits.startsWith("998") && digits.length > 3) {
+    phoneDigits = digits.substring(3);
   }
-  return `+998${digits.substring(3)}`;
+  
+  return `+998${phoneDigits}`;
 };
 
 export const PhoneInput: React.FC<PhoneInputProps> = ({
@@ -63,8 +74,14 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({
     const input = e.target.value;
     const digits = input.replace(/\D/g, "");
 
-    // Limit to 12 digits (998 + 9 digits)
-    if (digits.length <= 12) {
+    // Extract phone digits (skip 998 prefix if present)
+    let phoneDigits = digits;
+    if (digits.startsWith("998") && digits.length > 3) {
+      phoneDigits = digits.substring(3);
+    }
+
+    // Limit to 9 digits (after 998 prefix)
+    if (phoneDigits.length <= 9) {
       const formatted = formatPhoneNumber(input);
       setDisplayValue(formatted);
       onChange(unformatPhoneNumber(input));
@@ -97,7 +114,7 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({
   return (
     <div className="space-y-2">
       {label && (
-        <Label htmlFor="phone-input">
+        <Label htmlFor="phone-input" className="text-lg font-medium">
           {label}
           {required && <span className="text-red-500 ml-1">*</span>}
         </Label>
@@ -110,10 +127,10 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         disabled={disabled}
-        className={error ? "border-red-500 focus-visible:ring-red-500" : ""}
+        className={`h-12 text-lg ${error ? "border-red-500 focus-visible:ring-red-500" : ""}`}
         required={required}
       />
-      {error && <p className="text-sm text-red-500">{error}</p>}
+      {error && <p className="text-base text-red-500 mt-1.5">{error}</p>}
     </div>
   );
 };
