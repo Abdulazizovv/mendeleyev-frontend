@@ -60,6 +60,49 @@ apiClient.interceptors.response.use(
       _retry?: boolean;
     };
 
+    // 403: Do NOT auto-logout for generic permission denials
+    // Only logout if clearly auth/revocation related
+    if (error.response?.status === 403) {
+      try {
+        const url = (error.config?.url || "").toString();
+        const data: any = (error.response?.data as any) || {};
+        const detailText = (
+          typeof data === "string"
+            ? data
+            : data.detail || data.message || ""
+        )
+          .toString()
+          .toLowerCase();
+
+        const authLikeUrl = url.includes("/auth/");
+        const revocationHints = [
+          "revoked",
+          "inactive",
+          "blocked",
+          "deleted",
+          "suspended",
+          "invalid token",
+          "token has expired",
+          "credentials",
+          "account disabled",
+        ];
+        const hasRevocationHint = revocationHints.some((k) => detailText.includes(k));
+
+        if (authLikeUrl || hasRevocationHint) {
+          if (typeof window !== "undefined") {
+            localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
+            localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
+            localStorage.removeItem(STORAGE_KEYS.USER);
+            localStorage.removeItem(STORAGE_KEYS.CURRENT_BRANCH);
+            window.location.href = "/login";
+          }
+        }
+      } catch {
+        // Swallow parsing errors and just propagate 403
+      }
+      return Promise.reject(error);
+    }
+
     // If error is 401 and we haven't retried yet
     if (error.response?.status === 401 && !originalRequest._retry) {
       if (isRefreshing) {

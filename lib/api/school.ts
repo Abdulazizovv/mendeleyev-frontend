@@ -160,7 +160,12 @@ export const schoolApi = {
     params?: {
       academic_year_id?: string;
       grade_level?: number;
+      section?: string;
       is_active?: boolean;
+      search?: string;
+      ordering?: string;
+      page?: number;
+      page_size?: number;
     }
   ): Promise<Class[]> => {
     const response = await apiClient.get<Class[] | PaginatedResponse<Class>>(
@@ -170,6 +175,53 @@ export const schoolApi = {
       }
     );
     return unwrapResults(response.data);
+  },
+
+  /**
+   * Filialdagi sinflarni olish (paginated)
+   */
+  getClassesPaginated: async (
+    branchId: string,
+    params?: {
+      academic_year_id?: string;
+      grade_level?: number;
+      section?: string;
+      is_active?: boolean;
+      search?: string;
+      ordering?: string;
+      page?: number;
+      page_size?: number;
+    }
+  ): Promise<PaginatedResponse<Class>> => {
+    const response = await apiClient.get<PaginatedResponse<Class>>(
+      `/school/branches/${branchId}/classes/`,
+      { params }
+    );
+    return response.data;
+  },
+
+  /**
+   * Bitta sinf detallari
+   */
+  getClass: async (
+    branchId: string,
+    classId: string
+  ): Promise<Class> => {
+    // Some deployments serve class detail under branch scope, others globally.
+    // Try branch-scoped first, then fallback to global class detail.
+    try {
+      const response = await apiClient.get<Class>(
+        `/school/branches/${branchId}/classes/${classId}/`
+      );
+      return response.data;
+    } catch (err: any) {
+      const status = err?.response?.status;
+      if (status === 404) {
+        const fallback = await apiClient.get<Class>(`/school/classes/${classId}/`);
+        return fallback.data;
+      }
+      throw err;
+    }
   },
 
   /**
@@ -209,12 +261,18 @@ export const schoolApi = {
    */
   getClassStudents: async (
     classId: string,
-    params?: { is_active?: boolean }
+    params?: { 
+      page?: number;
+      page_size?: number;
+      search?: string;
+      ordering?: string;
+      is_active?: boolean; 
+    }
   ): Promise<ClassStudent[]> => {
-    const response = await apiClient.get<ClassStudent[]>(`/school/classes/${classId}/students/`, {
+    const response = await apiClient.get<ClassStudent[] | PaginatedResponse<ClassStudent>>(`/school/classes/${classId}/students/`, {
       params,
     });
-    return response.data;
+    return unwrapResults(response.data);
   },
 
   /**
@@ -247,19 +305,30 @@ export const schoolApi = {
     branchId: string,
     params?: { is_active?: boolean }
   ): Promise<Subject[]> => {
-    const response = await apiClient.get<Subject[]>(`/school/branches/${branchId}/subjects/`, {
-      params,
-    });
-    return response.data;
+    const response = await apiClient.get<Subject[] | PaginatedResponse<Subject>>(
+      `/school/branches/${branchId}/subjects/`,
+      { params }
+    );
+    return unwrapResults(response.data);
   },
 
   /**
    * Fan yaratish
    */
   createSubject: async (branchId: string, data: CreateSubjectRequest): Promise<Subject> => {
+    // Backend yangilanishi bilan branch va bo'sh qiymatlar uchun tozalash
+    const payload: CreateSubjectRequest = {
+      ...data,
+      branch: data.branch || branchId, // Agar body da talab qilinsa
+      // Bo'sh stringlar o'rniga undefined
+      code: data.code?.trim() ? data.code.trim() : undefined,
+      description: data.description?.trim() ? data.description.trim() : undefined,
+      color: data.color?.trim() ? data.color.trim() : undefined,
+    };
+
     const response = await apiClient.post<Subject>(
       `/school/branches/${branchId}/subjects/`,
-      data
+      payload
     );
     return response.data;
   },
@@ -272,9 +341,27 @@ export const schoolApi = {
     subjectId: string,
     data: Partial<CreateSubjectRequest>
   ): Promise<Subject> => {
+    const payload: Partial<CreateSubjectRequest> = {
+      ...data,
+      branch: data.branch || branchId,
+      code: data.code?.trim() ? data.code.trim() : undefined,
+      description: data.description?.trim() ? data.description.trim() : undefined,
+      color: data.color?.trim() ? data.color.trim() : undefined,
+    };
+
     const response = await apiClient.patch<Subject>(
       `/school/branches/${branchId}/subjects/${subjectId}/`,
-      data
+      payload
+    );
+    return response.data;
+  },
+
+  /**
+   * Fan detali (created_by, updated_by, full audit) olish
+   */
+  getSubject: async (branchId: string, subjectId: string): Promise<Subject> => {
+    const response = await apiClient.get<Subject>(
+      `/school/branches/${branchId}/subjects/${subjectId}/`
     );
     return response.data;
   },
@@ -293,13 +380,19 @@ export const schoolApi = {
    */
   getClassSubjects: async (
     classId: string,
-    params?: { is_active?: boolean }
+    params?: { 
+      page?: number;
+      page_size?: number;
+      search?: string;
+      ordering?: string;
+      is_active?: boolean; 
+    }
   ): Promise<ClassSubject[]> => {
-    const response = await apiClient.get<ClassSubject[]>(
+    const response = await apiClient.get<ClassSubject[] | PaginatedResponse<ClassSubject>>(
       `/school/classes/${classId}/subjects/`,
       { params }
     );
-    return response.data;
+    return unwrapResults(response.data);
   },
 
   /**
@@ -347,11 +440,11 @@ export const schoolApi = {
     branchId: string,
     params?: { is_active?: boolean }
   ): Promise<Building[]> => {
-    const response = await apiClient.get<Building[]>(
+    const response = await apiClient.get<Building[] | PaginatedResponse<Building>>(
       `/school/branches/${branchId}/buildings/`,
       { params }
     );
-    return response.data;
+    return unwrapResults(response.data);
   },
 
   /**
@@ -378,10 +471,10 @@ export const schoolApi = {
       is_active?: boolean;
     }
   ): Promise<Room[]> => {
-    const response = await apiClient.get<Room[]>(`/school/branches/${branchId}/rooms/`, {
+    const response = await apiClient.get<Room[] | PaginatedResponse<Room>>(`/school/branches/${branchId}/rooms/`, {
       params,
     });
-    return response.data;
+    return unwrapResults(response.data);
   },
 
   /**

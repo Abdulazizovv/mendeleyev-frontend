@@ -28,6 +28,10 @@ export interface User {
   last_name: string;
   email?: string;
   is_staff: boolean;
+  // User activity/block status (optional fields supplied by backend)
+  is_active?: boolean;
+  is_blocked?: boolean;
+  deleted_at?: string | null;
   date_joined: string;
   avatar?: string;
 }

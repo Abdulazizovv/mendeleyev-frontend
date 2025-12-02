@@ -103,6 +103,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         ...baseItems,
         { name: "Xodimlar", href: `/${rolePath}/staff`, icon: Users },
         { name: "O'quvchilar", href: `/${rolePath}/students`, icon: GraduationCap },
+        { name: "Sinflar", href: `/${rolePath}/classes`, icon: ClipboardList },
+        { name: "Fanlar", href: `/${rolePath}/subjects`, icon: BookOpen },
         { name: "Rollar", href: `/${rolePath}/roles`, icon: Shield },
         { name: "Moliya", href: `/${rolePath}/finance`, icon: DollarSign },
         { name: "Sozlamalar", href: `/${rolePath}/settings`, icon: Settings },

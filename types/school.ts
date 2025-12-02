@@ -80,9 +80,13 @@ export interface Subject {
   name: string;
   code?: string;
   description?: string;
+  /** Hex rang kodi (#RRGGBB) - dars jadvali va UI da ishlatiladi */
+  color?: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  created_by?: string | null;
+  updated_by?: string | null;
 }
 
 export interface ClassSubject {
@@ -392,6 +396,10 @@ export interface CreateSubjectRequest {
   code?: string;
   description?: string;
   is_active: boolean;
+  /** Filial ID - backend yangilangan bo'lsa body da talab qilinishi mumkin */
+  branch?: string;
+  /** Hex rang kodi (#RRGGBB) */
+  color?: string;
 }
 
 export interface AddSubjectToClassRequest {
