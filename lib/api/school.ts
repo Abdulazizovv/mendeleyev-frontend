@@ -513,6 +513,25 @@ export const schoolApi = {
     return response.data;
   },
 
+  /**
+   * O'quvchi ma'lumotlarini yangilash
+   * API: PATCH /api/v1/school/students/{studentId}/
+   */
+  updateStudent: async (
+    branchId: string,
+    studentId: string,
+    data: Partial<CreateStudentRequest>
+  ): Promise<Student> => {
+    const response = await apiClient.patch<Student>(
+      `/school/students/${studentId}/`,
+      {
+        ...data,
+        branch_id: branchId,
+      }
+    );
+    return response.data;
+  },
+
   // ==================== DASHBOARDS ====================
 
   /**

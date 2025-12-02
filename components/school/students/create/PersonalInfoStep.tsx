@@ -24,6 +24,7 @@ import type { StudentFormData } from "./schemas";
 
 interface PersonalInfoStepProps {
   form: UseFormReturn<StudentFormData>;
+  phoneDisabled?: boolean;
 }
 
 export function PersonalInfoStep({ form }: PersonalInfoStepProps) {

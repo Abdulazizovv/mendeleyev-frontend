@@ -248,6 +248,7 @@ export interface Student {
   date_of_birth: string;
   address: string;
   birth_certificate: string | null;
+  birth_certificate_url: string | null;
   additional_fields: Record<string, any>;
   current_class: {
     id: string;
@@ -260,21 +261,22 @@ export interface Student {
     balance: number;
     notes?: string;
     updated_at?: string;
-  };
-  transactions_summary?: {
-    total_income: number;
-    total_expense: number;
-    net_balance: number;
-    transactions_count: number;
-  };
-  payments_summary?: {
-    total_payments: number;
-    payments_count: number;
-    last_payment?: {
-      id: string;
-      amount: number;
-      date: string;
-      period: string;
+    transactions_summary?: {
+      total_income: number;
+      total_expense: number;
+      net_balance: number;
+      transactions_count: number;
+    };
+    payments_summary?: {
+      total_payments: number;
+      payments_count: number;
+      last_payment?: {
+        id: string;
+        amount: number;
+        date: string;
+        period: string;
+        period_display?: string;
+      };
     };
   };
   created_at: string;

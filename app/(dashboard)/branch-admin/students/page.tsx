@@ -32,6 +32,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { CreateStudentForm } from "@/components/dashboard/CreateStudentForm";
+import { EditStudentForm } from "@/components/dashboard/EditStudentForm";
 import {
   GraduationCap,
   Search,
@@ -61,6 +62,8 @@ import {
   Mail,
   MapPin,
   Clock,
+  FileText,
+  Edit,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -100,6 +103,7 @@ export default function StudentsManagement() {
   const [loadingStudent, setLoadingStudent] = React.useState(false);
   const [loadingRelatives, setLoadingRelatives] = React.useState(false);
   const [createFormOpen, setCreateFormOpen] = React.useState(false);
+  const [editFormOpen, setEditFormOpen] = React.useState(false);
   const [tableRefreshing, setTableRefreshing] = React.useState(false);
   const firstLoadRef = React.useRef(true);
   const [academicYearsLoading, setAcademicYearsLoading] = React.useState(false);
@@ -414,144 +418,226 @@ export default function StudentsManagement() {
       </div>
 
       {/* Filters */}
-      <Card className="border-0 shadow-lg">
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            {/* Search */}
-            <div className="relative lg:col-span-2">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <Input
-                placeholder="Ism, telefon yoki ID bo'yicha qidirish..."
-                value={searchValue}
-                onChange={(e) => setSearchValue(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-
-            {/* Academic Year Filter */}
-            <Select value={academicYearFilter} onValueChange={handleAcademicYearFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="O'quv yili" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Barcha yillar</SelectItem>
-                {academicYearsLoading && (
-                  <SelectItem value="__loading_years" disabled>
-                    Akademik yillar yuklanmoqda...
-                  </SelectItem>
-                )}
-                {!academicYearsLoading && academicYears.length === 0 && (
-                  <SelectItem value="__no_years" disabled>
-                    Akademik yil topilmadi
-                  </SelectItem>
-                )}
-                {academicYears.map((year) => (
-                  <SelectItem key={year.id} value={year.id}>
-                    {year.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Class Filter */}
-            <Select value={classFilter} onValueChange={handleClassFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Sinf" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Barcha sinflar</SelectItem>
-                {classesLoading && (
-                  <SelectItem value="__loading_classes" disabled>
-                    Sinflar yuklanmoqda...
-                  </SelectItem>
-                )}
-                {!classesLoading && classes.length === 0 && (
-                  <SelectItem value="__no_classes" disabled>
-                    Sinflar topilmadi
-                  </SelectItem>
-                )}
-                {classes.map((cls) => (
-                  <SelectItem key={cls.id} value={cls.id}>
-                    {cls.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Gender Filter */}
-            <Select value={genderFilter} onValueChange={handleGenderFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Jins" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Barchasi</SelectItem>
-                <SelectItem value="male">Erkak</SelectItem>
-                <SelectItem value="female">Ayol</SelectItem>
-              </SelectContent>
-            </Select>
+      <Card className="border-0 shadow-lg bg-gradient-to-br from-white to-gray-50">
+        <CardContent className="pt-6 space-y-6">
+          {/* Search Bar - Full Width with Better Styling */}
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Input
+              placeholder="O'quvchi ism-familiyasi, telefon raqami yoki shaxsiy raqam bo'yicha qidirish..."
+              value={searchValue}
+              onChange={(e) => setSearchValue(e.target.value)}
+              className="pl-12 h-12 text-base border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all shadow-sm"
+            />
+            {searchValue && (
+              <button
+                onClick={() => setSearchValue("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <Ban className="w-5 h-5" />
+              </button>
+            )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mt-4">
-            {/* Status Filter */}
-            <Select value={statusFilter} onValueChange={handleStatusFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Holat" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Barcha holatlar</SelectItem>
-                <SelectItem value="active">Aktiv</SelectItem>
-                <SelectItem value="archived">Arxivlangan</SelectItem>
-                <SelectItem value="suspended">Muzlatilgan</SelectItem>
-                <SelectItem value="graduated">Bitirgan</SelectItem>
-                <SelectItem value="transferred">O'tkazilgan</SelectItem>
-              </SelectContent>
-            </Select>
+          {/* Filters Row */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-full">
+                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                <span className="text-sm font-medium text-blue-900">Filtrlar</span>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+              {/* Academic Year Filter */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-gray-600 ml-1 flex items-center gap-1">
+                  <Calendar className="w-3 h-3" />
+                  O'quv yili
+                </label>
+                <Select value={academicYearFilter} onValueChange={handleAcademicYearFilter}>
+                  <SelectTrigger className="h-10 border-gray-200 hover:border-gray-300 transition-colors">
+                    <SelectValue placeholder="Tanlang" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Barchasi</SelectItem>
+                    {academicYearsLoading && (
+                      <SelectItem value="__loading_years" disabled>
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <span>Yuklanmoqda...</span>
+                        </div>
+                      </SelectItem>
+                    )}
+                    {!academicYearsLoading && academicYears.length === 0 && (
+                      <SelectItem value="__no_years" disabled>
+                        Ma'lumot topilmadi
+                      </SelectItem>
+                    )}
+                    {academicYears.map((year) => (
+                      <SelectItem key={year.id} value={year.id}>
+                        {year.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Class Filter */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-gray-600 ml-1 flex items-center gap-1">
+                  <BookOpen className="w-3 h-3" />
+                  Sinf
+                </label>
+                <Select value={classFilter} onValueChange={handleClassFilter}>
+                  <SelectTrigger className="h-10 border-gray-200 hover:border-gray-300 transition-colors">
+                    <SelectValue placeholder="Tanlang" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Barchasi</SelectItem>
+                    {classesLoading && (
+                      <SelectItem value="__loading_classes" disabled>
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <span>Yuklanmoqda...</span>
+                        </div>
+                      </SelectItem>
+                    )}
+                    {!classesLoading && classes.length === 0 && (
+                      <SelectItem value="__no_classes" disabled>
+                        Ma'lumot topilmadi
+                      </SelectItem>
+                    )}
+                    {classes.map((cls) => (
+                      <SelectItem key={cls.id} value={cls.id}>
+                        {cls.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Status Filter */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-gray-600 ml-1 flex items-center gap-1">
+                  <UserCheck className="w-3 h-3" />
+                  Holat
+                </label>
+                <Select value={statusFilter} onValueChange={handleStatusFilter}>
+                  <SelectTrigger className="h-10 border-gray-200 hover:border-gray-300 transition-colors">
+                    <SelectValue placeholder="Tanlang" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Barchasi</SelectItem>
+                    <SelectItem value="active">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <span>Aktiv</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="archived">
+                      <div className="flex items-center gap-2">
+                        <Archive className="w-3 h-3 text-gray-500" />
+                        <span>Arxivlangan</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="suspended">
+                      <div className="flex items-center gap-2">
+                        <UserX className="w-3 h-3 text-red-500" />
+                        <span>Muzlatilgan</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="graduated">
+                      <div className="flex items-center gap-2">
+                        <GraduationCap className="w-3 h-3 text-blue-500" />
+                        <span>Bitirgan</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="transferred">
+                      <div className="flex items-center gap-2">
+                        <ArrowUpDown className="w-3 h-3 text-orange-500" />
+                        <span>O'tkazilgan</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Gender Filter */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-gray-600 ml-1 flex items-center gap-1">
+                  <Users className="w-3 h-3" />
+                  Jins
+                </label>
+                <Select value={genderFilter} onValueChange={handleGenderFilter}>
+                  <SelectTrigger className="h-10 border-gray-200 hover:border-gray-300 transition-colors">
+                    <SelectValue placeholder="Tanlang" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Barchasi</SelectItem>
+                    <SelectItem value="male">Erkak</SelectItem>
+                    <SelectItem value="female">Ayol</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Reset Filters Button - Takes remaining space */}
+              <div className="space-y-1.5 sm:col-span-2 lg:col-span-3 xl:col-span-1">
+                <label className="text-xs font-medium text-transparent ml-1">.</label>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSearchValue("");
+                    setGenderFilter("all");
+                    setStatusFilter("all");
+                    setClassFilter("all");
+                    setAcademicYearFilter("all");
+                    setCurrentPage(1);
+                  }}
+                  className="w-full h-10 border-gray-200 hover:border-red-300 hover:bg-red-50 hover:text-red-700 transition-all"
+                  disabled={searchValue === "" && genderFilter === "all" && statusFilter === "all" && classFilter === "all" && academicYearFilter === "all"}
+                >
+                  <RefreshCcw className="w-4 h-4 mr-2" />
+                  Tozalash
+                </Button>
+              </div>
+            </div>
           </div>
 
           {/* Active Filters Display */}
           {(searchValue || genderFilter !== "all" || statusFilter !== "all" || classFilter !== "all" || academicYearFilter !== "all") && (
-            <div className="flex items-center gap-2 mt-4 flex-wrap">
-              <span className="text-sm text-gray-600">Faol filtrlar:</span>
+            <div className="flex items-center gap-2 flex-wrap pt-3 border-t border-gray-200">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Faol filtrlar:</span>
               {searchValue && (
-                <Badge variant="secondary" className="bg-blue-100 text-blue-700">
-                  Qidiruv: {searchValue}
+                <Badge className="bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200 transition-colors">
+                  <Search className="w-3 h-3 mr-1" />
+                  {searchValue}
                 </Badge>
               )}
               {genderFilter !== "all" && (
-                <Badge variant="secondary" className="bg-purple-100 text-purple-700">
+                <Badge className="bg-purple-100 text-purple-700 border-purple-200 hover:bg-purple-200 transition-colors">
+                  <Users className="w-3 h-3 mr-1" />
                   {translateGender(genderFilter)}
                 </Badge>
               )}
               {statusFilter !== "all" && (
-                <Badge variant="secondary" className={getStatusInfo(statusFilter).bgColor + " " + getStatusInfo(statusFilter).color}>
+                <Badge className={`${getStatusInfo(statusFilter).bgColor} ${getStatusInfo(statusFilter).color} border transition-colors`}>
+                  <UserCheck className="w-3 h-3 mr-1" />
                   {getStatusInfo(statusFilter).label}
                 </Badge>
               )}
               {academicYearFilter !== "all" && (
-                <Badge variant="secondary" className="bg-green-100 text-green-700">
+                <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-200 transition-colors">
+                  <Calendar className="w-3 h-3 mr-1" />
                   {Array.isArray(academicYears) && academicYears.find(y => y.id === academicYearFilter)?.name}
                 </Badge>
               )}
               {classFilter !== "all" && (
-                <Badge variant="secondary" className="bg-orange-100 text-orange-700">
+                <Badge className="bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200 transition-colors">
+                  <BookOpen className="w-3 h-3 mr-1" />
                   {Array.isArray(classes) && classes.find(c => c.id === classFilter)?.name}
                 </Badge>
               )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setSearchValue("");
-                  setGenderFilter("all");
-                  setStatusFilter("all");
-                  setClassFilter("all");
-                  setAcademicYearFilter("all");
-                  setCurrentPage(1);
-                }}
-                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-              >
-                Tozalash
-              </Button>
             </div>
           )}
         </CardContent>
@@ -659,9 +745,6 @@ export default function StudentsManagement() {
                               <div>
                                 <p className="font-medium text-gray-900">
                                   {student.full_name}
-                                </p>
-                                <p className="text-sm text-gray-500">
-                                  {student.email || "Email mavjud emas"}
                                 </p>
                               </div>
                             </div>
@@ -795,15 +878,30 @@ export default function StudentsManagement() {
 
       {/* Student Details Dialog */}
       <Dialog open={!!selectedStudent} onOpenChange={handleStudentDialogOpenChange}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-2xl flex items-center gap-2">
-              <GraduationCap className="w-6 h-6" />
-              O'quvchi ma'lumotlari
-            </DialogTitle>
-            <DialogDescription>
-              {selectedStudent?.full_name} haqida to'liq ma'lumot
-            </DialogDescription>
+        <DialogContent className="max-w-[70vw] h-[90vh] p-0 flex flex-col overflow-hidden">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <div>
+                <DialogTitle className="text-2xl flex items-center gap-2">
+                  <GraduationCap className="w-6 h-6" />
+                  O'quvchi ma'lumotlari
+                </DialogTitle>
+                <DialogDescription>
+                  {selectedStudent?.full_name} haqida to'liq ma'lumot
+                </DialogDescription>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setEditFormOpen(true);
+                }}
+                className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
+              >
+                <Edit className="w-4 h-4 mr-2" />
+                Tahrirlash
+              </Button>
+            </div>
           </DialogHeader>
           
           {loadingStudent ? (
@@ -814,7 +912,8 @@ export default function StudentsManagement() {
               </div>
             </div>
           ) : selectedStudent ? (
-            <div className="space-y-6 mt-4">
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <div className="space-y-6">
               {/* Personal Info */}
               <Card>
                 <CardHeader>
@@ -844,15 +943,6 @@ export default function StudentsManagement() {
                       </p>
                     </div>
                     <div>
-                      <label className="text-sm text-gray-500 flex items-center gap-1">
-                        <Mail className="w-3 h-3" />
-                        Email
-                      </label>
-                      <p className="font-semibold text-gray-900 mt-1">
-                        {selectedStudent.email || "—"}
-                      </p>
-                    </div>
-                    <div>
                       <label className="text-sm text-gray-500">Jins</label>
                       <p className="font-semibold text-gray-900 mt-1">
                         {translateGender(selectedStudent.gender)}
@@ -875,6 +965,17 @@ export default function StudentsManagement() {
                         </Badge>
                       </div>
                     </div>
+                    {selectedStudent.email && (
+                      <div>
+                        <label className="text-sm text-gray-500 flex items-center gap-1">
+                          <Mail className="w-3 h-3" />
+                          Email
+                        </label>
+                        <p className="font-semibold text-gray-900 mt-1">
+                          {selectedStudent.email}
+                        </p>
+                      </div>
+                    )}
                     {selectedStudent.address && (
                       <div className="col-span-2">
                         <label className="text-sm text-gray-500 flex items-center gap-1">
@@ -912,84 +1013,186 @@ export default function StudentsManagement() {
                 </Card>
               )}
 
-              {/* Financial Info */}
-              {(selectedStudent.balance || selectedStudent.transactions_summary || selectedStudent.payments_summary) && (
+              {/* Documents */}
+              {(selectedStudent.birth_certificate || selectedStudent.additional_fields) && (
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
-                      <DollarSign className="w-5 h-5" />
-                      Moliya ma'lumotlari
+                      <FileText className="w-5 h-5" />
+                      Hujjatlar
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {selectedStudent.balance && (
+                    {selectedStudent.birth_certificate && selectedStudent.birth_certificate_url && (
                       <div className="bg-blue-50 rounded-lg p-4">
                         <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm text-gray-600">Joriy balans</p>
-                            <p className={`text-2xl font-bold mt-1 ${selectedStudent.balance.balance >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                              {formatCurrency(selectedStudent.balance.balance)}
+                          <div className="flex-1">
+                            <p className="text-sm text-gray-600 mb-1">Tug'ilganlik guvohnomasi</p>
+                            <p className="text-xs text-gray-500 truncate">
+                              {selectedStudent.birth_certificate.split('/').pop()}
                             </p>
                           </div>
-                          <Wallet className="w-10 h-10 text-blue-600" />
+                          <div className="flex gap-2 ml-4">
+                            {(() => {
+                              const fileExtension = selectedStudent.birth_certificate.split('.').pop()?.toLowerCase();
+                              const isViewable = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExtension || '');
+                              
+                              return (
+                                <>
+                                  {isViewable && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => window.open(selectedStudent.birth_certificate_url!, '_blank')}
+                                      className="bg-white hover:bg-blue-100 text-blue-700 border-blue-300"
+                                    >
+                                      <FileText className="w-4 h-4 mr-1" />
+                                      Ko'rish
+                                    </Button>
+                                  )}
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      const link = document.createElement('a');
+                                      link.href = selectedStudent.birth_certificate_url!;
+                                      link.download = selectedStudent.birth_certificate?.split('/').pop() || 'birth_certificate';
+                                      link.click();
+                                    }}
+                                    className="bg-white hover:bg-green-100 text-green-700 border-green-300"
+                                  >
+                                    <Download className="w-4 h-4 mr-1" />
+                                    Yuklab olish
+                                  </Button>
+                                </>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {selectedStudent.additional_fields && Object.keys(selectedStudent.additional_fields).length > 0 && (
+                      <div className="grid grid-cols-2 gap-4">
+                        {Object.entries(selectedStudent.additional_fields).map(([key, value]) => (
+                          <div key={key} className="bg-gray-50 rounded-lg p-3">
+                            <p className="text-xs text-gray-500 mb-1">
+                              {key === 'passport_number' ? 'Pasport raqami' :
+                               key === 'nationality' ? 'Millati' :
+                               key === 'passport_issued_date' ? 'Pasport berilgan sana' :
+                               key === 'passport_expiry_date' ? 'Pasport amal qilish muddati' :
+                               key}
+                            </p>
+                            <p className="text-sm font-semibold text-gray-900">
+                              {String(value)}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Financial Info */}
+              {selectedStudent.balance && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Wallet className="w-5 h-5" />
+                      Moliya ma'lumotlari
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {/* Joriy balans */}
+                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-5 border border-blue-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-gray-600 mb-1">Joriy balans</p>
+                          <p className={`text-3xl font-bold ${selectedStudent.balance.balance >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                            {formatCurrency(selectedStudent.balance.balance)}
+                          </p>
+                          {selectedStudent.balance.updated_at && (
+                            <p className="text-xs text-gray-500 mt-2">
+                              Yangilangan: {formatDateSafe(selectedStudent.balance.updated_at, "dd MMM yyyy, HH:mm")}
+                            </p>
+                          )}
+                          {selectedStudent.balance.notes && (
+                            <p className="text-sm text-gray-700 mt-2 italic">"{selectedStudent.balance.notes}"</p>
+                          )}
+                        </div>
+                        <DollarSign className="w-12 h-12 text-blue-600 opacity-50" />
+                      </div>
+                    </div>
+
+                    {/* Tranzaksiyalar statistikasi */}
+                    {selectedStudent.balance.transactions_summary && (
+                      <div>
+                        <p className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                          <TrendingUp className="w-4 h-4" />
+                          Tranzaksiyalar statistikasi
+                        </p>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                            <p className="text-xs text-gray-600 mb-1">Jami kirim</p>
+                            <p className="text-lg font-bold text-green-700">
+                              {formatCurrency(selectedStudent.balance.transactions_summary.total_income || 0)}
+                            </p>
+                          </div>
+                          <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+                            <p className="text-xs text-gray-600 mb-1">Jami chiqim</p>
+                            <p className="text-lg font-bold text-red-700">
+                              {formatCurrency(selectedStudent.balance.transactions_summary.total_expense || 0)}
+                            </p>
+                          </div>
+                          <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                            <p className="text-xs text-gray-600 mb-1">Sof balans</p>
+                            <p className="text-lg font-bold text-blue-700">
+                              {formatCurrency(selectedStudent.balance.transactions_summary.net_balance || 0)}
+                            </p>
+                          </div>
+                          <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                            <p className="text-xs text-gray-600 mb-1">Tranzaksiyalar</p>
+                            <p className="text-lg font-bold text-gray-700">
+                              {selectedStudent.balance.transactions_summary.transactions_count || 0} ta
+                            </p>
+                          </div>
                         </div>
                       </div>
                     )}
 
-                    {selectedStudent.transactions_summary && (
-                      <div className="grid grid-cols-3 gap-4">
-                        <div className="bg-green-50 rounded-lg p-4">
-                          <div className="flex items-center gap-2 mb-2">
-                            <TrendingUp className="w-4 h-4 text-green-600" />
-                            <p className="text-sm text-gray-600">Jami kirim</p>
-                          </div>
-                          <p className="text-lg font-semibold text-green-700">
-                            {formatCurrency(selectedStudent.transactions_summary.total_income)}
-                          </p>
-                        </div>
-                        <div className="bg-red-50 rounded-lg p-4">
-                          <div className="flex items-center gap-2 mb-2">
-                            <TrendingDown className="w-4 h-4 text-red-600" />
-                            <p className="text-sm text-gray-600">Jami chiqim</p>
-                          </div>
-                          <p className="text-lg font-semibold text-red-700">
-                            {formatCurrency(selectedStudent.transactions_summary.total_expense)}
-                          </p>
-                        </div>
-                        <div className="bg-blue-50 rounded-lg p-4">
-                          <p className="text-sm text-gray-600 mb-2">Tranzaksiyalar</p>
-                          <p className="text-lg font-semibold text-blue-700">
-                            {selectedStudent.transactions_summary.transactions_count} ta
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    {selectedStudent.payments_summary && (
-                      <div className="border-t pt-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <p className="text-sm font-medium text-gray-700">To'lovlar statistikasi</p>
-                          <CreditCard className="w-5 h-5 text-gray-400" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <p className="text-sm text-gray-600">Jami to'lovlar</p>
-                            <p className="text-lg font-semibold text-gray-900 mt-1">
-                              {formatCurrency(selectedStudent.payments_summary.total_payments)}
+                    {/* To'lovlar statistikasi */}
+                    {selectedStudent.balance.payments_summary && (
+                      <div className="border-t pt-5">
+                        <p className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                          <CreditCard className="w-4 h-4" />
+                          To'lovlar statistikasi
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
+                            <p className="text-xs text-gray-600 mb-1">Jami to'lovlar</p>
+                            <p className="text-xl font-bold text-purple-700">
+                              {formatCurrency(selectedStudent.balance.payments_summary.total_payments || 0)}
                             </p>
                             <p className="text-xs text-gray-500 mt-1">
-                              {selectedStudent.payments_summary.payments_count} ta to'lov
+                              {selectedStudent.balance.payments_summary.payments_count || 0} ta to'lov
                             </p>
                           </div>
-                          {selectedStudent.payments_summary.last_payment && (
-                            <div>
-                              <p className="text-sm text-gray-600">Oxirgi to'lov</p>
-                              <p className="text-lg font-semibold text-gray-900 mt-1">
-                                {formatCurrency(selectedStudent.payments_summary.last_payment.amount)}
-                              </p>
-                              <p className="text-xs text-gray-500 mt-1">
-                                {formatDateSafe(selectedStudent.payments_summary.last_payment.date, "dd MMM, yyyy")} • {selectedStudent.payments_summary.last_payment.period}
-                              </p>
+                          {selectedStudent.balance.payments_summary.last_payment && (
+                            <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-200 col-span-2">
+                              <p className="text-xs text-gray-600 mb-2">Oxirgi to'lov</p>
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="text-2xl font-bold text-indigo-700">
+                                    {formatCurrency(selectedStudent.balance.payments_summary.last_payment.amount)}
+                                  </p>
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    {formatDateSafe(selectedStudent.balance.payments_summary.last_payment.date, "dd MMMM yyyy, HH:mm")}
+                                  </p>
+                                </div>
+                                <Badge className="bg-indigo-100 text-indigo-700 border-0">
+                                  {selectedStudent.balance.payments_summary.last_payment.period_display || selectedStudent.balance.payments_summary.last_payment.period}
+                                </Badge>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -1085,6 +1288,7 @@ export default function StudentsManagement() {
                   </div>
                 </div>
               </div>
+              </div>
             </div>
           ) : null}
         </DialogContent>
@@ -1097,6 +1301,22 @@ export default function StudentsManagement() {
         onSuccess={fetchStudents}
         classes={Array.isArray(classes) ? classes : []}
       />
+
+      {/* Edit Student Form */}
+      {selectedStudent && (
+        <EditStudentForm
+          open={editFormOpen}
+          onOpenChange={setEditFormOpen}
+          onSuccess={() => {
+            fetchStudents();
+            if (selectedStudent) {
+              handleStudentClick(selectedStudent.id, { updateUrl: false });
+            }
+          }}
+          classes={Array.isArray(classes) ? classes : []}
+          student={selectedStudent}
+        />
+      )}
     </div>
   );
 }
