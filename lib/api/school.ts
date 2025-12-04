@@ -28,6 +28,8 @@ import type {
   CreateStudentRequest,
   CreateStudentRelativeRequest,
 } from "@/types";
+import type { BranchMembership } from "@/types";
+import type { MembershipDetail } from "./branch";
 
 const unwrapResults = <T>(payload: T[] | PaginatedResponse<T>): T[] => {
   if (Array.isArray(payload)) {
@@ -276,6 +278,26 @@ export const schoolApi = {
   },
 
   /**
+   * Sinfga qo'shish mumkin bo'lgan o'quvchilarni olish
+   */
+  getAvailableStudents: async (
+    branchId: string,
+    classId: string,
+    params?: {
+      search?: string;
+      ordering?: string;
+      page?: number;
+      page_size?: number;
+    }
+  ): Promise<MembershipDetail[]> => {
+    const response = await apiClient.get<MembershipDetail[] | PaginatedResponse<MembershipDetail>>(
+      `/school/branches/${branchId}/classes/${classId}/available-students/`,
+      { params }
+    );
+    return unwrapResults(response.data);
+  },
+
+  /**
    * Sinfga o'quvchi qo'shish
    */
   addStudentToClass: async (
@@ -291,9 +313,26 @@ export const schoolApi = {
 
   /**
    * O'quvchini sinfdan olib tashlash
+   * API: DELETE /api/v1/school/classes/{classId}/students/{membershipId}/
    */
-  removeStudentFromClass: async (classId: string, studentId: string): Promise<void> => {
-    await apiClient.delete(`/school/classes/${classId}/students/${studentId}/`);
+  removeStudentFromClass: async (classId: string, membershipId: string): Promise<void> => {
+    await apiClient.delete(`/school/classes/${classId}/students/${membershipId}/`);
+  },
+
+  /**
+   * O'quvchini boshqa sinfga transfer qilish
+   * API: POST /api/v1/school/classes/{classId}/students/{membershipId}/transfer/
+   */
+  transferStudent: async (
+    classId: string,
+    membershipId: string,
+    data: { target_class_id: string; enrollment_date?: string; notes?: string }
+  ): Promise<ClassStudent> => {
+    const response = await apiClient.post<ClassStudent>(
+      `/school/classes/${classId}/students/${membershipId}/transfer/`,
+      data
+    );
+    return response.data;
   },
 
   // ==================== SUBJECTS ====================
@@ -576,14 +615,22 @@ export const schoolApi = {
 
   /**
    * Bitta o'quvchi haqida to'liq ma'lumot
-   * API: GET /api/v1/school/students/{studentId}/?branch_id={branchId}
+   * API: GET /api/v1/school/students/{studentId}/
    */
   getStudent: async (branchId: string, studentId: string): Promise<Student> => {
     const response = await apiClient.get<Student>(
-      `/school/students/${studentId}/`,
-      { 
-        params: { branch_id: branchId }
-      }
+      `/school/students/${studentId}/`
+    );
+    return response.data;
+  },
+
+  /**
+   * Sinfdagi o'quvchi detallari
+   * API: GET /api/v1/school/classes/{classId}/students/{membershipId}/
+   */
+  getClassStudent: async (classId: string, membershipId: string): Promise<ClassStudent> => {
+    const response = await apiClient.get<ClassStudent>(
+      `/school/classes/${classId}/students/${membershipId}/`
     );
     return response.data;
   },

@@ -65,6 +65,7 @@ export interface ClassStudent {
   student_id: string;
   student_name: string;
   student_phone: string;
+  student_balance: number;
   enrollment_date: string;
   is_active: boolean;
   notes?: string;
@@ -246,6 +247,7 @@ export interface Student {
   email: string;
   branch_id: string;
   branch_name: string;
+  membership_id?: string; // Available students endpoint returns this
   gender: "male" | "female" | "other" | "unspecified";
   status: "active" | "archived" | "suspended" | "graduated" | "transferred";
   status_display?: string;
@@ -375,6 +377,7 @@ export interface CreateQuarterRequest {
 }
 
 export interface CreateClassRequest {
+  branch: string; // Required by API - must match branch_id in URL
   academic_year: string;
   name: string;
   grade_level: number;

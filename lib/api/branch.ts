@@ -161,6 +161,9 @@ export const branchApi = {
 
   /**
    * Filialdagi xodimlarni olish (paginated)
+   * Filters: role, salary_type, user_id, is_active, balance, created_at, updated_at
+   * Search: user first_name/last_name/phone_number, membership title
+   * Ordering: created_at, updated_at, role, salary_type, balance (prefix - for desc)
    */
   getMemberships: async (
     branchId: string,
@@ -169,6 +172,24 @@ export const branchApi = {
       page_size?: number;
       search?: string;
       role?: string;
+      salary_type?: string;
+      user_id?: string;
+      is_active?: boolean;
+      balance?: number;
+      balance__lt?: number;
+      balance__lte?: number;
+      balance__gt?: number;
+      balance__gte?: number;
+      created_at?: string;
+      created_at__lt?: string;
+      created_at__lte?: string;
+      created_at__gt?: string;
+      created_at__gte?: string;
+      updated_at?: string;
+      updated_at__lt?: string;
+      updated_at__lte?: string;
+      updated_at__gt?: string;
+      updated_at__gte?: string;
       ordering?: string;
     }
   ): Promise<PaginatedResponse<MembershipDetail>> => {

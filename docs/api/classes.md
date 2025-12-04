@@ -1,33 +1,37 @@
-# Subjects API — Fanlar Boshqaruvi
+# Classes API — Sinflar Boshqaruvi
 
-Fanlar moduli maktabda fanlarni, sinfga fan biriktirish va o'qituvchi tayinlash uchun API-lar taqdim etadi.
+Sinflar moduli maktabda sinflarni, o'quvchilarni sinfga biriktirish va sinf ma'lumotlarini boshqarish uchun API-lar taqdim etadi.
 
 ## Model Struktura
 
-### Subject Model
+### Class Model
 
-Fanlar quyidagi maydonlarga ega:
+Sinflar quyidagi maydonlarga ega:
 
-- `id` (UUID) — Fan ID
+- `id` (UUID) — Sinf ID
 - `branch` (UUID) — Filial ID (ForeignKey)
-- `name` (String) — Fan nomi (masalan: "Matematika", "Fizika")
-- `code` (String, optional) — Fan kodi (masalan: "MATH", "PHYS")
-- `description` (Text, optional) — Fan tavsifi
-- `color` (String, optional) — Fan rang kodi (HEX, `#RRGGBB`). Jadvalda fan rangini ko'rsatish uchun ishlatiladi.
-- `is_active` (Boolean) — Faol fan
+- `academic_year` (UUID) — Akademik yil ID (ForeignKey)
+- `name` (String) — Sinf nomi (masalan: "1-A", "5-B")
+- `grade_level` (Integer, 1-11) — Sinf darajasi
+- `section` (String, optional) — Bo'lim (A, B, C, ...)
+- `class_teacher` (UUID, optional) — Sinf o'qituvchisi (BranchMembership ID, role=teacher)
+- `max_students` (Integer) — Maksimal o'quvchilar soni
+- `room` (UUID, optional) — Xona ID (ForeignKey to Room)
+- `is_active` (Boolean) — Faol sinf
+- `current_students_count` (Integer, read-only) — Joriy o'quvchilar soni
+- `can_add_student` (Boolean, read-only) — Sinfga yana o'quvchi qo'shish mumkinmi?
 - Audit trail: `created_at`, `updated_at`, `created_by`, `updated_by`
 
-### ClassSubject Model
+### ClassStudent Model
 
-Sinf-fan biriktirish quyidagi maydonlarga ega:
+Sinf o'quvchilari quyidagi maydonlarga ega:
 
-- `id` (UUID) — Sinf-fan biriktirish ID
+- `id` (UUID) — O'quvchi-sinf biriktirish ID
 - `class_obj` (UUID) — Sinf ID (ForeignKey)
-- `subject` (UUID) — Fan ID (ForeignKey)
-- `teacher` (UUID, optional) — O'qituvchi BranchMembership ID (role=teacher)
-- `hours_per_week` (Integer) — Haftada dars soatlari
-- `quarter` (UUID, optional) — Chorak ID (ForeignKey)
+- `membership` (UUID) — O'quvchi BranchMembership ID (role=student)
+- `enrollment_date` (Date) — Qo'shilgan sana (auto)
 - `is_active` (Boolean) — Faol
+- `notes` (Text, optional) — Izohlar
 - Audit trail: `created_at`, `updated_at`, `created_by`, `updated_by`
 
 ## Authentication
@@ -43,36 +47,56 @@ Authorization: Bearer <access_token>
 - `super_admin` — Barcha operatsiyalar
 - `teacher` — Ko'rish va o'z sinflarini boshqarish
 
+### Branch Konteksti (muvofiqlashtirish)
+
+Backend branch kontekstini quyidagi tartibda aniqlaydi:
+
+1) URL yo'lidagi `branch_id` (agar mavjud bo'lsa)
+2) Header: `X-Branch-Id`
+3) Query param: `branch_id`
+4) JWT claim: `br` (fallback)
+
+Sinflar o'quvchilari kabi ba'zi endpointlarda URL faqat `class_id` beradi. Bunday holatda backend avtomatik ravishda `class_id` orqali sinfning `branch_id` sini aniqlab, ruxsatni tekshiradi. Shuning uchun odatda `X-Branch-Id` yuborish shart emas.
+
 ## Endpoints
 
-### 1. Fanlar Ro'yxati
+### 1. Sinflar Ro'yxati
 
-**GET** `/api/v1/school/branches/{branch_id}/subjects/`
+**GET** `/api/v1/school/branches/{branch_id}/classes/`
 
-Filialdagi barcha fanlarni qaytaradi.
+Filialdagi barcha sinflarni qaytaradi.
 
 **Query Parameters:**
 - `page` (Number, optional) — Sahifa raqami (default: 1)
 - `page_size` (Number, optional) — Sahifa hajmi (default: 20, max: 100)
-- `search` (String, optional) — Qidiruv (nomi, kodi)
-- `ordering` (String, optional) — Tartiblash (masalan: `name`, `-name`, `code`, `-code`)
-- `is_active` (Boolean, optional) — Faol fanlar bo'yicha filter
+- `search` (String, optional) — Qidiruv (nomi, sinf rahbari ismi, familiyasi)
+- `ordering` (String, optional) — Tartiblash (masalan: `name`, `-name`, `grade_level`, `-grade_level`)
+- `academic_year_id` (UUID, optional) — Akademik yil bo'yicha filter
+- `grade_level` (Integer, optional) — Sinf darajasi bo'yicha filter
+- `is_active` (Boolean, optional) — Faol sinflar bo'yicha filter
 
 **Response 200:** (Paginatsiya qilingan natija)
 ```json
 {
-  "count": 10,
-  "next": "/api/v1/school/branches/{branch_id}/subjects/?page=2&page_size=20",
+  "count": 42,
+  "next": "/api/v1/school/branches/{branch_id}/classes/?page=2&page_size=20",
   "previous": null,
   "results": [
     {
       "id": "123e4567-e89b-12d3-a456-426614174000",
       "branch": "456e7890-e89b-12d3-a456-426614174001",
       "branch_name": "Alpha School",
-      "name": "Matematika",
-      "code": "MATH",
-      "description": "Matematika fani",
-      "color": "#2D9CDB",
+      "academic_year": "789e0123-e89b-12d3-a456-426614174002",
+      "academic_year_name": "2024-2025",
+      "name": "1-A",
+      "grade_level": 1,
+      "section": "A",
+      "class_teacher": "012e3456-e89b-12d3-a456-426614174003",
+      "class_teacher_name": "John Doe",
+      "max_students": 30,
+      "current_students_count": 25,
+      "can_add_student": true,
+      "room": "345e6789-e89b-12d3-a456-426614174004",
       "is_active": true,
       "created_at": "2024-09-01T10:00:00Z",
       "updated_at": "2024-09-01T10:00:00Z"
@@ -81,28 +105,32 @@ Filialdagi barcha fanlarni qaytaradi.
 }
 ```
 
-### 2. Fan Yaratish
+### 2. Sinf Yaratish
 
-**POST** `/api/v1/school/branches/{branch_id}/subjects/`
+**POST** `/api/v1/school/branches/{branch_id}/classes/`
 
-Yangi fan yaratadi.
+Yangi sinf yaratadi.
 
 **Request Body:**
 ```json
 {
   "branch": "456e7890-e89b-12d3-a456-426614174001",
-  "name": "Matematika",
-  "code": "MATH",
-  "description": "Matematika fani",
-  "color": "#2D9CDB",
+  "academic_year": "789e0123-e89b-12d3-a456-426614174002",
+  "name": "1-A",
+  "grade_level": 1,
+  "section": "A",
+  "class_teacher": "012e3456-e89b-12d3-a456-426614174003",
+  "max_students": 30,
   "is_active": true
 }
 ```
 
 **Validation Rules:**
 - `branch` so'rov bodysida talab qilinadi va URL dagi `{branch_id}` bilan mos bo'lishi kerak
-- `name` tanlangan filialda unique bo'lishi kerak
-- `code` ixtiyoriy, lekin unique bo'lishi tavsiya etiladi
+- `academic_year` tanlangan filialga tegishli bo'lishi kerak
+- `class_teacher` tanlangan filialga tegishli va `role=teacher` bo'lishi kerak
+- `grade_level` 1-11 orasida bo'lishi kerak
+- `max_students` 1 dan katta bo'lishi kerak
 
 **Response 201:**
 ```json
@@ -110,10 +138,16 @@ Yangi fan yaratadi.
   "id": "123e4567-e89b-12d3-a456-426614174000",
   "branch": "456e7890-e89b-12d3-a456-426614174001",
   "branch_name": "Alpha School",
-  "name": "Matematika",
-  "code": "MATH",
-  "description": "Matematika fani",
-  "color": "#2D9CDB",
+  "academic_year": "789e0123-e89b-12d3-a456-426614174002",
+  "academic_year_name": "2024-2025",
+  "name": "1-A",
+  "grade_level": 1,
+  "section": "A",
+  "class_teacher": "012e3456-e89b-12d3-a456-426614174003",
+  "class_teacher_name": "John Doe",
+  "max_students": 30,
+  "current_students_count": 0,
+  "can_add_student": true,
   "is_active": true,
   "created_at": "2024-09-01T10:00:00Z",
   "updated_at": "2024-09-01T10:00:00Z"
@@ -123,129 +157,86 @@ Yangi fan yaratadi.
 **Error 400:**
 ```json
 {
-  "name": ["Fan nomi allaqachon mavjud."]
+  "academic_year": ["Akademik yil tanlangan filialga tegishli emas."],
+  "class_teacher": ["Tanlangan a'zolik o'qituvchi roliga ega emas."]
 }
 ```
 
-### 3. Fan Detallari
+### 3. Sinf Detallari
 
-**GET** `/api/v1/school/branches/{branch_id}/subjects/{id}/`
+**GET** `/api/v1/school/branches/{branch_id}/classes/{id}/`
 
-Fan to'liq ma'lumotlarini va qo'shimcha statistikani qaytaradi.
+Sinf to'liq ma'lumotlarini qaytaradi.
 
-**Response 200 (kengaytirilgan):**
+**Response 200:** (Sinflar ro'yxati bilan bir xil format)
+
+### 4. Sinfni Yangilash
+
+**PATCH** `/api/v1/school/branches/{branch_id}/classes/{id}/`
+
+Sinf ma'lumotlarini yangilaydi.
+
+**Request Body:** (faqat yangilash kerak bo'lgan maydonlar)
 ```json
 {
-  "id": "123e4567-e89b-12d3-a456-426614174000",
-  "branch": "456e7890-e89b-12d3-a456-426614174001",
-  "branch_name": "Alpha School",
-  "name": "Matematika",
-  "code": "MATH",
-  "description": "Matematika fani",
-  "color": "#2D9CDB",
-  "is_active": true,
-  "total_classes": 5,
-  "active_classes": 4,
-  "teachers": [
-    {
-      "id": "c1a2...",
-      "phone_number": "+998901234500",
-      "full_name": "Akmal Rustamov"
-    }
-  ],
-  "class_subjects": [
-    {
-      "id": "789e0123-e89b-12d3-a456-426614174008",
-      "class_id": "321e4567-e89b-12d3-a456-426614174010",
-      "class_name": "5-A",
-      "hours_per_week": 4,
-      "is_active": true,
-      "teacher": {
-        "id": "c1a2...",
-        "full_name": "Akmal Rustamov",
-        "phone_number": "+998901234500"
-      },
-      "quarter": {
-        "id": "9b8c...",
-        "name": "1-chorak",
-        "number": 1
-      }
-    }
-  ],
-  "created_at": "2024-09-01T10:00:00Z",
-  "updated_at": "2024-09-01T10:00:00Z"
+  "name": "1-B",
+  "max_students": 35,
+  "is_active": false
 }
 ```
 
-**Qo'shimcha maydonlar izohi:**
-- `total_classes`: Fan biriktirilgan sinflar umumiy soni (soft-delete hisobga olinmaydi)
-- `active_classes`: Faol (`is_active=true`) biriktirilgan sinflar soni
-- `teachers`: Ushbu fanga biriktirilgan o'qituvchilar (unikal)
-- `class_subjects`: Har bir sinf-fan biriktirish obyekti detallari
+**Response 200:** (Yangilangan sinf ma'lumotlari)
 
-### 4. Fanni Yangilash
+### 5. Sinfni O'chirish
 
-**PATCH** `/api/v1/school/branches/{branch_id}/subjects/{id}/`
+**DELETE** `/api/v1/school/branches/{branch_id}/classes/{id}/`
 
-Fan ma'lumotlarini yangilaydi.
+Sinfni soft-delete qiladi. O'chirilganda bog'liq obyektlar ham soft-delete qilinadi:
 
-**Request Body (misol):**
-```json
-{
-  "name": "Matematika (Yangi)",
-  "description": "Yangilangan tavsif",
-  "color": "#F2994A"
-}
-```
-
-**Response 200:** (Yangilangan fan ma'lumotlari)
-
-### 5. Fanni O'chirish
-
-**DELETE** `/api/v1/school/branches/{branch_id}/subjects/{id}/`
-
-Fanni soft-delete qiladi (ma'lumotlar bazada qoladi, `deleted_at` belgilanadi, ro'yxatlarda ko'rinmaydi).
+- Ushbu sinfdagi barcha `ClassStudent` yozuvlari
+- Ushbu sinfga biriktirilgan barcha `ClassSubject` yozuvlari
 
 **Response 204:** No Content
 
-**Soft Delete Xulq-atvori:**
-- Keyinchalik tiklash uchun admin panelda yoki alohida endpoint orqali `restore` chaqirsa bo'ladi (hozircha umumiy endpoint yo'q).
-- Hard delete uchun faqat ichki maqsadlarda `hard_delete()` ishlatiladi.
-- Fan soft delete qilinganda unga biriktirilgan barcha `ClassSubject` yozuvlari ham avtomatik soft delete qilinadi (`deleted_at` belgilanadi) va o'qituvchi / o'quvchi dashboard fan ro'yxatlarida ko'rinmaydi.
+**Soft Delete va Unique Constraints:**
+- O'chirilgan sinflar ro'yxatlarda va detallarda ko'rinmaydi
+- Sinf soft-delete qilinganda, bog'liq `ClassStudent` va `ClassSubject` yozuvlari ham ko'rinmaydi
+- **O'chirilgan sinf bilan bir xil nomdagi yangi sinf yaratish mumkin** — unique constraint faqat faol (`deleted_at is null`) yozuvlarga qo'llanadi
+- Misol: "1-A" sinfni yaratib, o'chirib, yana "1-A" yaratish mumkin (ular turli ID bilan yangi yozuvlar bo'ladi)
 
-### 6. Sinf Fanlari Ro'yxati
+### 6. Sinf O'quvchilari Ro'yxati
 
-**GET** `/api/v1/school/classes/{class_id}/subjects/`
+**GET** `/api/v1/school/classes/{class_id}/students/`
 
-Sinfdagi barcha fanlarni qaytaradi.
+Sinfdagi barcha o'quvchilarni qaytaradi.
 
 **Query Parameters:**
 - `page` (Number, optional) — Sahifa raqami (default: 1)
 - `page_size` (Number, optional) — Sahifa hajmi (default: 20, max: 100)
-- `search` (String, optional) — Qidiruv (fan nomi, o'qituvchi ismi)
-- `ordering` (String, optional) — Tartiblash (masalan: `subject__name`, `-subject__name`)
-- `is_active` (Boolean, optional) — Faol fanlar bo'yicha filter
+- `search` (String, optional) — Qidiruv (ism, telefon)
+- `ordering` (String, optional) — Tartiblash (masalan: `created_at`, `-created_at`)
+- `is_active` (Boolean, optional) — Faol o'quvchilar bo'yicha filter
 
 **Response 200:** (Paginatsiya qilingan natija)
 ```json
 {
-  "count": 8,
-  "next": "/api/v1/school/classes/{class_id}/subjects/?page=2&page_size=20",
+  "count": 25,
+  "next": "/api/v1/school/classes/{class_id}/students/?page=2&page_size=20",
   "previous": null,
   "results": [
     {
       "id": "234e5678-e89b-12d3-a456-426614174005",
       "class_obj": "123e4567-e89b-12d3-a456-426614174000",
-      "class_name": "1-A",
-      "subject": "345e6789-e89b-12d3-a456-426614174006",
-      "subject_name": "Matematika",
-      "subject_code": "MATH",
-      "teacher": "567e8901-e89b-12d3-a456-426614174007",
-      "teacher_name": "John Doe",
-      "hours_per_week": 4,
-      "quarter": "789e0123-e89b-12d3-a456-426614174008",
-      "quarter_name": "1-chorak",
+      "membership": "567e8901-e89b-12d3-a456-426614174006",
+      "membership_id": "567e8901-e89b-12d3-a456-426614174006",
+      "student_id": "890e1234-e89b-12d3-a456-426614174007",
+      "student_user_id": "890e1234-e89b-12d3-a456-426614174007",
+      "student_name": "Jane Smith",
+      "student_phone": "+998901234568",
+      "student_balance": 0,
+      "enrollment_date": "2024-09-01",
       "is_active": true,
+      "notes": "",
       "created_at": "2024-09-01T10:00:00Z",
       "updated_at": "2024-09-01T10:00:00Z"
     }
@@ -253,45 +244,41 @@ Sinfdagi barcha fanlarni qaytaradi.
 }
 ```
 
-### 7. Sinfga Fan Qo'shish
+### 7. O'quvchi Qo'shish
 
-**POST** `/api/v1/school/classes/{class_id}/subjects/`
+**POST** `/api/v1/school/classes/{class_id}/students/`
 
-Sinfga fan qo'shadi va o'qituvchi tayinlaydi.
+O'quvchini sinfga qo'shadi.
 
 **Request Body:**
 ```json
 {
-  "subject": "345e6789-e89b-12d3-a456-426614174006",
-  "teacher": "567e8901-e89b-12d3-a456-426614174007",
-  "hours_per_week": 4,
-  "quarter": "789e0123-e89b-12d3-a456-426614174008",
-  "is_active": true
+  "membership": "567e8901-e89b-12d3-a456-426614174006",
+  "is_active": true,
+  "notes": "Yangi o'quvchi"
 }
 ```
 
 **Validation Rules:**
-- `subject` sinf bilan bir xil filialga tegishli bo'lishi kerak
-- `teacher` sinf bilan bir xil filialga tegishli va `role=teacher` bo'lishi kerak
-- `quarter` sinf bilan bir xil akademik yilga tegishli bo'lishi kerak (agar belgilansa)
-- Fan allaqachon sinfga qo'shilgan bo'lmasligi kerak
-- `hours_per_week` 1 dan katta bo'lishi kerak
+- `membership` o'quvchi roliga ega bo'lishi kerak (`role=student`)
+- `membership` sinf bilan bir xil filialga tegishli bo'lishi kerak
+- Sinf to'ldi bo'lmasligi kerak (`current_students_count < max_students`)
+- O'quvchi allaqachon sinfga qo'shilgan bo'lmasligi kerak
 
 **Response 201:**
 ```json
 {
   "id": "234e5678-e89b-12d3-a456-426614174005",
   "class_obj": "123e4567-e89b-12d3-a456-426614174000",
-  "class_name": "1-A",
-  "subject": "345e6789-e89b-12d3-a456-426614174006",
-  "subject_name": "Matematika",
-  "subject_code": "MATH",
-  "teacher": "567e8901-e89b-12d3-a456-426614174007",
-  "teacher_name": "John Doe",
-  "hours_per_week": 4,
-  "quarter": "789e0123-e89b-12d3-a456-426614174008",
-  "quarter_name": "1-chorak",
+  "membership": "567e8901-e89b-12d3-a456-426614174006",
+  "membership_id": "567e8901-e89b-12d3-a456-426614174006",
+  "student_id": "890e1234-e89b-12d3-a456-426614174007",
+  "student_name": "Jane Smith",
+  "student_phone": "+998901234568",
+  "student_balance": 0,
+  "enrollment_date": "2024-09-01",
   "is_active": true,
+  "notes": "Yangi o'quvchi",
   "created_at": "2024-09-01T10:00:00Z",
   "updated_at": "2024-09-01T10:00:00Z"
 }
@@ -300,44 +287,131 @@ Sinfga fan qo'shadi va o'qituvchi tayinlaydi.
 **Error 400:**
 ```json
 {
-  "subject": ["Bu fan allaqachon sinfga qo'shilgan."],
-  "teacher": ["Tanlangan a'zolik o'qituvchi roliga ega emas."],
-  "quarter": ["Chorak sinf bilan bir xil akademik yilga tegishli bo'lishi kerak."]
+  "membership": ["Sinf to'ldi. Maksimal o'quvchilar soni: 30"]
 }
 ```
 
-### 8. Sinf Fani Detallari
+### 8. O'quvchi Detallari
 
-**GET** `/api/v1/school/classes/{class_id}/subjects/{id}/`
+**GET** `/api/v1/school/classes/{class_id}/students/{student_id}/`
 
-Sinf-fan biriktirish detallarini qaytaradi.
+O'quvchi-sinf biriktirish detallarini qaytaradi.
 
-**Response 200:** (Sinf fanlari ro'yxati bilan bir xil format)
+**Muhim (best practice):** `{student_id}` — bu `membership_id`. Detail endpoint uchun har doim ro'yxatdagi `membership_id` ni ishlating.
 
-### 9. Sinf Fani Yangilash
+Qo'shimcha maydon: `student_user_id` foydalanuvchi ID (o'quvchi) bo'lib, ro'yxatda ma'lumot uchun qaytariladi. Detail uchun ishlatilmaydi.
 
-**PATCH** `/api/v1/school/classes/{class_id}/subjects/{id}/`
+Detail endpoint uchun doimo ro'yxatdagi `membership_id` ni ishlating.
 
-Sinf-fan biriktirish ma'lumotlarini yangilaydi (masalan, o'qituvchi o'zgartirish).
+**Eslatma:** Barcha response larda `student_balance` maydoni mavjud — o'quvchining joriy balansi (so'm, butun son). Bu moliyaviy operatsiyalarni kuzatish uchun foydali.
+
+**Response 200:** (O'quvchi ma'lumotlari)
+
+### 9. O'quvchini Yangilash
+
+**PATCH** `/api/v1/school/classes/{class_id}/students/{student_id}/`
+
+O'quvchi-sinf biriktirish ma'lumotlarini yangilaydi.
 
 **Request Body:**
 ```json
 {
-  "teacher": "890e1234-e89b-12d3-a456-426614174009",
-  "hours_per_week": 5,
-  "is_active": false
+  "is_active": false,
+  "notes": "O'quvchi sinfdan chiqdi"
 }
 ```
 
 **Response 200:** (Yangilangan ma'lumotlar)
 
-### 10. Sinfdan Fanni Olib Tashlash
+### 10. O'quvchini Olib Tashlash
 
-**DELETE** `/api/v1/school/classes/{class_id}/subjects/{id}/`
+**DELETE** `/api/v1/school/classes/{class_id}/students/{student_id}/`
 
-Sinfdan fanni olib tashlaydi (soft-delete).
+O'quvchini sinfdan olib tashlaydi (soft-delete).
 
 **Response 204:** No Content
+
+### 11. Mavjud O'quvchilar (Sinfga qo'shish uchun)
+
+### 12. O'quvchini Transfer Qilish
+
+**POST** `/api/v1/school/classes/{class_id}/students/{student_id}/transfer/`
+
+Berilgan sinfdagi o'quvchini (membership_id) boshqa sinfga ko'chiradi. Transfer faqat bir filial ichida amalga oshiriladi: eski biriktirish soft-delete qilinadi va yangi sinfga yangi biriktirish yaratiladi.
+
+Query params: yo'q.
+
+Body:
+```json
+{
+  "target_class_id": "789e1234-e89b-12d3-a456-426614174009",
+  "enrollment_date": "2024-09-15",
+  "notes": "Transfer: parallel sinfga"
+}
+```
+
+Cheklovlar:
+- `target_class_id` bir xil filialga tegishli bo'lishi kerak.
+- `target_class_id` joriy sinfdan farq qilishi kerak.
+- O'quvchi maqsadli sinfga allaqachon biriktirilgan bo'lmasligi kerak.
+
+**Response 201:** (Yangi sinfga biriktirish)
+```json
+{
+  "id": "234e5678-e89b-12d3-a456-426614174099",
+  "class_obj": "789e1234-e89b-12d3-a456-426614174009",
+  "membership": "567e8901-e89b-12d3-a456-426614174006",
+  "membership_id": "567e8901-e89b-12d3-a456-426614174006",
+  "student_id": "890e1234-e89b-12d3-a456-426614174007",
+  "student_name": "Jane Smith",
+  "student_phone": "+998901234568",
+  "student_balance": 0,
+  "enrollment_date": "2024-09-15",
+  "is_active": true,
+  "notes": "Transfer: parallel sinfga",
+  "created_at": "2024-09-15T10:00:00Z",
+  "updated_at": "2024-09-15T10:00:00Z"
+}
+```
+
+Xatoliklar (400):
+- `{"target_class_id": "Target class must be in the same branch"}`
+- `{"target_class_id": "Target class must be different"}`
+- `{"target_class_id": "Student already enrolled in target class"}`
+
+**GET** `/api/v1/school/branches/{branch_id}/classes/{class_id}/available-students/`
+
+Berilgan filial va sinf uchun hali sinfga kiritilmagan o'quvchilar ro'yxati (filialdagi `student` roli bo'lgan a'zoliklar ichidan).
+
+**Query Parameters:**
+- `page` — Sahifa raqami (default: 1)
+- `page_size` — Sahifa hajmi (default: 20, max: 100)
+- `search` — Qidiruv (`user__first_name`, `user__last_name`, `user__phone_number`, `title`)
+- `ordering` — Tartiblash (`user__first_name`, `user__last_name`, `created_at`, prefiks `-` kamayish uchun)
+
+**Response 200:** (Paginatsiya qilingan natija)
+```json
+{
+  "count": 2,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": "567e8901-e89b-12d3-a456-426614174006",
+      "user_phone": "+998900000012",
+      "user_name": "Ali Bek",
+      "branch": "456e7890-e89b-12d3-a456-426614174001",
+      "branch_name": "Alpha School",
+      "role": "student",
+      "title": "",
+      "salary_type": "monthly",
+      "balance": 0,
+      "created_at": "2024-09-01T10:00:00Z",
+      "updated_at": "2024-09-01T10:00:00Z"
+    }
+  ]
+}
+```
 
 ## Error Responses
 
@@ -371,97 +445,71 @@ Sinfdan fanni olib tashlaydi (soft-delete).
 
 ## Misollar
 
-### Fan yaratish va sinfga qo'shish
+### Sinf yaratish va o'quvchi qo'shish
 
 ```javascript
-// 1. Fan yaratish
-const createSubject = async () => {
-  const response = await fetch('/api/v1/school/branches/{branch_id}/subjects/', {
+// 1. Sinf yaratish
+const createClass = async () => {
+  const response = await fetch('/api/v1/school/branches/{branch_id}/classes/', {
     method: 'POST',
     headers: {
       'Authorization': 'Bearer <token>',
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      name: 'Matematika',
-      code: 'MATH',
-      description: 'Matematika fani',
-      color: '#2D9CDB',
+      academic_year: '789e0123-e89b-12d3-a456-426614174002',
+      name: '1-A',
+      grade_level: 1,
+      section: 'A',
+      class_teacher: '012e3456-e89b-12d3-a456-426614174003',
+      max_students: 30,
       is_active: true
     })
   });
-  const subjectData = await response.json();
-  return subjectData;
+  const classData = await response.json();
+  return classData;
 };
 
-// 2. Sinfga fan qo'shish
-const addSubjectToClass = async (classId, subjectId, teacherId, quarterId) => {
-  const response = await fetch(`/api/v1/school/classes/${classId}/subjects/`, {
+// 2. O'quvchini sinfga qo'shish
+const addStudent = async (classId, membershipId) => {
+  const response = await fetch(`/api/v1/school/classes/${classId}/students/`, {
     method: 'POST',
     headers: {
       'Authorization': 'Bearer <token>',
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      subject: subjectId,
-      teacher: teacherId,
-      hours_per_week: 4,
-      quarter: quarterId,
-      is_active: true
+      membership: membershipId,
+      is_active: true,
+      notes: 'Yangi o\'quvchi'
     })
   });
-  const classSubjectData = await response.json();
-  return classSubjectData;
+  const studentData = await response.json();
+  return studentData;
 };
 ```
 
-### Sinf fanlarini olish
+### Sinf o'quvchilarini olish
 
 ```javascript
-const getClassSubjects = async (classId) => {
-  const response = await fetch(`/api/v1/school/classes/${classId}/subjects/`, {
+const getClassStudents = async (classId) => {
+  const response = await fetch(`/api/v1/school/classes/${classId}/students/`, {
     method: 'GET',
     headers: {
       'Authorization': 'Bearer <token>'
     }
   });
-  const subjects = await response.json();
-  return subjects;
+  const students = await response.json();
+  return students;
 };
-```
-
-### O'qituvchini o'zgartirish
-
-```javascript
-const updateClassSubjectTeacher = async (classId, classSubjectId, newTeacherId) => {
-  const response = await fetch(`/api/v1/school/classes/${classId}/subjects/${classSubjectId}/`, {
-    method: 'PATCH',
-    headers: {
-      'Authorization': 'Bearer <token>',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      teacher: newTeacherId
-    })
-  });
-  const updatedData = await response.json();
-  return updatedData;
-};
-
-## Rang Tanlash Qoidalari
-
-- `color` faqat HEX formatda qabul qilinadi: `#RRGGBB`
-- Misol: `#FF5733`, `#2D9CDB`, `#27AE60`
-- Bo'sh qoldirilsa, UI default rangdan foydalansa bo'ladi.
-- Rang jadvalni vizual farqlash uchun; branch ichida takrorlansa ham ruxsat (agar unikal talab qilinsa, backendda qo'shimcha constraint qo'shish mumkin).
 ```
 
 ## Dashboard API
 
 O'qituvchi va o'quvchilar uchun alohida dashboard API-lar mavjud:
 
-- **O'qituvchi**: `/api/v1/school/dashboard/teacher/subjects/` — O'qituvchining fanlari
-- **O'quvchi**: `/api/v1/school/dashboard/student/subjects/` — O'quvchining fanlari
+- **O'qituvchi**: `/api/v1/school/dashboard/teacher/classes/` — O'qituvchining sinflari
+- **O'quvchi**: `/api/v1/school/dashboard/student/class/` — O'quvchining sinfi
 
 Batafsil ma'lumot uchun [Dashboard API](dashboard.md) hujjatiga qarang.
 
@@ -475,25 +523,26 @@ Quyidagi modellar signallar orqali avtomatik yaratiladi:
 
 ## Eslatmalar
 
-1. **Soft Delete**: Fan yoki sinf-fan biriktirish o'chirilganda, ular `deleted_at` maydoni bilan belgilanadi va faol ro'yxatlarda ko'rinmaydi.
+1. **Soft Delete**: Sinf yoki o'quvchi o'chirilganda, ular `deleted_at` maydoni bilan belgilanadi va faol ro'yxatlarda ko'rinmaydi.
 
 2. **Unique Constraints**: 
-   - Har bir filial uchun fan nomi unique
-   - Har bir sinf uchun fan bir marta qo'shilishi mumkin
-  - Soft-delete qilingan fan nomi qayta ishlatilsa bo'ladi (agar unique constraint buzilmasa). Agar constraint tufayli xato bo'lsa, avval eski fan tiklanishi yoki nom o'zgartirilishi kerak.
+   - Har bir filial va akademik yil uchun sinf nomi unique
+   - Har bir sinf uchun o'quvchi bir marta qo'shilishi mumkin
 
 3. **Relationships**:
-   - Fan filialga bog'liq
-   - Sinf-fan biriktirish sinf, fan, o'qituvchi va chorakka bog'liq
-  - Soft-delete qilingan fan bilan bog'liq `ClassSubject` lar ham avtomatik yashirinmaydi; ular timetable logikangizda filtrlanishi kerak.
-   - O'qituvchi ixtiyoriy (keyinchalik tayinlash mumkin)
+   - Sinf akademik yilga bog'liq
+   - Sinf o'qituvchiga bog'liq (ixtiyoriy)
+   - Sinf xonaga bog'liq (ixtiyoriy)
+   - O'quvchi BranchMembership orqali sinfga biriktiriladi
 
-4. **Validation**:
-   - Fan va sinf bir xil filialga tegishli bo'lishi kerak
-   - O'qituvchi va sinf bir xil filialga tegishli bo'lishi kerak
-   - Chorak va sinf bir xil akademik yilga tegishli bo'lishi kerak
+4. **Computed Fields**:
+   - `current_students_count` — faol o'quvchilar soni
+   - `can_add_student` — sinfga yana o'quvchi qo'shish mumkinmi?
 
 5. **Permissions**:
    - Admin endpointlar: `branch_admin`, `super_admin`, `teacher` (CRUD)
    - Dashboard endpointlar: `teacher` yoki `student` (faqat o'z ma'lumotlari)
+
+6. **Avtomatik Yaratiladigan Modellar**:
+   - `StudentBalance` - `StudentProfile` yaratilganda avtomatik yaratiladi (signal orqali)
 
