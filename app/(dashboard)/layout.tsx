@@ -18,7 +18,8 @@ import {
   X,
   ChevronDown,
   Building2,
-  Shield
+  Shield,
+  ArrowLeft
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -213,17 +214,27 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         {/* Top Header */}
         <header className="sticky top-0 z-30 bg-white border-b border-gray-200 backdrop-blur-sm bg-white/80">
           <div className="flex items-center justify-between px-6 py-4">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <Menu className="w-6 h-6" />
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="lg:hidden p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <Menu className="w-6 h-6" />
+              </button>
 
-            <div className="hidden lg:block">
-              <h2 className="text-2xl font-bold text-gray-900">
-                Dashboard
-              </h2>
+              <button
+                onClick={() => router.back()}
+                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Orqaga"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+
+              <div className="hidden lg:block">
+                <h2 className="text-2xl font-bold text-gray-900">
+                  Dashboard
+                </h2>
+              </div>
             </div>
 
             {/* User Menu */}
