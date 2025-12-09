@@ -1,9 +1,10 @@
 "use client";
 
 import React from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { roleToPath } from "@/lib/utils/roleMapping";
+import { useQueryClient } from "@tanstack/react-query";
 import { 
   LayoutDashboard, 
   Users, 
@@ -19,7 +20,8 @@ import {
   ChevronDown,
   Building2,
   Shield,
-  ArrowLeft
+  ArrowLeft,
+  Home
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -40,8 +42,15 @@ interface DashboardLayoutProps {
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const queryClient = useQueryClient();
   const { user, currentBranch, logout, isLoading, loadUser } = useAuth();
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
+
+  // Invalidate all queries when pathname changes (user navigates)
+  React.useEffect(() => {
+    queryClient.invalidateQueries();
+  }, [pathname, queryClient]);
 
   React.useEffect(() => {
     if (!isLoading && !user) {
@@ -106,6 +115,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         { name: "O'quvchilar", href: `/${rolePath}/students`, icon: GraduationCap },
         { name: "Sinflar", href: `/${rolePath}/classes`, icon: ClipboardList },
         { name: "Fanlar", href: `/${rolePath}/subjects`, icon: BookOpen },
+        { name: "Xonalar", href: `/${rolePath}/rooms`, icon: Home },
         { name: "Rollar", href: `/${rolePath}/roles`, icon: Shield },
         { name: "Moliya", href: `/${rolePath}/finance`, icon: DollarSign },
         { name: "Sozlamalar", href: `/${rolePath}/settings`, icon: Settings },

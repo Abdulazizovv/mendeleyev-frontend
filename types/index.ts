@@ -13,6 +13,7 @@ export type {
 	RoomType,
 	Building,
 	Room,
+	EquipmentItem,
 	TeacherClass,
 	TeacherSubject,
 	TeacherStudent,

@@ -497,6 +497,38 @@ export const schoolApi = {
     return response.data;
   },
 
+  /**
+   * Bino detallari
+   */
+  getBuilding: async (branchId: string, buildingId: string): Promise<Building> => {
+    const response = await apiClient.get<Building>(
+      `/school/branches/${branchId}/buildings/${buildingId}/`
+    );
+    return response.data;
+  },
+
+  /**
+   * Binoni yangilash
+   */
+  updateBuilding: async (
+    branchId: string,
+    buildingId: string,
+    data: Partial<CreateBuildingRequest>
+  ): Promise<Building> => {
+    const response = await apiClient.patch<Building>(
+      `/school/branches/${branchId}/buildings/${buildingId}/`,
+      data
+    );
+    return response.data;
+  },
+
+  /**
+   * Binoni o'chirish
+   */
+  deleteBuilding: async (branchId: string, buildingId: string): Promise<void> => {
+    await apiClient.delete(`/school/branches/${branchId}/buildings/${buildingId}/`);
+  },
+
   // ==================== ROOMS ====================
 
   /**
@@ -521,7 +553,39 @@ export const schoolApi = {
    */
   createRoom: async (branchId: string, data: CreateRoomRequest): Promise<Room> => {
     const response = await apiClient.post<Room>(`/school/branches/${branchId}/rooms/`, data);
+    return response.data; 
+  },
+
+  /**
+   * Xona detallari
+   */
+  getRoom: async (branchId: string, roomId: string): Promise<Room> => {
+    const response = await apiClient.get<Room>(
+      `/school/branches/${branchId}/rooms/${roomId}/`
+    );
     return response.data;
+  },
+
+  /**
+   * Xonani yangilash
+   */
+  updateRoom: async (
+    branchId: string,
+    roomId: string,
+    data: Partial<CreateRoomRequest>
+  ): Promise<Room> => {
+    const response = await apiClient.patch<Room>(
+      `/school/branches/${branchId}/rooms/${roomId}/`,
+      data
+    );
+    return response.data;
+  },
+
+  /**
+   * Xonani o'chirish
+   */
+  deleteRoom: async (branchId: string, roomId: string): Promise<void> => {
+    await apiClient.delete(`/school/branches/${branchId}/rooms/${roomId}/`);
   },
 
   // ==================== TEACHER DASHBOARD ====================

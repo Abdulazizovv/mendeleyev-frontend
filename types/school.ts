@@ -124,6 +124,12 @@ export interface Building {
   updated_at: string;
 }
 
+export interface EquipmentItem {
+  name: string;
+  quantity: number;
+  unit: string;
+}
+
 export interface Room {
   id: string;
   branch: string;
@@ -135,7 +141,7 @@ export interface Room {
   room_type_display: string;
   floor: number;
   capacity: number;
-  equipment?: Record<string, any>;
+  equipment?: EquipmentItem[];
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -427,7 +433,7 @@ export interface CreateRoomRequest {
   room_type: RoomType;
   floor: number;
   capacity: number;
-  equipment?: Record<string, any>;
+  equipment?: EquipmentItem[];
   is_active: boolean;
 }
 
