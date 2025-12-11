@@ -437,6 +437,150 @@ export interface CreateRoomRequest {
   is_active: boolean;
 }
 
+// HR Types
+export type EmploymentType = "full_time" | "part_time" | "contract" | "temporary";
+export type StaffStatus = "active" | "inactive" | "on_leave" | "terminated";
+export type TransactionType = "deposit" | "withdrawal" | "salary" | "bonus" | "fine" | "adjustment" | "advance";
+export type PaymentMethod = "cash" | "bank_transfer" | "card" | "click" | "payme" | "other";
+export type SalaryStatus = "pending" | "paid" | "cancelled" | "failed";
+
+export interface StaffRole {
+  id: string; // UUID
+  name: string;
+  code: string;
+  branch: string; // UUID
+  branch_name: string;
+  permissions: string[];
+  salary_range_min?: number;
+  salary_range_max?: number;
+  description?: string;
+  is_active: boolean;
+  staff_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserInfo {
+  id: string;
+  phone_number: string;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  email?: string;
+}
+
+export interface StaffRoleInfo {
+  id: number;
+  name: string;
+  code: string;
+}
+
+export interface BalanceSummary {
+  current_balance: number;
+  total_credits: number;
+  total_debits: number;
+  net: number;
+}
+
+export interface StaffProfile {
+  id: string; // UUID
+  user: string; // UUID
+  user_info: UserInfo;
+  branch: string; // UUID
+  branch_name: string;
+  membership?: string; // UUID
+  staff_role: string; // UUID
+  staff_role_info: StaffRoleInfo;
+  employment_type: EmploymentType;
+  hire_date: string;
+  termination_date?: string | null;
+  base_salary: number;
+  current_balance: number;
+  balance_summary: BalanceSummary;
+  bank_account?: string;
+  tax_id?: string;
+  status: StaffStatus;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BalanceTransaction {
+  id: string; // UUID
+  staff: string; // UUID
+  staff_name: string;
+  transaction_type: TransactionType;
+  transaction_type_display: string;
+  amount: number;
+  previous_balance: number;
+  new_balance: number;
+  reference?: string;
+  description?: string;
+  salary_payment?: string | null; // UUID
+  processed_by?: string; // UUID
+  processed_by_name?: string;
+  created_at: string;
+}
+
+export interface SalaryPayment {
+  id: string; // UUID
+  staff: string; // UUID
+  staff_name: string;
+  month: string;
+  amount: number;
+  payment_date?: string;
+  payment_method?: PaymentMethod;
+  payment_method_display?: string;
+  status: SalaryStatus;
+  status_display: string;
+  notes?: string;
+  reference_number?: string;
+  processed_by?: string; // UUID
+  processed_by_name?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateStaffRoleRequest {
+  name: string;
+  code: string;
+  branch: string; // UUID
+  permissions?: string[];
+  salary_range_min?: number;
+  salary_range_max?: number;
+  description?: string;
+  is_active: boolean;
+}
+
+export interface CreateStaffProfileRequest {
+  user: string; // UUID
+  branch: string; // UUID
+  membership?: string; // UUID
+  staff_role: string; // UUID
+  employment_type: EmploymentType;
+  hire_date: string;
+  base_salary: number;
+  bank_account?: string;
+  tax_id?: string;
+  notes?: string;
+}
+
+export interface CreateTransactionRequest {
+  transaction_type: TransactionType;
+  amount: number;
+  description?: string;
+  reference?: string;
+}
+
+export interface CreateSalaryPaymentRequest {
+  staff: string; // UUID
+  month: string;
+  amount: number;
+  payment_date?: string;
+  payment_method?: PaymentMethod;
+  notes?: string;
+}
+
 // Student Request Types
 export interface CreateStudentRelativeRequest {
   relationship_type: RelationshipType;
@@ -455,6 +599,18 @@ export interface CreateStudentRelativeRequest {
   is_guardian?: boolean;
   additional_info?: Record<string, any>;
   notes?: string;
+}
+
+// Bulk Salary Payment Request
+export interface BulkSalaryPaymentRequest {
+  month: string;
+  payments: Array<{
+    staff_id: string; // UUID
+    amount: number;
+    payment_date: string;
+    payment_method: PaymentMethod;
+    notes?: string;
+  }>;
 }
 
 export interface CreateStudentRequest {

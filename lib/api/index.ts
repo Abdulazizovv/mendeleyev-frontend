@@ -2,6 +2,7 @@ export { default as apiClient, handleApiError } from "./client";
 export { authApi } from "./auth";
 export { schoolApi } from "./school";
 export { branchApi } from "./branch";
+export { hrApi } from "./hr";
 
 // Re-export types
 export type { Role, MembershipDetail, BalanceUpdateRequest, RoleRequest, BranchStatistics } from "./branch";
