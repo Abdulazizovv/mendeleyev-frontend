@@ -8,6 +8,8 @@ import type {
   CreateStaffProfileRequest,
   CreateTransactionRequest,
   CreateSalaryPaymentRequest,
+  CheckStaffUserResponse,
+  StaffStatisticsResponse,
   PaginatedResponse,
 } from "@/types";
 
@@ -106,6 +108,9 @@ export const hrApi = {
     employment_type?: string;
     status?: string;
     active?: boolean;
+    balance_status?: "positive" | "negative" | "zero";
+    hire_date_from?: string;
+    hire_date_to?: string;
     search?: string;
     ordering?: string;
   }): Promise<StaffProfile[]> => {
@@ -114,6 +119,27 @@ export const hrApi = {
       { params }
     );
     return unwrapResults(response.data);
+  },
+
+  /**
+   * Xodimlar statistikasi
+   * API: GET /api/v1/hr/staff/stats/
+   */
+  getStaffStats: async (params?: {
+    branch?: string;
+    staff_role?: string;
+    employment_type?: string;
+    status?: string;
+    active?: boolean;
+    balance_status?: "positive" | "negative" | "zero";
+    hire_date_from?: string;
+    hire_date_to?: string;
+  }): Promise<StaffStatisticsResponse> => {
+    const response = await apiClient.get<StaffStatisticsResponse>(
+      `/hr/staff/stats/`,
+      { params }
+    );
+    return response.data;
   },
 
   /**
@@ -126,11 +152,44 @@ export const hrApi = {
   },
 
   /**
-   * Xodim yaratish
+   * Xodim yaratish (Basic - deprecated)
    * API: POST /api/v1/hr/staff/
+   * 
+   * @deprecated Yangi loyihalar uchun createStaffEnhanced'dan foydalaning
    */
   createStaff: async (data: CreateStaffProfileRequest): Promise<StaffProfile> => {
     const response = await apiClient.post<StaffProfile>(`/hr/staff/`, data);
+    return response.data;
+  },
+
+  /**
+   * Xodim yaratish (Enhanced - recommended)
+   * API: POST /api/v1/hr/staff/create/
+   * 
+   * User, BranchMembership va StaffProfile'ni atomik yaratadi
+   * Telefon raqamni avtomatik normalizatsiya qiladi
+   * Mavjud userlarni qayta ishlata oladi
+   */
+  createStaffEnhanced: async (data: EnhancedCreateStaffRequest): Promise<StaffProfile> => {
+    const response = await apiClient.post<StaffProfile>(`/hr/staff/create/`, data);
+    return response.data;
+  },
+
+  /**
+   * Xodim mavjudligini tekshirish
+   * API: GET/POST /api/v1/hr/staff/check-user/
+   * 
+   * Telefon raqam orqali xodim mavjudligini tekshiradi
+   * branch_id berilsa, shu filialdagi ma'lumotni qaytaradi
+   */
+  checkStaffUser: async (params: {
+    phone_number: string;
+    branch_id?: string;
+  }): Promise<CheckStaffUserResponse> => {
+    const response = await apiClient.get<CheckStaffUserResponse>(
+      `/hr/staff/check-user/`,
+      { params }
+    );
     return response.data;
   },
 

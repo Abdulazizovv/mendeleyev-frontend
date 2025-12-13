@@ -1,5 +1,6 @@
 export * from "./auth";
 export * from "./api";
+export * from "./staff";
 
 // Re-export school module types explicitly to avoid duplicate symbol
 // (PaginatedResponse is already exported from ./api)
@@ -26,8 +27,11 @@ export type {
 	UserInfo,
 	StaffRoleInfo,
 	BalanceSummary,
+	CheckStaffUserResponse,
+	StaffStatisticsResponse,
 	CreateStaffRoleRequest,
 	CreateStaffProfileRequest,
+	EnhancedCreateStaffRequest,
 	CreateTransactionRequest,
 	CreateSalaryPaymentRequest,
 	TeacherClass,

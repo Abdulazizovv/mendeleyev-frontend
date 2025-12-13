@@ -486,21 +486,31 @@ export interface StaffProfile {
   id: string; // UUID
   user: string; // UUID
   user_info: UserInfo;
+  user_name: string;
+  phone_number: string;
+  email?: string;
   branch: string; // UUID
   branch_name: string;
   membership?: string; // UUID
   staff_role: string; // UUID
   staff_role_info: StaffRoleInfo;
+  role_name: string;
+  role_code: string;
   employment_type: EmploymentType;
+  employment_type_display: string;
   hire_date: string;
   termination_date?: string | null;
   base_salary: number;
   current_balance: number;
+  balance_status: "positive" | "negative" | "zero";
   balance_summary: BalanceSummary;
   bank_account?: string;
   tax_id?: string;
   status: StaffStatus;
+  status_display: string;
   notes?: string;
+  days_employed: number;
+  is_active_membership: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -552,6 +562,7 @@ export interface CreateStaffRoleRequest {
   is_active: boolean;
 }
 
+// Basic staff profile request (deprecated - use EnhancedCreateStaffRequest)
 export interface CreateStaffProfileRequest {
   user: string; // UUID
   branch: string; // UUID
@@ -560,6 +571,23 @@ export interface CreateStaffProfileRequest {
   employment_type: EmploymentType;
   hire_date: string;
   base_salary: number;
+  bank_account?: string;
+  tax_id?: string;
+  notes?: string;
+}
+
+// Enhanced staff creation request (recommended)
+export interface EnhancedCreateStaffRequest {
+  phone_number: string; // +998901234567 formatida
+  first_name: string;
+  last_name?: string;
+  email?: string;
+  password?: string; // Ixtiyoriy, berilmasa unusable password
+  branch_id: string; // UUID
+  staff_role_id: string; // UUID
+  employment_type: EmploymentType;
+  hire_date: string; // YYYY-MM-DD
+  base_salary: number; // UZS
   bank_account?: string;
   tax_id?: string;
   notes?: string;
@@ -579,6 +607,103 @@ export interface CreateSalaryPaymentRequest {
   payment_date?: string;
   payment_method?: PaymentMethod;
   notes?: string;
+}
+
+// Check Staff User Response
+export interface CheckStaffUserResponse {
+  exists_in_branch: boolean;
+  exists_globally: boolean;
+  branch_data: {
+    branch_id: string;
+    branch_name: string;
+    is_active: boolean;
+    created_at: string;
+    user: {
+      id: string;
+      phone_number: string;
+      first_name: string;
+      last_name: string;
+      full_name: string;
+      email?: string;
+    };
+    staff_profile: {
+      id: string;
+      staff_role: {
+        id: string;
+        name: string;
+        code: string;
+      };
+      employment_type: EmploymentType;
+      employment_type_display: string;
+      base_salary: number;
+      current_balance: number;
+      status: StaffStatus;
+      status_display: string;
+      hire_date: string;
+      termination_date?: string | null;
+    };
+  } | null;
+  all_branches_data: Array<{
+    branch_id: string;
+    branch_name: string;
+    is_active: boolean;
+    created_at: string;
+    user: {
+      id: string;
+      phone_number: string;
+      first_name: string;
+      last_name: string;
+      full_name: string;
+      email?: string;
+    };
+    staff_profile: {
+      id: string;
+      staff_role: {
+        id: string;
+        name: string;
+        code: string;
+      };
+      employment_type: EmploymentType;
+      employment_type_display: string;
+      base_salary: number;
+      current_balance: number;
+      status: StaffStatus;
+      status_display: string;
+      hire_date: string;
+      termination_date?: string | null;
+    };
+  }>;
+}
+
+// Staff Statistics Response
+export interface StaffStatisticsResponse {
+  summary: {
+    total_count: number;
+    active_count: number;
+    inactive_count: number;
+    total_salary: number;
+    avg_salary: number;
+    total_balance: number;
+    positive_balance_count: number;
+    negative_balance_count: number;
+  };
+  by_employment_type: Array<{
+    employment_type: EmploymentType;
+    count: number;
+    total_salary: number;
+  }>;
+  by_role: Array<{
+    staff_role__name: string;
+    staff_role__id: string;
+    count: number;
+    avg_salary: number;
+  }>;
+  by_branch: Array<{
+    branch__name: string;
+    branch__id: string;
+    count: number;
+    total_salary: number;
+  }>;
 }
 
 // Student Request Types
