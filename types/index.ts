@@ -1,6 +1,7 @@
 export * from "./auth";
 export * from "./api";
 export * from "./staff";
+export * from "./finance";
 
 // Re-export school module types explicitly to avoid duplicate symbol
 // (PaginatedResponse is already exported from ./api)

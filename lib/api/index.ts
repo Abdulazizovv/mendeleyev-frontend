@@ -4,6 +4,7 @@ export { schoolApi } from "./school";
 export { branchApi } from "./branch";
 export { hrApi } from "./hr";
 export { staffApi } from "./staff";
+export { financeApi } from "./finance";
 
 // Re-export types
 export type { Role, MembershipDetail, BalanceUpdateRequest, RoleRequest, BranchStatistics } from "./branch";
