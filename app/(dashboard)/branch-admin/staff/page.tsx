@@ -3,7 +3,7 @@
 import React from "react";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { useDebounce } from "@/lib/hooks/useDebounce";
-import { staffApi } from "@/lib/api";
+import { staffApi, financeApi } from "@/lib/api";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   StaffMember,
@@ -11,6 +11,7 @@ import {
   CreateStaffRequest,
   UpdateStaffRequest,
   AddBalanceRequest,
+  ChangeBalanceRequest,
   PaySalaryRequest,
   EMPLOYMENT_TYPE_LABELS,
   EMPLOYMENT_STATUS_LABELS,
@@ -140,10 +141,14 @@ export default function StaffPage() {
     amount: number;
     payment_method: PaymentMethod;
     notes: string;
+    cash_register_id: string;
+    category_id: string;
   }>({
     amount: 0,
-    payment_method: "bank_transfer",
+    payment_method: "cash",
     notes: "",
+    cash_register_id: "",
+    category_id: "",
   });
 
   const debouncedSearch = useDebounce(searchQuery, 500);
@@ -154,6 +159,28 @@ export default function StaffPage() {
     queryFn: () => staffApi.getRoles(branchId),
     enabled: !!branchId,
   });
+
+  // Fetch cash registers
+  const { data: cashRegistersData } = useQuery({
+    queryKey: ["cash-registers", branchId],
+    queryFn: () => financeApi.getCashRegisters({ branch_id: branchId }),
+    enabled: !!branchId,
+  });
+
+  const cashRegisters = cashRegistersData?.results || [];
+
+  // Fetch expense categories (for salary payment)
+  const { data: categoriesData } = useQuery({
+    queryKey: ["finance-categories", branchId, "expense"],
+    queryFn: () => financeApi.getCategories({ 
+      branch_id: branchId,
+      type: "expense",
+      is_active: true 
+    }),
+    enabled: !!branchId,
+  });
+
+  const expenseCategories = categoriesData?.results || [];
 
   const {
     data: staffData,
@@ -235,17 +262,19 @@ export default function StaffPage() {
   });
 
   const paySalaryMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: PaySalaryRequest }) =>
-      staffApi.paySalary(id, data),
+    mutationFn: ({ id, data }: { id: string; data: ChangeBalanceRequest }) =>
+      staffApi.changeBalance(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["staff"] });
       queryClient.invalidateQueries({ queryKey: ["staff-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["cash-registers"] });
       setSalaryDialog({ open: false });
       resetSalaryForm();
-      toast.success("Maosh to'landi");
+      toast.success("Maosh muvaffaqiyatli to'landi!");
     },
-    onError: () => {
-      toast.error("Maosh to'lashda xatolik");
+    onError: (error: any) => {
+      const errorMessage = error?.response?.data?.error || "Maosh to'lashda xatolik";
+      toast.error(errorMessage);
     },
   });
 
@@ -280,10 +309,20 @@ export default function StaffPage() {
   };
 
   const resetSalaryForm = () => {
+    // Auto-select first cash register if available
+    const firstCashRegister = cashRegisters.length > 0 ? cashRegisters[0].id : "";
+    
+    // Try to find salary category
+    const salaryCategory = expenseCategories.find(cat => 
+      cat.code === "staff_salary" || cat.name.toLowerCase().includes("maosh")
+    );
+    
     setSalaryForm({
       amount: 0,
-      payment_method: "bank_transfer",
+      payment_method: "cash",
       notes: "",
+      cash_register_id: firstCashRegister,
+      category_id: salaryCategory?.id || "",
     });
   };
 
@@ -391,16 +430,34 @@ export default function StaffPage() {
   const handleSalarySubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!salaryDialog.data || !salaryForm.amount) {
-      toast.error("Miqdorni kiriting");
+    if (!salaryDialog.data) {
+      toast.error("Xodim ma'lumotlari topilmadi");
       return;
     }
 
-    const data: PaySalaryRequest = {
+    if (!salaryForm.amount || salaryForm.amount <= 0) {
+      toast.error("To'lov miqdorini kiriting");
+      return;
+    }
+
+    if (!salaryForm.cash_register_id) {
+      toast.error("Kassani tanlang");
+      return;
+    }
+
+    if (!salaryForm.category_id) {
+      toast.error("Kategoriyani tanlang");
+      return;
+    }
+
+    const data: ChangeBalanceRequest = {
+      transaction_type: "deduction",
       amount: salaryForm.amount,
+      description: salaryForm.notes || `Maosh to'lovi - ${new Date().toLocaleDateString('uz-UZ')}`,
+      create_cash_transaction: true,
+      cash_register_id: salaryForm.cash_register_id,
       payment_method: salaryForm.payment_method,
-      payment_status: "completed",
-      notes: salaryForm.notes,
+      reference: `SALARY-${Date.now()}`,
     };
 
     paySalaryMutation.mutate({ id: salaryDialog.data.id, data });
@@ -1243,21 +1300,117 @@ export default function StaffPage() {
 
       {/* Salary Payment Dialog */}
       <Dialog open={salaryDialog.open} onOpenChange={(open) => setSalaryDialog({ open })}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Maosh to&apos;lash</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Wallet className="w-5 h-5" />
+              Maosh To&apos;lash
+            </DialogTitle>
             <DialogDescription>
               {salaryDialog.data && (
-                <>
-                  <span className="font-medium">{salaryDialog.data.full_name}</span>
-                  <br />
-                  Oylik maosh: <span className="font-medium">{formatCurrency(salaryDialog.data.monthly_salary)}</span>
-                </>
+                <div className="space-y-1 mt-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Xodim:</span>
+                    <span className="font-medium text-gray-900">{salaryDialog.data.full_name}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Oylik maosh:</span>
+                    <span className="font-semibold text-blue-600">{formatCurrency(salaryDialog.data.monthly_salary)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Joriy balans:</span>
+                    <span className={`font-medium ${
+                      salaryDialog.data.balance < 0 ? 'text-red-600' : 'text-green-600'
+                    }`}>
+                      {formatCurrency(salaryDialog.data.balance)}
+                    </span>
+                  </div>
+                </div>
               )}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSalarySubmit}>
             <div className="space-y-4 py-4">
+              <Card className="bg-yellow-50 border-yellow-200">
+                <CardContent className="pt-4 pb-3">
+                  <div className="flex gap-2 text-sm text-yellow-800">
+                    <CreditCard className="w-4 h-4 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="font-medium mb-1">Maosh to&apos;lash - Kassa chiqimi</p>
+                      <p className="text-xs">
+                        Bu operatsiya xodim balansini kamaytiradi va tanlangan kassadan pul chiqimini qayd qiladi.
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="cash_register_id">
+                    Kassa <span className="text-red-500">*</span>
+                  </Label>
+                  <Select
+                    value={salaryForm.cash_register_id}
+                    onValueChange={(value) =>
+                      setSalaryForm({ ...salaryForm, cash_register_id: value })
+                    }
+                  >
+                    <SelectTrigger id="cash_register_id">
+                      <SelectValue placeholder="Kassani tanlang" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {cashRegisters.length === 0 ? (
+                        <div className="p-2 text-sm text-gray-500 text-center">
+                          Kassalar topilmadi
+                        </div>
+                      ) : (
+                        cashRegisters.map((register) => (
+                          <SelectItem key={register.id} value={register.id}>
+                            {register.name} ({formatCurrency(register.balance)})
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="category_id">
+                    Kategoriya <span className="text-red-500">*</span>
+                  </Label>
+                  <Select
+                    value={salaryForm.category_id}
+                    onValueChange={(value) =>
+                      setSalaryForm({ ...salaryForm, category_id: value })
+                    }
+                  >
+                    <SelectTrigger id="category_id">
+                      <SelectValue placeholder="Kategoriyani tanlang" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {expenseCategories.length === 0 ? (
+                        <div className="p-2 text-sm text-gray-500 text-center">
+                          Kategoriyalar topilmadi
+                        </div>
+                      ) : (
+                        expenseCategories.map((category) => (
+                          <SelectItem key={category.id} value={category.id}>
+                            {category.name}
+                            {category.is_global && (
+                              <span className="text-xs text-gray-500 ml-1">(Global)</span>
+                            )}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-gray-500">
+                    Chiqim kategoriyasi (masalan: Xodim maoshi)
+                  </p>
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="payment_method">
                   To&apos;lov usuli <span className="text-red-500">*</span>
@@ -1275,6 +1428,7 @@ export default function StaffPage() {
                     <SelectItem value="cash">{paymentMethodLabels.cash}</SelectItem>
                     <SelectItem value="bank_transfer">{paymentMethodLabels.bank_transfer}</SelectItem>
                     <SelectItem value="card">{paymentMethodLabels.card}</SelectItem>
+                    <SelectItem value="mobile_payment">{paymentMethodLabels.mobile_payment || "Mobil to'lov"}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1292,8 +1446,23 @@ export default function StaffPage() {
                   }
                   placeholder="4000000"
                   step="100000"
+                  min="0"
                   required
                 />
+                {salaryDialog.data && salaryDialog.data.monthly_salary > 0 && (
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-500">Oylik maosh:</span>
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      className="h-auto p-0 text-blue-600"
+                      onClick={() => setSalaryForm({ ...salaryForm, amount: salaryDialog.data!.monthly_salary })}
+                    >
+                      {formatCurrency(salaryDialog.data.monthly_salary)} dan foydalanish
+                    </Button>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -1302,7 +1471,7 @@ export default function StaffPage() {
                   id="salary_notes"
                   value={salaryForm.notes}
                   onChange={(e) => setSalaryForm({ ...salaryForm, notes: e.target.value })}
-                  placeholder="To'lov haqida ma'lumot"
+                  placeholder="To'lov haqida qo'shimcha ma'lumot (ixtiyoriy)"
                   rows={2}
                 />
               </div>
@@ -1316,11 +1485,15 @@ export default function StaffPage() {
               >
                 Bekor qilish
               </Button>
-              <Button type="submit" disabled={paySalaryMutation.isPending}>
+              <Button 
+                type="submit" 
+                disabled={paySalaryMutation.isPending || !salaryForm.cash_register_id || !salaryForm.category_id}
+              >
                 {paySalaryMutation.isPending && (
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
                 )}
-                To&apos;lash
+                <CheckCircle className="w-4 h-4 mr-2" />
+                Maosh To&apos;lash
               </Button>
             </DialogFooter>
           </form>

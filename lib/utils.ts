@@ -59,6 +59,7 @@ export function formatMonthYear(year: number, month: number): string {
 }
 
 // Pul formatlash (spaces bilan)
-export function formatCurrency(amount: number): string {
+export function formatCurrency(amount: number | null | undefined): string {
+  if (amount === null || amount === undefined) return "0 so'm";
   return amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " so'm";
 }

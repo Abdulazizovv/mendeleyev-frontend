@@ -6,6 +6,7 @@ import { branchApi, schoolApi } from "@/lib/api";
 import type { MembershipDetail, Role, PaginatedResponse } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Users,
   GraduationCap,
@@ -22,12 +23,23 @@ import {
 } from "lucide-react";
 import { formatCurrency } from "@/lib/translations";
 import { toast } from "sonner";
+import { getDashboardWidgets, getStudentTerminology } from "@/lib/utils/branchType";
+import type { BranchType } from "@/types/auth";
 
 export default function BranchAdminDashboard() {
   const { user, currentBranch } = useAuth();
   const [memberships, setMemberships] = React.useState<MembershipDetail[]>([]);
   const [roles, setRoles] = React.useState<Role[]>([]);
   const [loading, setLoading] = React.useState(true);
+
+  // Get branch type and terminology
+  const branchType = (currentBranch?.branch_type || "school") as BranchType;
+  const studentTerm = getStudentTerminology(branchType);
+  const widgets = getDashboardWidgets(branchType);
+  
+  // Helper to check if widget is visible
+  const isWidgetVisible = (widgetId: string) => 
+    widgets.some(w => w.id === widgetId && w.visible);
 
   // Fetch branch data
   React.useEffect(() => {
@@ -93,9 +105,14 @@ export default function BranchAdminDashboard() {
       <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl p-8 text-white shadow-lg">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-3xl font-bold mb-2">
-              Xush kelibsiz, {user?.first_name}!
-            </h1>
+            <div className="flex items-center gap-3 mb-2">
+              <h1 className="text-3xl font-bold">
+                Xush kelibsiz, {user?.first_name}!
+              </h1>
+              <Badge variant="secondary" className="bg-white/20 text-white border-white/30">
+                {branchType === "school" ? "Maktab" : "O'quv Markazi"}
+              </Badge>
+            </div>
             <p className="text-purple-100 text-lg">
               {currentBranch?.branch_name} filiali boshqaruvi
             </p>
@@ -109,6 +126,7 @@ export default function BranchAdminDashboard() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* Staff Card */}
         <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-gray-600">
@@ -124,46 +142,72 @@ export default function BranchAdminDashboard() {
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              O'quvchilar
-            </CardTitle>
-            <GraduationCap className="w-5 h-5 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-gray-900">{stats.totalStudents}</div>
-            <p className="text-xs text-gray-500 mt-1">Aktiv o'quvchilar</p>
-          </CardContent>
-        </Card>
+        {/* Students Card */}
+        {isWidgetVisible("students") && (
+          <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">
+                {studentTerm.plural}
+              </CardTitle>
+              <GraduationCap className="w-5 h-5 text-green-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-gray-900">{stats.totalStudents}</div>
+              <p className="text-xs text-gray-500 mt-1">Aktiv {studentTerm.plural.toLowerCase()}</p>
+            </CardContent>
+          </Card>
+        )}
 
-        <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              Rollar
-            </CardTitle>
-            <Shield className="w-5 h-5 text-orange-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-gray-900">{stats.totalRoles}</div>
-            <p className="text-xs text-gray-500 mt-1">Faol rollar</p>
-          </CardContent>
-        </Card>
+        {/* Classes/Groups Card - Conditional */}
+        {branchType === "school" ? (
+          isWidgetVisible("classes") && (
+            <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-gray-600">
+                  Sinflar
+                </CardTitle>
+                <BookOpen className="w-5 h-5 text-indigo-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-gray-900">-</div>
+                <p className="text-xs text-gray-500 mt-1">Aktiv sinflar</p>
+              </CardContent>
+            </Card>
+          )
+        ) : (
+          isWidgetVisible("groups") && (
+            <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-gray-600">
+                  Guruhlar
+                </CardTitle>
+                <Users className="w-5 h-5 text-indigo-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-gray-900">-</div>
+                <p className="text-xs text-gray-500 mt-1">Aktiv guruhlar</p>
+              </CardContent>
+            </Card>
+          )
+        )}
 
-        <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              Oylik xarajat
-            </CardTitle>
-            <DollarSign className="w-5 h-5 text-purple-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-gray-900">
-              {formatCurrency(stats.totalSalary)}
-            </div>
-            <p className="text-xs text-gray-500 mt-1">Ish haqi xarajati</p>
-          </CardContent>
-        </Card>
+        {/* Finance Card */}
+        {isWidgetVisible("finance") && (
+          <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">
+                Moliya
+              </CardTitle>
+              <DollarSign className="w-5 h-5 text-purple-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-gray-900">
+                {formatCurrency(stats.totalSalary)}
+              </div>
+              <p className="text-xs text-gray-500 mt-1">Oylik xarajat</p>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -271,31 +315,55 @@ export default function BranchAdminDashboard() {
           <CardTitle className="text-lg font-semibold">Tez amallar</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Add Staff */}
             <Button className="h-auto py-6 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
               <div className="flex flex-col items-center space-y-2">
                 <UserPlus className="w-6 h-6" />
                 <span>Xodim qo'shish</span>
               </div>
             </Button>
-            <Button className="h-auto py-6 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700">
-              <div className="flex flex-col items-center space-y-2">
-                <GraduationCap className="w-6 h-6" />
-                <span>O'quvchi qo'shish</span>
-              </div>
-            </Button>
-            <Button className="h-auto py-6 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700">
-              <div className="flex flex-col items-center space-y-2">
-                <Shield className="w-6 h-6" />
-                <span>Rol yaratish</span>
-              </div>
-            </Button>
-            <Button className="h-auto py-6 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700">
-              <div className="flex flex-col items-center space-y-2">
-                <DollarSign className="w-6 h-6" />
-                <span>To'lov qilish</span>
-              </div>
-            </Button>
+            
+            {/* Add Student */}
+            {isWidgetVisible("students") && (
+              <Button className="h-auto py-6 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700">
+                <div className="flex flex-col items-center space-y-2">
+                  <GraduationCap className="w-6 h-6" />
+                  <span>{studentTerm.singular} qo'shish</span>
+                </div>
+              </Button>
+            )}
+            
+            {/* Conditional: Classes/Groups or Courses */}
+            {branchType === "school" ? (
+              isWidgetVisible("classes") && (
+                <Button className="h-auto py-6 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700">
+                  <div className="flex flex-col items-center space-y-2">
+                    <BookOpen className="w-6 h-6" />
+                    <span>Sinf qo'shish</span>
+                  </div>
+                </Button>
+              )
+            ) : (
+              isWidgetVisible("groups") && (
+                <Button className="h-auto py-6 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700">
+                  <div className="flex flex-col items-center space-y-2">
+                    <Users className="w-6 h-6" />
+                    <span>Guruh qo'shish</span>
+                  </div>
+                </Button>
+              )
+            )}
+            
+            {/* Finance */}
+            {isWidgetVisible("finance") && (
+              <Button className="h-auto py-6 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700">
+                <div className="flex flex-col items-center space-y-2">
+                  <DollarSign className="w-6 h-6" />
+                  <span>To'lov qilish</span>
+                </div>
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>

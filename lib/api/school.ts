@@ -704,15 +704,11 @@ export const schoolApi = {
    * API: POST /api/v1/school/students/create/
    */
   createStudent: async (
-    branchId: string,
     data: CreateStudentRequest
   ): Promise<Student> => {
     const response = await apiClient.post<Student>(
       `/school/students/create/`,
-      {
-        ...data,
-        branch_id: branchId,
-      }
+      data
     );
     return response.data;
   },

@@ -115,37 +115,6 @@ export interface StaffMemberDetail extends StaffMember {
 }
 
 /**
- * Balance Transaction
- */
-export interface BalanceTransaction {
-  id: string; // UUID
-  transaction_type: TransactionType;
-  transaction_type_display: string;
-  amount: number;
-  previous_balance: number;
-  new_balance: number;
-  description?: string;
-  processed_by_name?: string;
-  created_at: string;
-}
-
-/**
- * Salary Payment
- */
-export interface SalaryPayment {
-  id: string; // UUID
-  month: string;
-  amount: number;
-  payment_date: string;
-  payment_method: PaymentMethod;
-  payment_method_display: string;
-  status: PaymentStatus;
-  status_display: string;
-  processed_by_name?: string;
-  notes?: string;
-}
-
-/**
  * Staff Statistics
  * Endpoint: GET /api/v1/branches/staff/stats/
  * v2: Enhanced with financial and payment data

@@ -9,8 +9,8 @@ export interface ApiError {
   non_field_errors?: string[];
 }
 
-// Minimal branch membership type for selection lists
-export interface BranchMembership {
+// Detailed membership type for lists and management
+export interface MembershipDetail {
   id: string;
   branch_id: string;
   role: string;

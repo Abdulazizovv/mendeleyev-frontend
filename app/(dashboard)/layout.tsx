@@ -1,9 +1,11 @@
 "use client";
 
-import React from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { roleToPath } from "@/lib/utils/roleMapping";
+import { getNavigationItems as getBranchNavigationItems } from "@/lib/utils/branchType";
+import type { BranchType } from "@/types/auth";
 import { useQueryClient } from "@tanstack/react-query";
 import { 
   LayoutDashboard, 
@@ -21,7 +23,8 @@ import {
   Building2,
   Shield,
   ArrowLeft,
-  Home
+  Home,
+  FolderTree
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -45,44 +48,45 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
   const queryClient = useQueryClient();
   const { user, currentBranch, logout, isLoading, loadUser } = useAuth();
-  const [sidebarOpen, setSidebarOpen] = React.useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Invalidate all queries when pathname changes (user navigates)
-  React.useEffect(() => {
+  useEffect(() => {
     queryClient.invalidateQueries();
   }, [pathname, queryClient]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!isLoading && !user) {
       router.push("/login");
     }
   }, [user, isLoading, router]);
 
   // Load user data on mount
-  React.useEffect(() => {
+  useEffect(() => {
     if (user && !isLoading) {
       loadUser();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Role-based redirect
-  React.useEffect(() => {
+  useEffect(() => {
     if (!isLoading && user && currentBranch) {
-      const pathname = window.location.pathname;
+      const currentPath = window.location.pathname;
       const role = currentBranch.role;
       const rolePath = roleToPath(role);
       
       // If user is on wrong dashboard, redirect to their role's dashboard
-      if (!pathname.startsWith(`/${rolePath}`) && !pathname.startsWith("/dashboard")) {
+      if (!currentPath.startsWith(`/${rolePath}`) && !currentPath.startsWith("/dashboard")) {
         router.push(`/${rolePath}`);
       }
     }
   }, [user, currentBranch, isLoading, router]);
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     await logout();
     router.push("/login");
-  };
+  }, [logout, router]);
 
   if (isLoading) {
     return (
@@ -101,23 +105,24 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const role = currentBranch.role;
   const rolePath = roleToPath(role);
+  const branchType = currentBranch.branch_type as BranchType;
 
-  // Navigation items based on role
+  // Navigation items based on role and branch type
   const getNavigationItems = () => {
     const baseItems = [
       { name: "Asosiy", href: `/${rolePath}`, icon: LayoutDashboard },
     ];
 
     if (role === "branch_admin") {
+      // Use branch type-specific navigation
+      const branchItems = getBranchNavigationItems(branchType);
       return [
         ...baseItems,
-        { name: "Xodimlar", href: `/${rolePath}/staff`, icon: Users },
-        { name: "O'quvchilar", href: `/${rolePath}/students`, icon: GraduationCap },
-        { name: "Sinflar", href: `/${rolePath}/classes`, icon: ClipboardList },
-        { name: "Fanlar", href: `/${rolePath}/subjects`, icon: BookOpen },
-        { name: "Xonalar", href: `/${rolePath}/rooms`, icon: Home },
-        { name: "Rollar", href: `/${rolePath}/roles`, icon: Shield },
-        { name: "Moliya", href: `/${rolePath}/finance`, icon: DollarSign },
+        ...branchItems.map(item => ({
+          name: item.name,
+          href: item.href,
+          icon: getIconForRoute(item.href),
+        })),
         { name: "Sozlamalar", href: `/${rolePath}/settings`, icon: Settings },
       ];
     }
@@ -143,6 +148,22 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     }
 
     return baseItems;
+  };
+
+  // Helper to get icon for route
+  const getIconForRoute = (href: string) => {
+    if (href.includes("/students")) return GraduationCap;
+    if (href.includes("/classes")) return ClipboardList;
+    if (href.includes("/subjects")) return BookOpen;
+    if (href.includes("/teachers")) return Users;
+    if (href.includes("/finance/categories")) return FolderTree;
+    if (href.includes("/finance")) return DollarSign;
+    if (href.includes("/groups")) return Users;
+    if (href.includes("/courses")) return BookOpen;
+    if (href.includes("/staff")) return Users;
+    if (href.includes("/rooms")) return Building2;
+    if (href.includes("/roles")) return Shield;
+    return LayoutDashboard;
   };
 
   const navigationItems = getNavigationItems();
@@ -212,6 +233,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 <p className="text-xs text-gray-500">Filial</p>
                 <p className="text-sm font-medium text-gray-900 truncate">
                   {currentBranch.branch_name}
+                </p>
+                <p className="text-xs text-gray-400 truncate">
+                  {branchType === "school" ? "Maktab" : "O'quv Markazi"}
                 </p>
               </div>
             </div>

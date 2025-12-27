@@ -11,6 +11,7 @@ import type {
   CheckStaffUserResponse,
   StaffStatisticsResponse,
   PaginatedResponse,
+  EnhancedCreateStaffRequest,
 } from "@/types";
 
 const unwrapResults = <T>(payload: T[] | PaginatedResponse<T>): T[] => {

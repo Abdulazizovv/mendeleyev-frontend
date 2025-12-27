@@ -259,6 +259,8 @@ export interface Student {
   status_display?: string;
   date_of_birth: string;
   address: string;
+  avatar?: string | null;
+  avatar_url?: string | null;
   birth_certificate: string | null;
   birth_certificate_url: string | null;
   additional_fields: Record<string, any>;
@@ -268,6 +270,48 @@ export interface Student {
     academic_year: string;
   } | null;
   relatives_count: number;
+  relatives?: StudentRelative[];
+  subscriptions?: {
+    id: string;
+    subscription_plan: {
+      id: string;
+      name: string;
+      price: number;
+      period: string;
+      period_display: string;
+    };
+    discount?: {
+      id: string;
+      name: string;
+      discount_type: 'percentage' | 'fixed';
+      discount_value: number;
+    };
+    is_active: boolean;
+    start_date: string;
+    end_date: string | null;
+    next_payment_date: string;
+    last_payment_date: string | null;
+    total_debt: number;
+    notes: string;
+    created_at: string;
+  }[];
+  payment_due?: {
+    has_subscription: boolean;
+    total_amount: number;
+    subscriptions: {
+      subscription_id: string;
+      subscription_plan_name: string;
+      subscription_period: string;
+      subscription_price: number;
+      current_amount: number;
+      debt_amount: number;
+      total_amount: number;
+      next_due_date: string | null;
+      overdue_months: number;
+      is_expired: boolean;
+      is_overdue: boolean;
+    }[];
+  };
   balance?: {
     id: string;
     balance: number;
@@ -291,6 +335,37 @@ export interface Student {
       };
     };
   };
+  recent_transactions?: {
+    id: string;
+    transaction_type: string;
+    transaction_type_display: string;
+    status: string;
+    status_display: string;
+    amount: number;
+    payment_method: string;
+    payment_method_display: string;
+    description?: string;
+    reference_number?: string;
+    transaction_date: string;
+    cash_register?: {
+      id: string;
+      name: string;
+    };
+    category?: {
+      id: string;
+      name: string;
+      type: string;
+    };
+    employee?: {
+      id: string;
+      user_id: string;
+      full_name: string;
+      phone_number: string;
+      role: string;
+      role_display: string;
+      avatar?: string;
+    };
+  }[];
   created_at: string;
   updated_at: string;
 }
