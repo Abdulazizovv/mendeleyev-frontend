@@ -30,6 +30,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ExportModal } from "@/components/finance/ExportModal";
 
 export default function PaymentsPage() {
   const router = useRouter();
@@ -41,6 +42,7 @@ export default function PaymentsPage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [studentFilter, setStudentFilter] = useState("");
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   // Get filters from query params
   useEffect(() => {
@@ -170,6 +172,14 @@ export default function PaymentsPage() {
         </div>
 
         <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setIsExportModalOpen(true)}
+            className="gap-2"
+          >
+            <Download className="w-4 h-4" />
+            Excel
+          </Button>
           <Button
             onClick={() => router.push("/branch-admin/finance/payments/create")}
             className="gap-2"
@@ -516,6 +526,19 @@ export default function PaymentsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Export Modal */}
+      <ExportModal
+        open={isExportModalOpen}
+        onOpenChange={setIsExportModalOpen}
+        exportType="payments"
+        defaultFilters={{
+          date_from: startDate || undefined,
+          date_to: endDate || undefined,
+          student_profile: studentFilter || undefined,
+          search: searchQuery || undefined,
+        }}
+      />
     </div>
   );
 }

@@ -18,6 +18,11 @@ import type {
   StudentSubscription,
   CreateStudentSubscriptionRequest,
   UpdateStudentSubscriptionRequest,
+  ExportFilters,
+  ExportTaskResponse,
+  ExportTaskStatusResponse,
+  TransactionQueryParams,
+  PaymentQueryParams,
   PaginatedResponse 
 } from "@/types/finance";
 
@@ -155,18 +160,10 @@ export const financeApi = {
   // ==================== TRANSACTIONS ====================
 
   /**
-   * Get transactions list
+   * Get transactions list with advanced filtering, ordering, and search
    * GET /api/v1/school/finance/transactions/
    */
-  getTransactions: async (params?: {
-    branch_id?: string;
-    transaction_type?: string;
-    status?: string;
-    cash_register?: string;
-    category?: string;
-    search?: string;
-    ordering?: string;
-  }): Promise<PaginatedResponse<Transaction>> => {
+  getTransactions: async (params?: TransactionQueryParams): Promise<PaginatedResponse<Transaction>> => {
     const response = await apiClient.get<PaginatedResponse<Transaction>>(
       `/school/finance/transactions/`,
       { params }
@@ -353,17 +350,10 @@ export const financeApi = {
   // ==================== PAYMENTS ====================
 
   /**
-   * Get payments list
+   * Get payments list with advanced filtering, ordering, and search
    * GET /api/v1/school/finance/payments/
    */
-  getPayments: async (params?: {
-    branch_id?: string;
-    student_profile?: string;
-    period_start?: string;
-    period_end?: string;
-    search?: string;
-    ordering?: string;
-  }): Promise<PaginatedResponse<Payment>> => {
+  getPayments: async (params?: PaymentQueryParams): Promise<PaginatedResponse<Payment>> => {
     const response = await apiClient.get<PaginatedResponse<Payment>>(
       `/school/finance/payments/`,
       { params }
@@ -478,6 +468,65 @@ export const financeApi = {
     const response = await apiClient.get<FinanceStatistics>(
       `/school/finance/statistics/`,
       { params }
+    );
+    return response.data;
+  },
+
+  // ==================== EXPORT SYSTEM ====================
+
+  /**
+   * Export transactions to Excel (Celery async task)
+   * POST /api/v1/school/finance/export/transactions/
+   */
+  exportTransactions: async (
+    filters: ExportFilters
+  ): Promise<ExportTaskResponse> => {
+    // Remove undefined/empty values to avoid backend issues
+    const cleanFilters = Object.fromEntries(
+      Object.entries(filters).filter(([_, v]) => v != null && v !== '')
+    );
+    console.log('📤 POST /school/finance/export/transactions/');
+    console.log('   Body:', cleanFilters);
+    console.log('   Header X-Branch-Id: (added by interceptor)');
+    const response = await apiClient.post<ExportTaskResponse>(
+      '/school/finance/export/transactions/',
+      cleanFilters
+    );
+    console.log('✅ Export response:', response.data);
+    return response.data;
+  },
+
+  /**
+   * Export payments to Excel (Celery async task)
+   * POST /api/v1/school/finance/export/payments/
+   */
+  exportPayments: async (
+    filters: ExportFilters
+  ): Promise<ExportTaskResponse> => {
+    // Remove undefined/empty values to avoid backend issues
+    const cleanFilters = Object.fromEntries(
+      Object.entries(filters).filter(([_, v]) => v != null && v !== '')
+    );
+    console.log('📤 POST /school/finance/export/payments/');
+    console.log('   Body:', cleanFilters);
+    console.log('   Header X-Branch-Id: (added by interceptor)');
+    const response = await apiClient.post<ExportTaskResponse>(
+      '/school/finance/export/payments/',
+      cleanFilters
+    );
+    console.log('✅ Export response:', response.data);
+    return response.data;
+  },
+
+  /**
+   * Get export task status (polling endpoint)
+   * GET /api/v1/school/finance/export/task-status/{task_id}/
+   */
+  getExportTaskStatus: async (
+    taskId: string
+  ): Promise<ExportTaskStatusResponse> => {
+    const response = await apiClient.get<ExportTaskStatusResponse>(
+      `/school/finance/export/task-status/${taskId}/`
     );
     return response.data;
   },

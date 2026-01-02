@@ -399,6 +399,85 @@ export interface UpdateStudentSubscriptionRequest {
   notes?: string;
 }
 
+// ==================== Export System ====================
+
+export type ExportTaskStatus = 
+  | "PENDING" 
+  | "STARTED" 
+  | "SUCCESS" 
+  | "FAILURE" 
+  | "REVOKED";
+
+export interface ExportFilters {
+  // Transactions filters
+  transaction_type?: "income" | "expense" | "transfer" | "payment" | "salary" | "refund";
+  payment_method?: "CASH" | "CARD" | "BANK_TRANSFER" | "ONLINE";
+  status?: "pending" | "completed" | "cancelled" | "failed";
+  date_from?: string;
+  date_to?: string;
+  cash_register?: string;
+  category?: string;
+  student_profile?: string;
+  employee_membership?: string;
+  
+  // Payments filters
+  period?: string;
+  subscription_plan?: string;
+  discount?: string;
+  
+  // Common
+  branch_id?: string; // UUID string, sent in both body AND X-Branch-Id header
+  search?: string;
+  ordering?: string;
+}
+
+export interface ExportTaskResponse {
+  message: string;
+  task_id: string;
+  status: ExportTaskStatus;
+}
+
+export interface ExportTaskStatusResponse {
+  task_id: string;
+  status: ExportTaskStatus;
+  message: string;
+  file_url?: string;
+  filename?: string;
+  records_count?: number;
+  error?: string;
+  progress?: number;
+}
+
+// ==================== Query Params ====================
+
+export interface BaseQueryParams {
+  branch_id?: string;
+  search?: string;
+  ordering?: string;
+  page?: number;
+  page_size?: number;
+}
+
+export interface TransactionQueryParams extends BaseQueryParams {
+  transaction_type?: string;
+  status?: string;
+  cash_register?: string;
+  category?: string;
+  student_profile?: string;
+  employee_membership?: string;
+  date_from?: string;
+  date_to?: string;
+}
+
+export interface PaymentQueryParams extends BaseQueryParams {
+  student_profile?: string;
+  subscription_plan?: string;
+  discount?: string;
+  period_start?: string;
+  period_end?: string;
+  payment_method?: string;
+}
+
 // ==================== Paginated Response ====================
 
 export interface PaginatedResponse<T> {

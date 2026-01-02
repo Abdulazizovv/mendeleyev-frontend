@@ -14,7 +14,7 @@ const apiClient: AxiosInstance = axios.create({
 });
 
 /**
- * Request interceptor - Add auth token
+ * Request interceptor - Add auth token and branch ID
  */
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
@@ -23,6 +23,32 @@ apiClient.interceptors.request.use(
       const token = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
       if (token && config.headers) {
         config.headers.Authorization = `Bearer ${token}`;
+      }
+
+      // Add X-Branch-Id header from current branch
+      const currentBranchStr = localStorage.getItem(STORAGE_KEYS.CURRENT_BRANCH);
+      console.log('🔍 CURRENT_BRANCH from localStorage:', currentBranchStr);
+      
+      if (currentBranchStr) {
+        try {
+          const currentBranch = JSON.parse(currentBranchStr);
+          console.log('📦 Parsed currentBranch:', currentBranch);
+          
+          // branch_id is a UUID string in currentBranch object
+          const branchId = currentBranch?.branch_id;
+          console.log('🆔 Extracted branch_id:', branchId);
+          
+          if (branchId && config.headers) {
+            config.headers['X-Branch-Id'] = String(branchId);
+            console.log('🏢 Adding X-Branch-Id header:', branchId);
+          } else {
+            console.warn('⚠️ branch_id not found in currentBranch:', currentBranch);
+          }
+        } catch (error) {
+          console.error('❌ Error parsing current branch:', error);
+        }
+      } else {
+        console.warn('⚠️ CURRENT_BRANCH not found in localStorage');
       }
     }
     return config;

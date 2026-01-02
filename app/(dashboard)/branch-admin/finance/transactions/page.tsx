@@ -36,6 +36,7 @@ import {
 import { TRANSACTION_TYPE_LABELS, PAYMENT_METHOD_LABELS } from "@/types/finance";
 import CreateIncomeModal from "@/components/finance/transactions/CreateIncomeModal";
 import CreateExpenseModal from "@/components/finance/transactions/CreateExpenseModal";
+import { ExportModal } from "@/components/finance/ExportModal";
 
 export default function TransactionsPage() {
   const router = useRouter();
@@ -48,6 +49,7 @@ export default function TransactionsPage() {
   const [cashRegisterFilter, setCashRegisterFilter] = useState<string>("all");
   const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   // Fetch cash registers for filter
   const { data: cashRegistersData } = useQuery({
@@ -137,6 +139,14 @@ export default function TransactionsPage() {
         </div>
 
         <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setIsExportModalOpen(true)}
+            className="gap-2"
+          >
+            <Download className="w-4 h-4" />
+            Excel
+          </Button>
           <Button
             variant="outline"
             onClick={() => setIsExpenseModalOpen(true)}
@@ -387,6 +397,18 @@ export default function TransactionsPage() {
         onSuccess={() => {
           refetch();
           setIsExpenseModalOpen(false);
+        }}
+      />
+
+      <ExportModal
+        open={isExportModalOpen}
+        onOpenChange={setIsExportModalOpen}
+        exportType="transactions"
+        defaultFilters={{
+          transaction_type: typeFilter !== "all" ? typeFilter : undefined,
+          status: statusFilter !== "all" ? statusFilter : undefined,
+          cash_register: cashRegisterFilter !== "all" ? cashRegisterFilter : undefined,
+          search: searchQuery || undefined,
         }}
       />
     </div>

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
-import apiClient from "@/lib/api/client";
+import { financeApi } from "@/lib/api";
 
 interface CashRegister {
   id: number;
@@ -54,25 +54,16 @@ export default function CashRegisterDetailPage() {
   // Kassa ma'lumotlarini olish
   const { data: cashRegister, isLoading: isLoadingRegister } = useQuery<CashRegister>({
     queryKey: ["cash-register", registerId],
-    queryFn: async () => {
-      const response = await apiClient.get(`/school/finance/cash-registers/${registerId}/`);
-      return response.data;
-    },
+    queryFn: () => financeApi.getCashRegister(registerId),
   });
 
   // Oxirgi tranzaksiyalarni olish
   const { data: transactionsData, isLoading: isLoadingTransactions } = useQuery({
     queryKey: ["cash-register-transactions", registerId],
-    queryFn: async () => {
-      const response = await apiClient.get("/school/finance/transactions/", {
-        params: {
-          cash_register: registerId,
-          page: 1,
-          page_size: 10,
-        },
-      });
-      return response.data;
-    },
+    queryFn: () => financeApi.getTransactions({
+      cash_register: registerId,
+      ordering: "-transaction_date",
+    }),
   });
 
   // Oylik statistikani olish (demo uchun hisoblash) - useMemo bilan optimize qilish
