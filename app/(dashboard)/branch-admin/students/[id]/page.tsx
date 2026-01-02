@@ -119,47 +119,70 @@ export default function StudentDetailPage() {
     <div className="min-h-screen bg-gray-50 p-3 sm:p-4 md:p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => router.push("/branch-admin/students")}
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-            
-            {/* Avatar */}
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-2xl font-bold shadow-lg">
-              {student.avatar_url ? (
-                <img
-                  src={student.avatar_url}
-                  alt={student.full_name}
-                  className="w-full h-full rounded-full object-cover"
-                />
-              ) : (
-                <span>{student.first_name.charAt(0)}{student.last_name?.charAt(0) || ''}</span>
-              )}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4 flex-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => router.push("/branch-admin/students")}
+                className="hover:bg-gray-100"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </Button>
+              
+              {/* Avatar */}
+              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-2xl sm:text-3xl font-bold shadow-lg ring-4 ring-white">
+                {student.avatar_url ? (
+                  <img
+                    src={student.avatar_url}
+                    alt={student.full_name}
+                    className="w-full h-full rounded-full object-cover"
+                  />
+                ) : (
+                  <span>{student.first_name.charAt(0)}{student.last_name?.charAt(0) || ''}</span>
+                )}
+              </div>
+              
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+                    {student.first_name} {student.middle_name} {student.last_name}
+                  </h1>
+                  {getStatusBadge(student.status)}
+                </div>
+                <div className="flex flex-wrap items-center gap-4 mt-2 text-sm text-gray-600">
+                  {student.personal_number && (
+                    <span className="flex items-center gap-1">
+                      <span className="font-medium">Shaxsiy raqam:</span>
+                      <span>{student.personal_number}</span>
+                    </span>
+                  )}
+                  {student.phone_number && (
+                    <span className="flex items-center gap-1">
+                      <span className="font-medium">Tel:</span>
+                      <span>{student.phone_number}</span>
+                    </span>
+                  )}
+                  {student.current_class && (
+                    <span className="flex items-center gap-1">
+                      <span className="font-medium">Sinf:</span>
+                      <span>{student.current_class.name}</span>
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
-            
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-                {student.first_name} {student.middle_name} {student.last_name}
-              </h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                Shaxsiy raqam: {student.personal_number}
-              </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => router.push(`/branch-admin/students/${studentId}/edit`)}
+                className="hover:bg-blue-50 hover:border-blue-300"
+              >
+                <Edit className="w-4 h-4 mr-2" />
+                Tahrirlash
+              </Button>
             </div>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => router.push(`/branch-admin/students/${studentId}/edit`)}
-            >
-              <Edit className="w-4 h-4 mr-2" />
-              Tahrirlash
-            </Button>
-            {getStatusBadge(student.status)}
           </div>
         </div>
 

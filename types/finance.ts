@@ -359,6 +359,46 @@ export const DISCOUNT_TYPE_LABELS: Record<DiscountType, string> = {
   fixed: "Aniq summa",
 };
 
+// ==================== Student Subscription ====================
+
+export interface StudentSubscription {
+  id: string;
+  student_profile: string;
+  student_name: string;
+  subscription_plan: string;
+  subscription_plan_name: string;
+  subscription_plan_price: number;
+  period_display: string;
+  branch: string;
+  branch_name: string;
+  is_active: boolean;
+  start_date: string;
+  end_date: string | null;
+  next_payment_date: string;
+  total_debt: number;
+  last_payment_date: string | null;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateStudentSubscriptionRequest {
+  student_profile: string;
+  subscription_plan: string;
+  branch: string;
+  start_date: string;
+  end_date?: string | null;
+  next_payment_date: string;
+  notes?: string;
+}
+
+export interface UpdateStudentSubscriptionRequest {
+  is_active?: boolean;
+  end_date?: string | null;
+  next_payment_date?: string;
+  notes?: string;
+}
+
 // ==================== Paginated Response ====================
 
 export interface PaginatedResponse<T> {

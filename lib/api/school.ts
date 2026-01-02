@@ -774,6 +774,37 @@ export const schoolApi = {
   },
 
   /**
+   * O'quvchi yaqinini yangilash
+   * API: PATCH /api/v1/school/students/{studentId}/relatives/{relativeId}/
+   * NOTE: Backend'da bu endpoint qo'shilishi kerak
+   */
+  updateStudentRelative: async (
+    studentId: string,
+    relativeId: string,
+    data: Partial<CreateStudentRelativeRequest>
+  ): Promise<StudentRelative> => {
+    const response = await apiClient.patch<StudentRelative>(
+      `/school/students/${studentId}/relatives/${relativeId}/`,
+      data
+    );
+    return response.data;
+  },
+
+  /**
+   * O'quvchi yaqinini o'chirish
+   * API: DELETE /api/v1/school/students/{studentId}/relatives/{relativeId}/
+   * NOTE: Backend'da bu endpoint qo'shilishi kerak
+   */
+  deleteStudentRelative: async (
+    studentId: string,
+    relativeId: string
+  ): Promise<void> => {
+    await apiClient.delete(
+      `/school/students/${studentId}/relatives/${relativeId}/`
+    );
+  },
+
+  /**
    * Telefon raqami orqali mavjud o'quvchini tekshirish
    * API: GET /api/v1/school/students/check-user/
    */

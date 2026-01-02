@@ -15,6 +15,9 @@ import type {
   Payment,
   CreatePaymentRequest,
   FinanceStatistics,
+  StudentSubscription,
+  CreateStudentSubscriptionRequest,
+  UpdateStudentSubscriptionRequest,
   PaginatedResponse 
 } from "@/types/finance";
 
@@ -389,6 +392,76 @@ export const financeApi = {
       data
     );
     return response.data;
+  },
+
+  // ==================== STUDENT SUBSCRIPTIONS ====================
+
+  /**
+   * Get student subscriptions list
+   * GET /api/v1/school/finance/student-subscriptions/
+   */
+  getStudentSubscriptions: async (params?: {
+    student_profile?: string;
+    subscription_plan?: string;
+    is_active?: boolean;
+    search?: string;
+    ordering?: string;
+    page?: number;
+    page_size?: number;
+  }): Promise<PaginatedResponse<StudentSubscription>> => {
+    const response = await apiClient.get<PaginatedResponse<StudentSubscription>>(
+      `/school/finance/student-subscriptions/`,
+      { params }
+    );
+    return response.data;
+  },
+
+  /**
+   * Get student subscription detail
+   * GET /api/v1/school/finance/student-subscriptions/{id}/
+   */
+  getStudentSubscription: async (id: string): Promise<StudentSubscription> => {
+    const response = await apiClient.get<StudentSubscription>(
+      `/school/finance/student-subscriptions/${id}/`
+    );
+    return response.data;
+  },
+
+  /**
+   * Create student subscription
+   * POST /api/v1/school/finance/student-subscriptions/
+   */
+  createStudentSubscription: async (
+    data: CreateStudentSubscriptionRequest
+  ): Promise<StudentSubscription> => {
+    const response = await apiClient.post<StudentSubscription>(
+      `/school/finance/student-subscriptions/`,
+      data
+    );
+    return response.data;
+  },
+
+  /**
+   * Update student subscription
+   * PUT /api/v1/school/finance/student-subscriptions/{id}/
+   */
+  updateStudentSubscription: async (
+    id: string,
+    data: UpdateStudentSubscriptionRequest
+  ): Promise<StudentSubscription> => {
+    const response = await apiClient.put<StudentSubscription>(
+      `/school/finance/student-subscriptions/${id}/`,
+      data
+    );
+    return response.data;
+  },
+
+  /**
+   * Delete student subscription (deactivate)
+   * DELETE /api/v1/school/finance/student-subscriptions/{id}/
+   */
+  deleteStudentSubscription: async (id: string): Promise<void> => {
+    await apiClient.delete(`/school/finance/student-subscriptions/${id}/`);
   },
 
   // ==================== STATISTICS ====================
