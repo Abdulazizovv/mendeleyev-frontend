@@ -41,8 +41,9 @@ export default function TeacherDashboard() {
           schoolApi.getTeacherSubjects({ branch_id: currentBranch.branch_id, is_active: true }),
         ]);
 
-        setClasses(classesData);
-        setSubjects(subjectsData);
+        // Handle both array and paginated response formats
+        setClasses(Array.isArray(classesData) ? classesData : (classesData as any)?.results || []);
+        setSubjects(Array.isArray(subjectsData) ? subjectsData : (subjectsData as any)?.results || []);
       } catch (error: any) {
         console.error("Error fetching teacher data:", error);
         toast.error("Ma'lumotlarni yuklashda xatolik yuz berdi");
@@ -56,11 +57,15 @@ export default function TeacherDashboard() {
 
   // Calculate statistics
   const stats = React.useMemo(() => {
-    const totalStudents = classes.reduce((sum, cls) => sum + cls.current_students_count, 0);
-    const totalSubjectsCount = subjects.length;
+    // Ensure classes and subjects are arrays
+    const classesArray = Array.isArray(classes) ? classes : [];
+    const subjectsArray = Array.isArray(subjects) ? subjects : [];
+    
+    const totalStudents = classesArray.reduce((sum, cls) => sum + (cls.current_students_count || 0), 0);
+    const totalSubjectsCount = subjectsArray.length;
     
     return {
-      totalClasses: classes.length,
+      totalClasses: classesArray.length,
       totalStudents,
       totalSubjects: totalSubjectsCount,
       upcomingLessons: 3, // TODO: Get from schedule API

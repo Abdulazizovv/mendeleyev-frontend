@@ -24,7 +24,10 @@ import {
   Shield,
   ArrowLeft,
   Home,
-  FolderTree
+  FolderTree,
+  FileText,
+  Award,
+  CheckSquare
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -134,6 +137,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         { name: "Darslar", href: `/${rolePath}/lessons`, icon: BookOpen },
         { name: "Jadval", href: `/${rolePath}/schedule`, icon: Calendar },
         { name: "Davomat", href: `/${rolePath}/attendance`, icon: ClipboardList },
+        { name: "Baholar", href: `/${rolePath}/grades`, icon: Award },
+        { name: "Uyga vazifalar", href: `/${rolePath}/homework`, icon: FileText },
       ];
     }
 
@@ -143,6 +148,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         { name: "Darslarim", href: `/${rolePath}/lessons`, icon: BookOpen },
         { name: "Jadval", href: `/${rolePath}/schedule`, icon: Calendar },
         { name: "Baholar", href: `/${rolePath}/grades`, icon: GraduationCap },
+        { name: "Uyga vazifalar", href: `/${rolePath}/homework`, icon: CheckSquare },
+        { name: "Davomat", href: `/${rolePath}/attendance`, icon: ClipboardList },
         { name: "To'lovlar", href: `/${rolePath}/payments`, icon: DollarSign },
       ];
     }

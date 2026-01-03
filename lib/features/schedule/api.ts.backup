@@ -1,0 +1,408 @@
+/**
+ * Schedule & Timetable API
+ * Endpoints for managing timetable templates, slots, and schedule operations
+ * 
+ * NOTE: All endpoints require branch_id in URL path
+ * Base URL: /api/v1/school/branches/{branch_id}/
+ */
+
+import { apiClient } from '@/lib/api';
+import type {
+  PaginatedResponse,
+  TimetableTemplate,
+  TimetableSlot,
+  CreateTimetableTemplate,
+  CreateTimetableSlot,
+  BulkCreateSlots,
+  ScheduleFilters,
+  LessonInstance,
+  LessonTopic,
+  LessonFilters,
+  GenerateLessonsRequest,
+  GenerateLessonsResponse,
+  CompleteLessonRequest,
+} from '@/types/academic';
+
+/**
+ * Get base path for branch-scoped endpoints
+ */
+const getBasePath = (branchId: string) => `/school/branches/${branchId}`;
+
+// ==================== TIMETABLE TEMPLATES ====================
+
+/**
+ * Get all timetable templates for the current branch
+ */
+export const getTimetableTemplates = async (
+  branchId: string,
+  filters?: ScheduleFilters
+): Promise<PaginatedResponse<TimetableTemplate>> => {
+  const response = await apiClient.get(`${getBasePath(branchId)}/timetables/`, {
+    params: filters,
+  });
+  return response.data;
+};
+
+/**
+ * Get a single timetable template by ID
+ */
+export const getTimetableTemplate = async (
+  branchId: string,
+  id: string
+): Promise<TimetableTemplate> => {
+  const response = await apiClient.get(`${getBasePath(branchId)}/timetables/${id}/`);
+  return response.data;
+};
+
+/**
+ * Create a new timetable template
+ * @requires Permission: create_timetabletemplate
+ */
+export const createTimetableTemplate = async (
+  branchId: string,
+  data: CreateTimetableTemplate
+): Promise<TimetableTemplate> => {
+  const response = await apiClient.post(`${getBasePath(branchId)}/timetables/`, data);
+  return response.data;
+};
+
+/**
+ * Update a timetable template
+ * @requires Permission: change_timetabletemplate
+ */
+export const updateTimetableTemplate = async (
+  branchId: string,
+  id: string,
+  data: Partial<CreateTimetableTemplate>
+): Promise<TimetableTemplate> => {
+  const response = await apiClient.patch(
+    `${getBasePath(branchId)}/timetables/${id}/`,
+    data
+  );
+  return response.data;
+};
+
+/**
+ * Delete a timetable template
+ * @requires Permission: delete_timetabletemplate
+ */
+export const deleteTimetableTemplate = async (
+  branchId: string,
+  id: string
+): Promise<void> => {
+  await apiClient.delete(`${getBasePath(branchId)}/timetables/${id}/`);
+};
+
+/**
+ * Activate a timetable template (deactivates others for the same class)
+ * @requires Permission: change_timetabletemplate
+ */
+export const activateTimetableTemplate = async (
+  branchId: string,
+  id: string
+): Promise<TimetableTemplate> => {
+  const response = await apiClient.post(
+    `${getBasePath(branchId)}/timetables/${id}/activate/`
+  );
+  return response.data;
+};
+
+// ==================== TIMETABLE SLOTS ====================
+
+/**
+ * Get all timetable slots for a template
+ */
+export const getTimetableSlots = async (
+  branchId: string,
+  templateId: string,
+  filters?: ScheduleFilters & { class_subject?: string; day_of_week?: string; lesson_number?: number; room?: string }
+): Promise<PaginatedResponse<TimetableSlot>> => {
+  const response = await apiClient.get(
+    `${getBasePath(branchId)}/timetables/${templateId}/slots/`,
+    { params: filters }
+  );
+  return response.data;
+};
+): Promise<PaginatedResponse<TimetableSlot>> => {
+  const response = await apiClient.get(`${BASE_PATH}/timetable-slots/`, {
+    params: filters,
+  });
+  return response.data;
+};
+
+/**
+ * Get a single timetable slot by ID
+ */
+export const getTimetableSlot = async (id: string): Promise<TimetableSlot> => {
+  const response = await apiClient.get(`${BASE_PATH}/timetable-slots/${id}/`);
+  return response.data;
+};
+
+/**
+ * Create a single timetable slot
+ * @requires Permission: create_timetableslot
+ * @throws 409 Conflict if teacher/room is already booked
+ */
+export const createTimetableSlot = async (
+  data: CreateTimetableSlot
+): Promise<TimetableSlot> => {
+  const response = await apiClient.post(`${BASE_PATH}/timetable-slots/`, data);
+  return response.data;
+};
+
+/**
+ * Bulk create multiple timetable slots
+ * @requires Permission: create_timetableslot
+ * @throws 409 Conflict if any slot conflicts with existing
+ */
+export const bulkCreateTimetableSlots = async (
+  data: BulkCreateSlots
+): Promise<TimetableSlot[]> => {
+  const response = await apiClient.post(
+    `${BASE_PATH}/timetable-slots/bulk-create/`,
+    data
+  );
+  return response.data;
+};
+
+/**
+ * Update a timetable slot
+ * @requires Permission: change_timetableslot
+ * @throws 409 Conflict if update causes conflicts
+ */
+export const updateTimetableSlot = async (
+  id: string,
+  data: Partial<CreateTimetableSlot>
+): Promise<TimetableSlot> => {
+  const response = await apiClient.patch(`${BASE_PATH}/timetable-slots/${id}/`, data);
+  return response.data;
+};
+
+/**
+ * Delete a timetable slot
+ * @requires Permission: delete_timetableslot
+ */
+export const deleteTimetableSlot = async (id: string): Promise<void> => {
+  await apiClient.delete(`${BASE_PATH}/timetable-slots/${id}/`);
+};
+
+// ==================== LESSON TOPICS ====================
+
+/**
+ * Get all lesson topics for a subject
+ */
+export const getLessonTopics = async (
+  subjectId?: string,
+  quarter?: number
+): Promise<PaginatedResponse<LessonTopic>> => {
+  const response = await apiClient.get(`${BASE_PATH}/lesson-topics/`, {
+    params: { subject_id: subjectId, quarter },
+  });
+  return response.data;
+};
+
+/**
+ * Create a lesson topic
+ * @requires Permission: create_lessontopic
+ */
+export const createLessonTopic = async (
+  data: Omit<LessonTopic, keyof import('@/types/academic').BaseEntity>
+): Promise<LessonTopic> => {
+  const response = await apiClient.post(`${BASE_PATH}/lesson-topics/`, data);
+  return response.data;
+};
+
+/**
+ * Update a lesson topic
+ * @requires Permission: change_lessontopic
+ */
+export const updateLessonTopic = async (
+  id: string,
+  data: Partial<LessonTopic>
+): Promise<LessonTopic> => {
+  const response = await apiClient.patch(`${BASE_PATH}/lesson-topics/${id}/`, data);
+  return response.data;
+};
+
+/**
+ * Delete a lesson topic
+ * @requires Permission: delete_lessontopic
+ */
+export const deleteLessonTopic = async (id: string): Promise<void> => {
+  await apiClient.delete(`${BASE_PATH}/lesson-topics/${id}/`);
+};
+
+// ==================== LESSON INSTANCES ====================
+
+/**
+ * Get all lesson instances
+ */
+export const getLessonInstances = async (
+  filters?: LessonFilters
+): Promise<PaginatedResponse<LessonInstance>> => {
+  const response = await apiClient.get(`${BASE_PATH}/lesson-instances/`, {
+    params: filters,
+  });
+  return response.data;
+};
+
+/**
+ * Get a single lesson instance by ID
+ */
+export const getLessonInstance = async (id: string): Promise<LessonInstance> => {
+  const response = await apiClient.get(`${BASE_PATH}/lesson-instances/${id}/`);
+  return response.data;
+};
+
+/**
+ * Generate lesson instances from a timetable template
+ * @requires Permission: create_lessoninstance
+ */
+export const generateLessonInstances = async (
+  data: GenerateLessonsRequest
+): Promise<GenerateLessonsResponse> => {
+  const response = await apiClient.post(
+    `${BASE_PATH}/lesson-instances/generate/`,
+    data
+  );
+  return response.data;
+};
+
+/**
+ * Update a lesson instance
+ * @requires Permission: change_lessoninstance
+ */
+export const updateLessonInstance = async (
+  id: string,
+  data: Partial<LessonInstance>
+): Promise<LessonInstance> => {
+  const response = await apiClient.patch(
+    `${BASE_PATH}/lesson-instances/${id}/`,
+    data
+  );
+  return response.data;
+};
+
+/**
+ * Complete a lesson (teacher only)
+ * @requires Permission: change_lessoninstance
+ * @requires User must be the lesson's teacher
+ */
+export const completeLesson = async (
+  id: string,
+  data?: CompleteLessonRequest
+): Promise<LessonInstance> => {
+  const response = await apiClient.post(
+    `${BASE_PATH}/lesson-instances/${id}/complete/`,
+    data
+  );
+  return response.data;
+};
+
+/**
+ * Cancel a lesson
+ * @requires Permission: change_lessoninstance
+ */
+export const cancelLesson = async (
+  id: string,
+  reason?: string
+): Promise<LessonInstance> => {
+  const response = await apiClient.post(`${BASE_PATH}/lesson-instances/${id}/cancel/`, {
+    notes: reason,
+  });
+  return response.data;
+};
+
+/**
+ * Delete a lesson instance
+ * @requires Permission: delete_lessoninstance
+ */
+export const deleteLessonInstance = async (id: string): Promise<void> => {
+  await apiClient.delete(`${BASE_PATH}/lesson-instances/${id}/`);
+};
+
+// ==================== HELPER FUNCTIONS ====================
+
+/**
+ * Get weekly timetable for a specific class
+ */
+export const getWeeklyTimetable = async (
+  classId: string,
+  academicYear: string,
+  quarter: number
+): Promise<TimetableSlot[]> => {
+  const templatesResponse = await getTimetableTemplates({
+    class_id: classId,
+    academic_year: academicYear,
+    quarter,
+    is_active: true,
+  });
+
+  if (templatesResponse.results.length === 0) {
+    return [];
+  }
+
+  const activeTemplate = templatesResponse.results[0];
+  const slotsResponse = await getTimetableSlots({
+    template_id: activeTemplate.id,
+  });
+
+  return slotsResponse.results;
+};
+
+/**
+ * Check for slot conflicts before creating
+ */
+export const checkSlotConflicts = async (
+  slot: CreateTimetableSlot
+): Promise<{ hasConflict: boolean; message?: string }> => {
+  try {
+    await createTimetableSlot(slot);
+    return { hasConflict: false };
+  } catch (error: any) {
+    if (error.response?.status === 409) {
+      return {
+        hasConflict: true,
+        message: error.response.data.detail || 'Schedule conflict detected',
+      };
+    }
+    throw error;
+  }
+};
+
+export const scheduleApi = {
+  // Templates
+  getTimetableTemplates,
+  getTimetableTemplate,
+  createTimetableTemplate,
+  updateTimetableTemplate,
+  deleteTimetableTemplate,
+  activateTimetableTemplate,
+  
+  // Slots
+  getTimetableSlots,
+  getTimetableSlot,
+  createTimetableSlot,
+  bulkCreateTimetableSlots,
+  updateTimetableSlot,
+  deleteTimetableSlot,
+  
+  // Topics
+  getLessonTopics,
+  createLessonTopic,
+  updateLessonTopic,
+  deleteLessonTopic,
+  
+  // Lessons
+  getLessonInstances,
+  getLessonInstance,
+  generateLessonInstances,
+  updateLessonInstance,
+  completeLesson,
+  cancelLesson,
+  deleteLessonInstance,
+  
+  // Helpers
+  getWeeklyTimetable,
+  checkSlotConflicts,
+};

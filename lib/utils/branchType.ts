@@ -43,6 +43,11 @@ export const getNavigationItems = (branchType: BranchType): NavigationItem[] => 
         description: "Fanlarni boshqarish",
       },
       {
+        name: "Dars Jadvali",
+        href: "/branch-admin/schedule",
+        description: "Dars jadvalini boshqarish",
+      },
+      {
         name: "Xodimlar",
         href: "/branch-admin/staff",
         description: "Xodimlarni boshqarish",
@@ -76,6 +81,11 @@ export const getNavigationItems = (branchType: BranchType): NavigationItem[] => 
         name: "Kurslar",
         href: "/branch-admin/courses",
         description: "Kurslarni boshqarish",
+      },
+      {
+        name: "Dars Jadvali",
+        href: "/branch-admin/schedule",
+        description: "Dars jadvalini boshqarish",
       },
       {
         name: "Xodimlar",

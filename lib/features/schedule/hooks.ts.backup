@@ -1,0 +1,477 @@
+/**
+ * Schedule & Timetable React Query Hooks
+ * Custom hooks for data fetching, mutations, and caching
+ */
+
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { scheduleApi } from './api';
+import type {
+  TimetableTemplate,
+  TimetableSlot,
+  CreateTimetableTemplate,
+  CreateTimetableSlot,
+  BulkCreateSlots,
+  ScheduleFilters,
+  LessonInstance,
+  LessonTopic,
+  LessonFilters,
+  GenerateLessonsRequest,
+  CompleteLessonRequest,
+} from '@/types/academic';
+
+// ==================== QUERY KEYS ====================
+
+export const scheduleKeys = {
+  all: ['schedule'] as const,
+  
+  templates: () => [...scheduleKeys.all, 'templates'] as const,
+  template: (id: string) => [...scheduleKeys.templates(), id] as const,
+  templateList: (filters?: ScheduleFilters) =>
+    [...scheduleKeys.templates(), 'list', filters] as const,
+  
+  slots: () => [...scheduleKeys.all, 'slots'] as const,
+  slot: (id: string) => [...scheduleKeys.slots(), id] as const,
+  slotList: (filters?: ScheduleFilters) =>
+    [...scheduleKeys.slots(), 'list', filters] as const,
+  
+  topics: () => [...scheduleKeys.all, 'topics'] as const,
+  topic: (id: string) => [...scheduleKeys.topics(), id] as const,
+  topicList: (subjectId?: string, quarter?: number) =>
+    [...scheduleKeys.topics(), 'list', subjectId, quarter] as const,
+  
+  lessons: () => [...scheduleKeys.all, 'lessons'] as const,
+  lesson: (id: string) => [...scheduleKeys.lessons(), id] as const,
+  lessonList: (filters?: LessonFilters) =>
+    [...scheduleKeys.lessons(), 'list', filters] as const,
+};
+
+// ==================== TIMETABLE TEMPLATES ====================
+
+/**
+ * Hook to fetch timetable templates list
+ * @param branchId - Branch ID (required)
+ * @param filters - Optional filters
+ */
+export const useTimetableTemplates = (branchId: string, filters?: ScheduleFilters) => {
+  return useQuery({
+    queryKey: scheduleKeys.templateList(filters),
+    queryFn: () => scheduleApi.getTimetableTemplates(branchId, filters),
+    enabled: !!branchId,
+  });
+};
+
+/**
+ * Hook to fetch a single timetable template
+ * @param branchId - Branch ID (required)
+ * @param id - Template ID
+ */
+export const useTimetableTemplate = (branchId: string, id: string) => {
+  return useQuery({
+    queryKey: scheduleKeys.template(id),
+    queryFn: () => scheduleApi.getTimetableTemplate(branchId, id),
+    enabled: !!id && !!branchId,
+  });
+};
+
+/**
+ * Hook to create a timetable template
+ * @param branchId - Branch ID (required)
+ */
+export const useCreateTimetableTemplate = (branchId: string) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: CreateTimetableTemplate) =>
+      scheduleApi.createTimetableTemplate(branchId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.templates() });
+      toast.success('Timetable template created successfully');
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to create template');
+    },
+  });
+};
+
+/**
+ * Hook to update a timetable template
+ */
+export const useUpdateTimetableTemplate = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<CreateTimetableTemplate> }) =>
+      scheduleApi.updateTimetableTemplate(id, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.template(variables.id) });
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.templates() });
+      toast.success('Template updated successfully');
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to update template');
+    },
+  });
+};
+
+/**
+ * Hook to delete a timetable template
+ */
+export const useDeleteTimetableTemplate = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => scheduleApi.deleteTimetableTemplate(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.templates() });
+      toast.success('Template deleted successfully');
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to delete template');
+    },
+  });
+};
+
+/**
+ * Hook to activate a timetable template
+ */
+export const useActivateTimetableTemplate = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => scheduleApi.activateTimetableTemplate(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.templates() });
+      toast.success('Template activated successfully');
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to activate template');
+    },
+  });
+};
+
+// ==================== TIMETABLE SLOTS ====================
+
+/**
+ * Hook to fetch timetable slots
+ * @param branchId - Branch ID (required)
+ * @param templateId - Template ID (required)
+ * @param filters - Optional filters
+ */
+export const useTimetableSlots = (
+  branchId: string,
+  templateId: string,
+  filters?: Omit<ScheduleFilters, 'template_id'>
+) => {
+  return useQuery({
+    queryKey: scheduleKeys.slotList({ template_id: templateId, ...filters }),
+    queryFn: () => scheduleApi.getTimetableSlots(branchId, templateId, filters),
+    enabled: !!branchId && !!templateId,
+  });
+};
+
+/**
+ * Hook to fetch a single timetable slot
+ * @param branchId - Branch ID (required)
+ * @param templateId - Template ID (required)
+ * @param slotId - Slot ID
+ */
+export const useTimetableSlot = (branchId: string, templateId: string, slotId: string) => {
+  return useQuery({
+    queryKey: scheduleKeys.slot(slotId),
+    queryFn: () => scheduleApi.getTimetableSlot(branchId, templateId, slotId),
+    enabled: !!branchId && !!templateId && !!slotId,
+  });
+};
+
+/**
+ * Hook to create a timetable slot
+ */
+export const useCreateTimetableSlot = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: CreateTimetableSlot) => scheduleApi.createTimetableSlot(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.slots() });
+      toast.success('Slot created successfully');
+    },
+    onError: (error: any) => {
+      if (error.response?.status === 409) {
+        toast.error('Schedule conflict: ' + error.response.data.detail);
+      } else {
+        toast.error(error.response?.data?.detail || 'Failed to create slot');
+      }
+    },
+  });
+};
+
+/**
+ * Hook to bulk create timetable slots
+ */
+export const useBulkCreateTimetableSlots = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: BulkCreateSlots) => scheduleApi.bulkCreateTimetableSlots(data),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.slots() });
+      toast.success(`${data.length} slots created successfully`);
+    },
+    onError: (error: any) => {
+      if (error.response?.status === 409) {
+        toast.error('Schedule conflict detected');
+      } else {
+        toast.error(error.response?.data?.detail || 'Failed to create slots');
+      }
+    },
+  });
+};
+
+/**
+ * Hook to update a timetable slot
+ */
+export const useUpdateTimetableSlot = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<CreateTimetableSlot> }) =>
+      scheduleApi.updateTimetableSlot(id, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.slot(variables.id) });
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.slots() });
+      toast.success('Slot updated successfully');
+    },
+    onError: (error: any) => {
+      if (error.response?.status === 409) {
+        toast.error('Schedule conflict: ' + error.response.data.detail);
+      } else {
+        toast.error(error.response?.data?.detail || 'Failed to update slot');
+      }
+    },
+  });
+};
+
+/**
+ * Hook to delete a timetable slot
+ */
+export const useDeleteTimetableSlot = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => scheduleApi.deleteTimetableSlot(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.slots() });
+      toast.success('Slot deleted successfully');
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to delete slot');
+    },
+  });
+};
+
+// ==================== LESSON TOPICS ====================
+
+/**
+ * Hook to fetch lesson topics
+ */
+export const useLessonTopics = (subjectId?: string, quarter?: number) => {
+  return useQuery({
+    queryKey: scheduleKeys.topicList(subjectId, quarter),
+    queryFn: () => scheduleApi.getLessonTopics(subjectId, quarter),
+    enabled: !!subjectId,
+  });
+};
+
+/**
+ * Hook to create a lesson topic
+ */
+export const useCreateLessonTopic = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: Omit<LessonTopic, keyof import('@/types/academic').BaseEntity>) =>
+      scheduleApi.createLessonTopic(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.topics() });
+      toast.success('Topic created successfully');
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to create topic');
+    },
+  });
+};
+
+/**
+ * Hook to update a lesson topic
+ */
+export const useUpdateLessonTopic = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<LessonTopic> }) =>
+      scheduleApi.updateLessonTopic(id, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.topic(variables.id) });
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.topics() });
+      toast.success('Topic updated successfully');
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to update topic');
+    },
+  });
+};
+
+/**
+ * Hook to delete a lesson topic
+ */
+export const useDeleteLessonTopic = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => scheduleApi.deleteLessonTopic(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.topics() });
+      toast.success('Topic deleted successfully');
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to delete topic');
+    },
+  });
+};
+
+// ==================== LESSON INSTANCES ====================
+
+/**
+ * Hook to fetch lesson instances
+ */
+export const useLessonInstances = (filters?: LessonFilters) => {
+  return useQuery({
+    queryKey: scheduleKeys.lessonList(filters),
+    queryFn: () => scheduleApi.getLessonInstances(filters),
+  });
+};
+
+/**
+ * Hook to fetch a single lesson instance
+ */
+export const useLessonInstance = (id: string) => {
+  return useQuery({
+    queryKey: scheduleKeys.lesson(id),
+    queryFn: () => scheduleApi.getLessonInstance(id),
+    enabled: !!id,
+  });
+};
+
+/**
+ * Hook to generate lesson instances
+ */
+export const useGenerateLessonInstances = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: GenerateLessonsRequest) => scheduleApi.generateLessonInstances(data),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.lessons() });
+      toast.success(`${data.generated_count} lessons generated successfully`);
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to generate lessons');
+    },
+  });
+};
+
+/**
+ * Hook to update a lesson instance
+ */
+export const useUpdateLessonInstance = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<LessonInstance> }) =>
+      scheduleApi.updateLessonInstance(id, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.lesson(variables.id) });
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.lessons() });
+      toast.success('Lesson updated successfully');
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to update lesson');
+    },
+  });
+};
+
+/**
+ * Hook to complete a lesson
+ */
+export const useCompleteLesson = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data?: CompleteLessonRequest }) =>
+      scheduleApi.completeLesson(id, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.lesson(variables.id) });
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.lessons() });
+      toast.success('Lesson completed successfully');
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to complete lesson');
+    },
+  });
+};
+
+/**
+ * Hook to cancel a lesson
+ */
+export const useCancelLesson = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason?: string }) =>
+      scheduleApi.cancelLesson(id, reason),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.lesson(variables.id) });
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.lessons() });
+      toast.success('Lesson cancelled successfully');
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to cancel lesson');
+    },
+  });
+};
+
+/**
+ * Hook to delete a lesson instance
+ */
+export const useDeleteLessonInstance = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => scheduleApi.deleteLessonInstance(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: scheduleKeys.lessons() });
+      toast.success('Lesson deleted successfully');
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to delete lesson');
+    },
+  });
+};
+
+// ==================== CUSTOM HOOKS ====================
+
+/**
+ * Hook to fetch weekly timetable for a class
+ */
+export const useWeeklyTimetable = (
+  classId: string,
+  academicYear: string,
+  quarter: number
+) => {
+  return useQuery({
+    queryKey: ['weekly-timetable', classId, academicYear, quarter],
+    queryFn: () => scheduleApi.getWeeklyTimetable(classId, academicYear, quarter),
+    enabled: !!classId && !!academicYear && !!quarter,
+  });
+};
