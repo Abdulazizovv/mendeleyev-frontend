@@ -1,583 +1,430 @@
-"use client";
+/**
+ * Weekly Schedule View - Professional Edition
+ * Branch Admin can view, add, edit, and generate lessons
+ * Full Uzbek localization with real-time features
+ */
 
-import React from "react";
-import { useAuth } from "@/lib/hooks/useAuth";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+'use client';
+
+import React, { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/hooks/useAuth';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
-  Calendar,
-  Plus,
-  Clock,
+  ChevronLeft,
+  ChevronRight,
+  CalendarDays,
+  RefreshCw,
   Edit,
-  Trash2,
-  Copy,
-  Loader2,
-  BookOpen,
-  Users,
-  MoreVertical,
-} from "lucide-react";
+  Sparkles,
+} from 'lucide-react';
+import { WeeklyTimetableGrid } from '@/lib/features/schedule/components/WeeklyTimetableGrid';
+import { CurrentTimeDisplay } from '@/lib/features/schedule/components/CurrentTimeDisplay';
+import { LessonDetailModal } from '@/lib/features/schedule/components/LessonDetailModal';
+import { DeleteLessonDialog } from '@/lib/features/schedule/components/DeleteLessonDialog';
+import { AddLessonDialog, type AddLessonData } from '@/lib/features/schedule/components/AddLessonDialog';
+import { GenerateLessonsDialog, type GenerateLessonsData } from '@/lib/features/schedule/components/GenerateLessonsDialog';
+import { useLessonInstances } from '@/lib/features/schedule/hooks';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { TimetableGrid } from "@/lib/features/schedule/components/TimetableGrid";
-import {
-  useTimetableTemplates,
-  useTimetableSlots,
-} from "@/lib/features/schedule/hooks";
-import { CreateTemplateDialog } from "@/components/schedule/CreateTemplateDialog";
-import { EditTemplateDialog } from "@/components/schedule/EditTemplateDialog";
-import { DeleteTemplateDialog } from "@/components/schedule/DeleteTemplateDialog";
-import { CreateSlotDialog } from "@/components/schedule/CreateSlotDialog";
-import { EditSlotDialog } from "@/components/schedule/EditSlotDialog";
-import { DeleteSlotDialog } from "@/components/schedule/DeleteSlotDialog";
-import { toast } from "sonner";
-import type { TimetableSlot, TimetableTemplate } from "@/types/academic";
+  getWeekStart,
+  getPreviousWeek,
+  getNextWeek,
+  formatDateForAPI,
+} from '@/lib/features/schedule/utils/time';
+import { addDays, format } from 'date-fns';
+import { uz } from 'date-fns/locale';
+import type { LessonInstance } from '@/types/academic';
+import { toast } from 'sonner';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import api from '@/lib/api/client';
+import { SCHEDULE_TRANSLATIONS, formatDateUz } from '@/lib/features/schedule/constants/translations';
 
 export default function BranchAdminSchedulePage() {
+  const router = useRouter();
   const { currentBranch } = useAuth();
-  const [selectedTemplate, setSelectedTemplate] = React.useState<string | null>(null);
-  const [activeTab, setActiveTab] = React.useState<string>("templates");
+  const queryClient = useQueryClient();
+  
+  // State for week navigation
+  const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() =>
+    getWeekStart(new Date())
+  );
 
-  // Dialog states
-  const [createTemplateOpen, setCreateTemplateOpen] = React.useState(false);
-  const [editTemplateOpen, setEditTemplateOpen] = React.useState(false);
-  const [deleteTemplateOpen, setDeleteTemplateOpen] = React.useState(false);
-  const [createSlotOpen, setCreateSlotOpen] = React.useState(false);
-  const [editSlotOpen, setEditSlotOpen] = React.useState(false);
-  const [deleteSlotOpen, setDeleteSlotOpen] = React.useState(false);
-
-  // Selected items for dialogs
-  const [selectedTemplateForEdit, setSelectedTemplateForEdit] = React.useState<TimetableTemplate | null>(null);
-  const [selectedSlotForEdit, setSelectedSlotForEdit] = React.useState<TimetableSlot | null>(null);
+  // State for modals
+  const [selectedLesson, setSelectedLesson] = useState<LessonInstance | null>(null);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [lessonToDelete, setLessonToDelete] = useState<LessonInstance | null>(null);
+  const [addLessonDialogOpen, setAddLessonDialogOpen] = useState(false);
+  const [addLessonContext, setAddLessonContext] = useState<{ date: Date; lessonNumber: number } | null>(null);
+  const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
+  const [generationResult, setGenerationResult] = useState<{ created: number; skipped: number; updated: number } | null>(null);
 
   const branchId = currentBranch?.branch_id;
 
-  // Fetch timetable templates
-  const { data: templates, isLoading: templatesLoading } = useTimetableTemplates(
-    branchId || '',
-    { is_active: true }
-  );
+  // Calculate week date range
+  const weekEnd = useMemo(() => addDays(currentWeekStart, 5), [currentWeekStart]); // Saturday
 
-  // Fetch timetable slots for selected template
-  const { data: slotsData, isLoading: slotsLoading } = useTimetableSlots(
-    branchId || '',
-    selectedTemplate || '',
-    {}
-  );
+  // Fetch lessons for the week
+  const {
+    data: lessonsData,
+    isLoading,
+    refetch,
+  } = useLessonInstances(branchId || '', {
+    date_from: formatDateForAPI(currentWeekStart),
+    date_to: formatDateForAPI(weekEnd),
+  });
 
-  const slots = slotsData?.results || [];
+  const lessons = lessonsData?.results || [];
 
-  // Select first template by default
-  React.useEffect(() => {
-    if (templates?.results && templates.results.length > 0 && !selectedTemplate) {
-      setSelectedTemplate(templates.results[0].id);
+  // Navigation handlers
+  const handlePreviousWeek = () => {
+    setCurrentWeekStart(getPreviousWeek(currentWeekStart));
+  };
+
+  const handleNextWeek = () => {
+    setCurrentWeekStart(getNextWeek(currentWeekStart));
+  };
+
+  const handleToday = () => {
+    setCurrentWeekStart(getWeekStart(new Date()));
+  };
+
+  const handleEditSchedule = () => {
+    router.push('/branch-admin/schedule/edit');
+  };
+
+  // Lesson interaction handlers
+  const handleLessonClick = (lesson: LessonInstance) => {
+    setSelectedLesson(lesson);
+    setDetailModalOpen(true);
+  };
+
+  const handleLessonDelete = (lesson: LessonInstance) => {
+    setLessonToDelete(lesson);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleRefresh = () => {
+    refetch();
+    toast.success(SCHEDULE_TRANSLATIONS.toasts.refreshed);
+  };
+
+  // Add lesson handler
+  const handleAddLesson = (date: Date, lessonNumber: number) => {
+    setAddLessonContext({ date, lessonNumber });
+    setAddLessonDialogOpen(true);
+  };
+
+  // Create lesson mutation
+  const createLessonMutation = useMutation({
+    mutationFn: async (data: AddLessonData) => {
+      const response = await api.post('/api/v1/school/lessons/', data);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lesson-instances', branchId] });
+      setAddLessonDialogOpen(false);
+      setAddLessonContext(null);
+      toast.success(SCHEDULE_TRANSLATIONS.toasts.lessonAdded);
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.detail || SCHEDULE_TRANSLATIONS.toasts.error;
+      toast.error(message);
+    },
+  });
+
+  // Delete lesson mutation
+  const deleteLessonMutation = useMutation({
+    mutationFn: async (lessonId: number) => {
+      await api.delete(`/api/v1/school/lessons/${lessonId}/`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lesson-instances', branchId] });
+      setDeleteDialogOpen(false);
+      setLessonToDelete(null);
+      setDetailModalOpen(false);
+      toast.success(SCHEDULE_TRANSLATIONS.toasts.lessonDeleted);
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.detail || SCHEDULE_TRANSLATIONS.toasts.error;
+      toast.error(message);
+    },
+  });
+
+  // Complete lesson mutation
+  const completeLessonMutation = useMutation({
+    mutationFn: async (lessonId: number) => {
+      const response = await api.patch(`/api/v1/school/lessons/${lessonId}/`, {
+        status: 'completed',
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lesson-instances', branchId] });
+      setDetailModalOpen(false);
+      setSelectedLesson(null);
+      toast.success(SCHEDULE_TRANSLATIONS.toasts.lessonCompleted);
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.detail || SCHEDULE_TRANSLATIONS.toasts.error;
+      toast.error(message);
+    },
+  });
+
+  // Generate lessons mutation
+  const generateLessonsMutation = useMutation({
+    mutationFn: async (data: GenerateLessonsData) => {
+      const response = await api.post('/api/v1/school/lessons/generate/', data);
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['lesson-instances', branchId] });
+      setGenerationResult({
+        created: data.created || 0,
+        skipped: data.skipped || 0,
+        updated: data.updated || 0,
+      });
+      toast.success(SCHEDULE_TRANSLATIONS.toasts.lessonsGenerated);
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.detail || SCHEDULE_TRANSLATIONS.toasts.error;
+      toast.error(message);
+      setGenerateDialogOpen(false);
+    },
+  });
+
+  // Handler functions
+  const handleSubmitAddLesson = (data: AddLessonData) => {
+    createLessonMutation.mutate(data);
+  };
+
+  const handleConfirmDelete = () => {
+    if (lessonToDelete) {
+      // Convert string ID to number if needed
+      const lessonId = typeof lessonToDelete.id === 'string' 
+        ? parseInt(lessonToDelete.id, 10) 
+        : lessonToDelete.id;
+      deleteLessonMutation.mutate(lessonId);
     }
-  }, [templates, selectedTemplate]);
-
-  // Handle slot click
-  const handleSlotClick = (slot: TimetableSlot) => {
-    setSelectedSlotForEdit(slot);
-    setEditSlotOpen(true);
   };
 
-  // Template actions
-  const handleEditTemplate = (template: TimetableTemplate) => {
-    setSelectedTemplateForEdit(template);
-    setEditTemplateOpen(true);
+  const handleCompleteLesson = (lesson: LessonInstance) => {
+    // Convert string ID to number if needed
+    const lessonId = typeof lesson.id === 'string' 
+      ? parseInt(lesson.id, 10) 
+      : lesson.id;
+    completeLessonMutation.mutate(lessonId);
   };
 
-  const handleDeleteTemplate = (template: TimetableTemplate) => {
-    setSelectedTemplateForEdit(template);
-    setDeleteTemplateOpen(true);
+  const handleSubmitGenerate = (data: GenerateLessonsData) => {
+    generateLessonsMutation.mutate(data);
   };
 
-  // Slot actions
-  const handleDeleteSlot = (slot: TimetableSlot) => {
-    setSelectedSlotForEdit(slot);
-    setDeleteSlotOpen(true);
+  const handleCloseGenerateDialog = () => {
+    setGenerateDialogOpen(false);
+    setGenerationResult(null);
   };
 
   if (!branchId) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-6 text-center">
-            <p className="text-muted-foreground">Filial tanlanmagan</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  };
-
-  if (templatesLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
-          <p className="text-gray-600 font-medium">Ma'lumotlar yuklanmoqda...</p>
-        </div>
+      <div className="flex items-center justify-center h-96">
+        <p className="text-muted-foreground">{SCHEDULE_TRANSLATIONS.noData}</p>
       </div>
     );
   }
 
-  const selectedTemplateData = templates?.results?.find((t: TimetableTemplate) => t.id === selectedTemplate);
-
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <div className="space-y-6 p-6">
+      {/* Header with Real-Time Clock */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Dars Jadvali</h1>
-          <p className="text-gray-600 mt-1">
-            Filial dars jadvalini boshqarish va ko&apos;rish
+          <h1 className="text-3xl font-bold tracking-tight">{SCHEDULE_TRANSLATIONS.title}</h1>
+          <p className="text-muted-foreground mt-2">
+            {SCHEDULE_TRANSLATIONS.description}
           </p>
         </div>
-        <Button
-          className="bg-blue-600 hover:bg-blue-700"
-          onClick={() => setCreateTemplateOpen(true)}
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Yangi Shablon
-        </Button>
+
+        <CurrentTimeDisplay />
       </div>
 
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="templates">Shablonlar</TabsTrigger>
-          <TabsTrigger value="schedule">Jadval Ko'rinishi</TabsTrigger>
-          <TabsTrigger value="analytics">Statistika</TabsTrigger>
-        </TabsList>
+      {/* Controls Card */}
+      <Card>
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <CalendarDays className="h-5 w-5" />
+                {formatDateUz(currentWeekStart)} - {formatDateUz(weekEnd)}
+              </CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                {lessons.length} {SCHEDULE_TRANSLATIONS.lessonsCount}
+              </p>
+            </div>
 
-        {/* Templates Tab */}
-        <TabsContent value="templates" className="space-y-6">
-          {/* Template Selector */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Jadval Shablonlari</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {templates?.results && templates.results.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {templates.results.map((template: TimetableTemplate) => (
-                    <Card
-                      key={template.id}
-                      className={`cursor-pointer transition-all hover:shadow-md ${
-                        selectedTemplate === template.id
-                          ? "ring-2 ring-blue-500 bg-blue-50"
-                          : ""
-                      }`}
-                    >
-                      <CardHeader className="pb-3">
-                        <div className="flex items-start justify-between">
-                          <div
-                            className="flex-1"
-                            onClick={() => setSelectedTemplate(template.id)}
-                          >
-                            <CardTitle className="text-base">{template.name}</CardTitle>
-                            <p className="text-sm text-gray-600 mt-1">
-                              {template.academic_year || 'O\'quv yili'}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {template.is_active && (
-                              <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded">
-                                Faol
-                              </span>
-                            )}
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleEditTemplate(template);
-                                }}>
-                                  <Edit className="mr-2 h-4 w-4" />
-                                  Tahrirlash
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteTemplate(template);
-                                }} className="text-destructive">
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  O&apos;chirish
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="pt-0" onClick={() => setSelectedTemplate(template.id)}>
-                        <div className="space-y-2 text-sm text-gray-600">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="w-4 h-4" />
-                            <span>{template.start_date} - {template.end_date}</span>
-                          </div>
-                          {template.description && (
-                            <div className="flex items-start gap-2">
-                              <BookOpen className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                              <span className="line-clamp-2">{template.description}</span>
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <Calendar className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    Jadval shablonlari topilmadi
-                  </h3>
-                  <p className="text-gray-600 mb-4">
-                    Dars jadvalini yaratish uchun avval shablon qo&apos;shing
-                  </p>
-                  <Button
-                    className="bg-blue-600 hover:bg-blue-700"
-                    onClick={() => setCreateTemplateOpen(true)}
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Yangi Shablon Yaratish
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Generate Button */}
+              <Button 
+                onClick={() => setGenerateDialogOpen(true)} 
+                variant="outline"
+                className="gap-2"
+              >
+                <Sparkles className="h-4 w-4" />
+                {SCHEDULE_TRANSLATIONS.generateLessons}
+              </Button>
 
-          {/* Template Details */}
-          {selectedTemplateData && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Shablon: {selectedTemplateData.name}</CardTitle>
-                  <Button
-                    onClick={() => setCreateSlotOpen(true)}
-                    className="bg-blue-600 hover:bg-blue-700"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Dars Vaqti Qo&apos;shish
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                  <div className="space-y-1">
-                    <p className="text-sm text-gray-600">O&apos;quv yili</p>
-                    <p className="font-semibold">
-                      {selectedTemplateData.academic_year}
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-sm text-gray-600">Boshlanish sanasi</p>
-                    <p className="font-semibold">
-                      {selectedTemplateData.start_date}
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-sm text-gray-600">Tugash sanasi</p>
-                    <p className="font-semibold">
-                      {selectedTemplateData.end_date}
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-sm text-gray-600">Holati</p>
-                    <span
-                      className={`inline-block px-3 py-1 text-sm font-medium rounded ${
-                        selectedTemplateData.is_active
-                          ? "bg-green-100 text-green-800"
-                          : "bg-gray-100 text-gray-800"
-                      }`}
-                    >
-                      {selectedTemplateData.is_active ? "Faol" : "Nofaol"}
-                    </span>
-                  </div>
-                </div>
+              {/* Edit Schedule Button */}
+              <Button onClick={handleEditSchedule} variant="outline" className="gap-2">
+                <Edit className="h-4 w-4" />
+                {SCHEDULE_TRANSLATIONS.editSchedule}
+              </Button>
 
-                {/* Slots table */}
-                {slotsLoading ? (
-                  <div className="text-center py-8">
-                    <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto" />
-                  </div>
-                ) : slots.length > 0 ? (
-                  <div className="border rounded-lg overflow-hidden">
-                    <table className="w-full">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">
-                            Kun
-                          </th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">
-                            Dars №
-                          </th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">
-                            Vaqt
-                          </th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">
-                            Sinf - Fan
-                          </th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">
-                            Xona
-                          </th>
-                          <th className="px-4 py-3 text-right text-sm font-medium text-gray-700">
-                            Amallar
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y">
-                        {slots.map((slot: TimetableSlot) => {
-                          const dayNames: Record<number, string> = {
-                            1: 'Dushanba',
-                            2: 'Seshanba',
-                            3: 'Chorshanba',
-                            4: 'Payshanba',
-                            5: 'Juma',
-                            6: 'Shanba',
-                            7: 'Yakshanba',
-                          };
-                          
-                          return (
-                            <tr key={slot.id} className="hover:bg-gray-50">
-                              <td className="px-4 py-3 text-sm">
-                                {dayNames[slot.day_of_week] || slot.day_of_week}
-                              </td>
-                              <td className="px-4 py-3 text-sm">
-                                {slot.lesson_number}
-                              </td>
-                              <td className="px-4 py-3 text-sm">
-                                {slot.start_time} - {slot.end_time}
-                              </td>
-                              <td className="px-4 py-3 text-sm">
-                                {slot.class_subject?.class_name || '-'} - {slot.class_subject?.subject_name || '-'}
-                              </td>
-                              <td className="px-4 py-3 text-sm">
-                                {slot.room || '-'}
-                              </td>
-                              <td className="px-4 py-3 text-sm text-right">
-                                <div className="flex items-center justify-end gap-2">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => {
-                                      setSelectedSlotForEdit(slot);
-                                      setEditSlotOpen(true);
-                                    }}
-                                  >
-                                    <Edit className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleDeleteSlot(slot)}
-                                  >
-                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                  </Button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-gray-600">
-                    <Clock className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                    <p>Ushbu shablon uchun dars vaqtlari mavjud emas</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
+              {/* Today Button */}
+              <Button variant="outline" size="sm" onClick={handleToday}>
+                {SCHEDULE_TRANSLATIONS.today}
+              </Button>
 
-        {/* Schedule View Tab */}
-        <TabsContent value="schedule" className="space-y-6">
-          {selectedTemplate && slots.length > 0 ? (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Haftalik Jadval</CardTitle>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setCreateSlotOpen(true)}
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Dars Qo&apos;shish
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <TimetableGrid slots={slots} onSlotClick={handleSlotClick} />
-              </CardContent>
-            </Card>
-          ) : (
-            <Card>
-              <CardContent className="text-center py-12">
-                <Clock className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  Dars jadvali bo&apos;sh
-                </h3>
-                <p className="text-gray-600 mb-4">
-                  Tanlangan shablon uchun darslar mavjud emas
-                </p>
+              {/* Navigation */}
+              <div className="flex items-center gap-1 border rounded-md">
                 <Button
-                  className="bg-blue-600 hover:bg-blue-700"
-                  onClick={() => setCreateSlotOpen(true)}
-                  disabled={!selectedTemplate}
+                  variant="ghost"
+                  size="icon"
+                  onClick={handlePreviousWeek}
+                  className="h-9 w-9"
+                  title={SCHEDULE_TRANSLATIONS.previousWeek}
                 >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Dars Qo&apos;shish
+                  <ChevronLeft className="h-4 w-4" />
                 </Button>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        {/* Analytics Tab */}
-        <TabsContent value="analytics" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Jami Darslar</CardTitle>
-                <BookOpen className="h-4 w-4 text-gray-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{slots.length}</div>
-                <p className="text-xs text-gray-600 mt-1">Haftalik</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">O'qituvchilar</CardTitle>
-                <Users className="h-4 w-4 text-gray-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {new Set(slots.map((s: TimetableSlot) => s.class_subject?.teacher_id).filter(Boolean)).size}
-                </div>
-                <p className="text-xs text-gray-600 mt-1">Faol o'qituvchilar</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Fanlar</CardTitle>
-                <BookOpen className="h-4 w-4 text-gray-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {new Set(slots.map((s: TimetableSlot) => s.class_subject?.subject_id).filter(Boolean)).size}
-                </div>
-                <p className="text-xs text-gray-600 mt-1">Noyob fanlar</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Xonalar</CardTitle>
-                <BookOpen className="h-4 w-4 text-gray-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {slots.filter((s: TimetableSlot) => s.room).length}
-                </div>
-                <p className="text-xs text-gray-600 mt-1">Xonali darslar</p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Most Active Subjects */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Eng Ko'p O'qitiladigan Fanlar</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {(() => {
-                  const subjectCounts = slots.reduce((acc: Map<string, number>, slot: TimetableSlot) => {
-                    const subjectName = slot.class_subject?.subject_name || 'Noma\'lum';
-                    acc.set(subjectName, (acc.get(subjectName) || 0) + 1);
-                    return acc;
-                  }, new Map<string, number>());
-                  
-                  return Array.from(subjectCounts.entries())
-                    .sort((a, b) => b[1] - a[1])
-                    .slice(0, 5)
-                    .map(([subjectName, count]) => (
-                    <div key={subjectName} className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded bg-blue-100 flex items-center justify-center">
-                          <BookOpen className="w-5 h-5 text-blue-600" />
-                        </div>
-                        <span className="font-medium">{subjectName}</span>
-                      </div>
-                      <span className="text-gray-600">{count} dars/hafta</span>
-                    </div>
-                  ));
-                })()}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleNextWeek}
+                  className="h-9 w-9"
+                  title={SCHEDULE_TRANSLATIONS.nextWeek}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
               </div>
+
+              {/* Refresh */}
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleRefresh}
+                disabled={isLoading}
+                title={SCHEDULE_TRANSLATIONS.refresh}
+              >
+                <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+      </Card>
+
+      {/* Timetable Grid */}
+      <Card>
+        <CardContent className="p-6">
+          {isLoading ? (
+            <div className="space-y-4">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <Skeleton key={i} className="h-24 w-full" />
+              ))}
+            </div>
+          ) : (
+            <WeeklyTimetableGrid
+              lessons={lessons}
+              weekStart={currentWeekStart}
+              onLessonClick={handleLessonClick}
+              onLessonDelete={handleLessonDelete}
+              onAddLesson={handleAddLesson}
+            />
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Stats Cards */}
+      {!isLoading && lessons.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-2xl font-bold">
+                {lessons.filter((l) => l.status === 'planned').length}
+              </div>
+              <div className="text-sm text-muted-foreground">{SCHEDULE_TRANSLATIONS.statuses.planned}</div>
             </CardContent>
           </Card>
-        </TabsContent>
-      </Tabs>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-2xl font-bold text-green-600">
+                {lessons.filter((l) => l.status === 'completed').length}
+              </div>
+              <div className="text-sm text-muted-foreground">{SCHEDULE_TRANSLATIONS.statuses.completed}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-2xl font-bold text-red-600">
+                {lessons.filter((l) => l.status === 'cancelled').length}
+              </div>
+              <div className="text-sm text-muted-foreground">{SCHEDULE_TRANSLATIONS.statuses.cancelled}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-2xl font-bold text-blue-600">
+                {new Set(lessons.map((l) => l.class_id)).size}
+              </div>
+              <div className="text-sm text-muted-foreground">{SCHEDULE_TRANSLATIONS.classesCount}</div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
-      {/* Dialogs */}
-      <CreateTemplateDialog
-        open={createTemplateOpen}
-        onOpenChange={setCreateTemplateOpen}
-        branchId={branchId || ''}
+      {/* Lesson Detail Modal */}
+      <LessonDetailModal
+        lesson={selectedLesson}
+        open={detailModalOpen}
+        onClose={() => {
+          setDetailModalOpen(false);
+          setSelectedLesson(null);
+        }}
+        onDelete={handleLessonDelete}
+        onComplete={handleCompleteLesson}
       />
 
-      <EditTemplateDialog
-        open={editTemplateOpen}
-        onOpenChange={setEditTemplateOpen}
-        branchId={branchId || ''}
-        template={selectedTemplateForEdit}
+      {/* Delete Confirmation Dialog */}
+      <DeleteLessonDialog
+        lesson={lessonToDelete}
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={handleConfirmDelete}
+        isDeleting={deleteLessonMutation.isPending}
       />
 
-      <DeleteTemplateDialog
-        open={deleteTemplateOpen}
-        onOpenChange={setDeleteTemplateOpen}
-        branchId={branchId || ''}
-        template={selectedTemplateForEdit}
-      />
+      {/* Add Lesson Dialog */}
+      {addLessonContext && branchId && (
+        <AddLessonDialog
+          open={addLessonDialogOpen}
+          onOpenChange={setAddLessonDialogOpen}
+          date={addLessonContext.date}
+          lessonNumber={addLessonContext.lessonNumber}
+          branchId={branchId}
+          onSubmit={handleSubmitAddLesson}
+          isSubmitting={createLessonMutation.isPending}
+        />
+      )}
 
-      {selectedTemplate && (
-        <>
-          <CreateSlotDialog
-            open={createSlotOpen}
-            onOpenChange={setCreateSlotOpen}
-            branchId={branchId || ''}
-            templateId={selectedTemplate}
-          />
-
-          <EditSlotDialog
-            open={editSlotOpen}
-            onOpenChange={setEditSlotOpen}
-            branchId={branchId || ''}
-            templateId={selectedTemplate}
-            slot={selectedSlotForEdit}
-          />
-
-          <DeleteSlotDialog
-            open={deleteSlotOpen}
-            onOpenChange={setDeleteSlotOpen}
-            branchId={branchId || ''}
-            templateId={selectedTemplate}
-            slot={selectedSlotForEdit}
-          />
-        </>
+      {/* Generate Lessons Dialog */}
+      {branchId && (
+        <GenerateLessonsDialog
+          open={generateDialogOpen}
+          onOpenChange={handleCloseGenerateDialog}
+          branchId={parseInt(branchId, 10)}
+          onSubmit={handleSubmitGenerate}
+          isGenerating={generateLessonsMutation.isPending}
+          generationResult={generationResult}
+        />
       )}
     </div>
   );

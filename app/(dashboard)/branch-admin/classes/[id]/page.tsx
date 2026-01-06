@@ -243,7 +243,7 @@ export default function ClassDetailPage() {
 													Fan nomi <span className="text-red-500">*</span>
 												</Label>
 												<Select
-													value={subjectForm.subject || ""}
+													value={subjectForm.subject}
 													onValueChange={(v) => setSubjectForm((s) => ({ ...s, subject: v }))}
 												>
 													<SelectTrigger className="h-10">
@@ -265,14 +265,14 @@ export default function ClassDetailPage() {
 													O'qituvchi
 												</Label>
 												<Select
-													value={subjectForm.teacher || ""}
-													onValueChange={(v) => setSubjectForm((s) => ({ ...s, teacher: v }))}
+													value={subjectForm.teacher}
+													onValueChange={(v) => setSubjectForm((s) => ({ ...s, teacher: v === "_none" ? undefined : v }))}
 												>
 													<SelectTrigger className="h-10">
 														<SelectValue placeholder="O'qituvchini tanlang..." />
 													</SelectTrigger>
 													<SelectContent>
-														<SelectItem value="">O'qituvchisiz</SelectItem>
+														<SelectItem value="_none">O'qituvchisiz</SelectItem>
 														{teachers.map((t) => (
 															<SelectItem key={t.id} value={t.id}>
 																{t.user_name}
@@ -831,7 +831,7 @@ export default function ClassDetailPage() {
 											</SelectTrigger>
 											<SelectContent>
 												{allClasses
-													.filter((c) => c.id !== classId && c.can_add_student)
+													.filter((c) => c.id && c.id.trim() !== '' && c.id !== classId && c.can_add_student)
 													.map((c) => (
 														<SelectItem key={c.id} value={c.id}>
 															{c.name} ({c.current_students_count}/{c.max_students} o'quvchi)

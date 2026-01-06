@@ -30,23 +30,25 @@ export interface TimetableTemplate extends BaseEntity {
   description?: string;
 }
 
+// Type alias for compatibility
+export type Timetable = TimetableTemplate;
+
 export interface TimetableSlot extends BaseEntity {
-  template_id: string;
-  day_of_week: 1 | 2 | 3 | 4 | 5 | 6 | 7; // Monday=1, Sunday=7
+  timetable: string; // Backend field name
+  class_obj?: string; // Backend field name
+  class_subject: string; // Backend field name
+  day_of_week: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+  day_of_week_display?: string; // "Dushanba", "Seshanba", etc.
   lesson_number: number;
   start_time: string; // "09:00:00"
   end_time: string; // "09:45:00"
-  class_subject_id: string;
-  class_subject?: {
-    id: string;
-    class_id: string;
-    class_name: string;
-    subject_id: string;
-    subject_name: string;
-    teacher_id: string;
-    teacher_name: string;
-  };
   room?: string;
+  room_name?: string;
+  // Expanded fields from backend
+  timetable_name?: string;
+  class_name?: string;
+  subject_name?: string;
+  teacher_name?: string;
 }
 
 export interface TimetableConflict {
@@ -65,8 +67,10 @@ export interface CreateTimetableTemplate {
 }
 
 export interface CreateTimetableSlot {
-  class_subject_id: string;
-  day_of_week: number;
+  timetable: string; // Backend kutayotgan nom
+  class_obj: string; // Backend kutayotgan nom
+  class_subject: string; // Backend kutayotgan nom
+  day_of_week: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
   lesson_number: number;
   start_time: string;
   end_time: string;
@@ -93,10 +97,15 @@ export interface LessonInstance extends BaseEntity {
   date: string; // "2024-01-15"
   start_time: string;
   end_time: string;
+  lesson_number?: number; // Which lesson period (1-8)
   status: LessonStatus;
   topic_id?: string;
+  topic?: { id: string; title: string; description?: string }; // Topic object
   topic_name?: string;
   notes?: string;
+  homework?: string; // Homework assignment
+  teacher_notes?: string; // Teacher's notes
+  is_auto_generated?: boolean; // Was this lesson generated automatically?
   branch_id: string;
 }
 
