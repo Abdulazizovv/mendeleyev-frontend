@@ -2,229 +2,335 @@
 
 import React from "react";
 import { useAuth } from "@/lib/hooks/useAuth";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
-  Settings,
   Building2,
   Clock,
   DollarSign,
   Save,
   Loader2,
   Calendar,
-  Bell,
-  Shield,
-  Users,
+  Briefcase,
+  AlertCircle,
+  CheckCircle2,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { branchApi } from "@/lib/api/branch";
+import type { BranchSettings, UpdateBranchSettingsPayload } from "@/types/school";
+
+const MONTHS = [
+  { value: 1, label: "Yanvar" },
+  { value: 2, label: "Fevral" },
+  { value: 3, label: "Mart" },
+  { value: 4, label: "Aprel" },
+  { value: 5, label: "May" },
+  { value: 6, label: "Iyun" },
+  { value: 7, label: "Iyul" },
+  { value: 8, label: "Avgust" },
+  { value: 9, label: "Sentabr" },
+  { value: 10, label: "Oktabr" },
+  { value: 11, label: "Noyabr" },
+  { value: 12, label: "Dekabr" },
+];
 
 export default function BranchSettingsPage() {
-  const { currentBranch, user } = useAuth();
-  const [loading, setLoading] = React.useState(false);
-  const [activeTab, setActiveTab] = React.useState<string>("general");
+  const { currentBranch } = useAuth();
+  const queryClient = useQueryClient();
+  const branchId = currentBranch?.branch_id;
 
-  // General settings state
-  const [generalSettings, setGeneralSettings] = React.useState({
-    branchName: currentBranch?.branch_name || "",
-    branchType: currentBranch?.branch_type || "",
-    address: "",
-    phone: "",
-    email: "",
+  // Fetch branch settings
+  const {
+    data: settings,
+    isLoading,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ["branch-settings", branchId],
+    queryFn: () => branchApi.getBranchSettings(branchId!),
+    enabled: !!branchId,
   });
 
-  // Academic settings state
+  // Update mutation
+  const updateMutation = useMutation({
+    mutationFn: (data: UpdateBranchSettingsPayload) =>
+      branchApi.updateBranchSettings(branchId!, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["branch-settings", branchId] });
+      toast.success("Sozlamalar muvaffaqiyatli saqlandi");
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.detail || "Xatolik yuz berdi";
+      toast.error(message);
+    },
+  });
+
+  // Form states
+  const [scheduleSettings, setScheduleSettings] = React.useState({
+    lesson_duration_minutes: 45,
+    break_duration_minutes: 10,
+    school_start_time: "08:00:00",
+    school_end_time: "17:00:00",
+  });
+
   const [academicSettings, setAcademicSettings] = React.useState({
-    academicYearStart: "2024-09-01",
-    academicYearEnd: "2025-06-30",
-    quarterCount: 4,
-    lessonDuration: 45,
-    breakDuration: 10,
-    lunchBreakDuration: 30,
+    academic_year_start_month: 9,
+    academic_year_end_month: 6,
   });
 
-  // Financial settings state
-  const [financialSettings, setFinancialSettings] = React.useState({
-    currency: "UZS",
-    paymentDueDay: 5,
-    latePaymentFee: 50000,
-    enableAutoReminders: true,
-    reminderDaysBefore: 3,
+  const [salarySettings, setSalarySettings] = React.useState({
+    salary_calculation_time: "00:00:00",
+    auto_calculate_salary: true,
+    salary_calculation_day: 1,
   });
 
-  // Notification settings state
-  const [notificationSettings, setNotificationSettings] = React.useState({
-    enableSMS: true,
-    enableEmail: false,
-    enablePush: true,
-    attendanceNotifications: true,
-    gradeNotifications: true,
-    paymentNotifications: true,
-    homeworkNotifications: true,
+  const [paymentSettings, setPaymentSettings] = React.useState({
+    late_payment_penalty_percent: "0.00",
+    early_payment_discount_percent: "0.00",
   });
 
-  const handleSaveGeneral = async () => {
-    setLoading(true);
-    try {
-      // TODO: Implement API call to save general settings
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      toast.success("Umumiy sozlamalar saqlandi");
-    } catch (error) {
-      toast.error("Xatolik yuz berdi");
-    } finally {
-      setLoading(false);
+  const [workSettings, setWorkSettings] = React.useState({
+    work_days_per_week: 6,
+    work_hours_per_day: 8,
+  });
+
+  // Update form states when data is loaded
+  React.useEffect(() => {
+    if (settings) {
+      setScheduleSettings({
+        lesson_duration_minutes: settings.lesson_duration_minutes,
+        break_duration_minutes: settings.break_duration_minutes,
+        school_start_time: settings.school_start_time,
+        school_end_time: settings.school_end_time,
+      });
+      setAcademicSettings({
+        academic_year_start_month: settings.academic_year_start_month,
+        academic_year_end_month: settings.academic_year_end_month,
+      });
+      setSalarySettings({
+        salary_calculation_time: settings.salary_calculation_time,
+        auto_calculate_salary: settings.auto_calculate_salary,
+        salary_calculation_day: settings.salary_calculation_day,
+      });
+      setPaymentSettings({
+        late_payment_penalty_percent: settings.late_payment_penalty_percent,
+        early_payment_discount_percent: settings.early_payment_discount_percent,
+      });
+      setWorkSettings({
+        work_days_per_week: settings.work_days_per_week,
+        work_hours_per_day: settings.work_hours_per_day,
+      });
     }
+  }, [settings]);
+
+  const handleSaveSchedule = () => {
+    updateMutation.mutate(scheduleSettings);
   };
 
-  const handleSaveAcademic = async () => {
-    setLoading(true);
-    try {
-      // TODO: Implement API call to save academic settings
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      toast.success("O'quv sozlamalari saqlandi");
-    } catch (error) {
-      toast.error("Xatolik yuz berdi");
-    } finally {
-      setLoading(false);
-    }
+  const handleSaveAcademic = () => {
+    updateMutation.mutate(academicSettings);
   };
 
-  const handleSaveFinancial = async () => {
-    setLoading(true);
-    try {
-      // TODO: Implement API call to save financial settings
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      toast.success("Moliya sozlamalari saqlandi");
-    } catch (error) {
-      toast.error("Xatolik yuz berdi");
-    } finally {
-      setLoading(false);
-    }
+  const handleSaveSalary = () => {
+    updateMutation.mutate(salarySettings);
   };
 
-  const handleSaveNotifications = async () => {
-    setLoading(true);
-    try {
-      // TODO: Implement API call to save notification settings
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      toast.success("Bildirishnoma sozlamalari saqlandi");
-    } catch (error) {
-      toast.error("Xatolik yuz berdi");
-    } finally {
-      setLoading(false);
-    }
+  const handleSavePayment = () => {
+    updateMutation.mutate(paymentSettings);
   };
+
+  const handleSaveWork = () => {
+    updateMutation.mutate(workSettings);
+  };
+
+  if (!branchId) {
+    return (
+      <div className="flex items-center justify-center h-[60vh]">
+        <Alert className="max-w-md">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>Filial tanlanmagan</AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-[60vh]">
+        <div className="text-center space-y-4">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto" />
+          <p className="text-gray-600">Sozlamalar yuklanmoqda...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-[60vh]">
+        <Alert variant="destructive" className="max-w-md">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Sozlamalarni yuklashda xatolik yuz berdi
+            <Button
+              onClick={() => refetch()}
+              variant="outline"
+              size="sm"
+              className="mt-4 w-full"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Qayta urinish
+            </Button>
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-8">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Filial Sozlamalari</h1>
           <p className="text-gray-600 mt-1">
-            Filial konfiguratsiyasi va sozlamalarini boshqarish
+            {settings?.branch_name} — filial konfiguratsiyasi
           </p>
+        </div>
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <CheckCircle2 className="w-4 h-4 text-green-600" />
+          <span>Oxirgi yangilanish: {new Date(settings?.updated_at || "").toLocaleString("uz-UZ")}</span>
         </div>
       </div>
 
       {/* Settings Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="general">
-            <Building2 className="w-4 h-4 mr-2" />
-            Umumiy
+      <Tabs defaultValue="schedule" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-5 h-auto">
+          <TabsTrigger value="schedule" className="flex items-center gap-2 py-3">
+            <Clock className="w-4 h-4" />
+            <span className="hidden sm:inline">Dars Jadvali</span>
           </TabsTrigger>
-          <TabsTrigger value="academic">
-            <Calendar className="w-4 h-4 mr-2" />
-            O'quv
+          <TabsTrigger value="academic" className="flex items-center gap-2 py-3">
+            <Calendar className="w-4 h-4" />
+            <span className="hidden sm:inline">Akademik</span>
           </TabsTrigger>
-          <TabsTrigger value="financial">
-            <DollarSign className="w-4 h-4 mr-2" />
-            Moliya
+          <TabsTrigger value="salary" className="flex items-center gap-2 py-3">
+            <DollarSign className="w-4 h-4" />
+            <span className="hidden sm:inline">Maosh</span>
           </TabsTrigger>
-          <TabsTrigger value="notifications">
-            <Bell className="w-4 h-4 mr-2" />
-            Bildirishnomalar
+          <TabsTrigger value="payment" className="flex items-center gap-2 py-3">
+            <Building2 className="w-4 h-4" />
+            <span className="hidden sm:inline">To'lovlar</span>
+          </TabsTrigger>
+          <TabsTrigger value="work" className="flex items-center gap-2 py-3">
+            <Briefcase className="w-4 h-4" />
+            <span className="hidden sm:inline">Ish Vaqti</span>
           </TabsTrigger>
         </TabsList>
 
-        {/* General Settings */}
-        <TabsContent value="general" className="space-y-6">
+        {/* Schedule Settings */}
+        <TabsContent value="schedule" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Umumiy Ma'lumotlar</CardTitle>
+              <CardTitle>Dars Jadvali Sozlamalari</CardTitle>
+              <CardDescription>
+                Dars va tanaffus davomiyligini, maktab ish vaqtini sozlang
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="branchName">Filial nomi</Label>
+                  <Label htmlFor="lessonDuration">Dars davomiyligi (daqiqa)</Label>
                   <Input
-                    id="branchName"
-                    value={generalSettings.branchName}
+                    id="lessonDuration"
+                    type="number"
+                    min="30"
+                    max="90"
+                    value={scheduleSettings.lesson_duration_minutes}
                     onChange={(e) =>
-                      setGeneralSettings({ ...generalSettings, branchName: e.target.value })
+                      setScheduleSettings({
+                        ...scheduleSettings,
+                        lesson_duration_minutes: parseInt(e.target.value),
+                      })
                     }
-                    placeholder="Filial nomini kiriting"
                   />
+                  <p className="text-xs text-gray-500">Standart: 45 daqiqa</p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="branchType">Filial turi</Label>
+                  <Label htmlFor="breakDuration">Tanaffus davomiyligi (daqiqa)</Label>
                   <Input
-                    id="branchType"
-                    value={generalSettings.branchType === "school" ? "Maktab" : "O'quv Markazi"}
-                    disabled
-                    className="bg-gray-50"
+                    id="breakDuration"
+                    type="number"
+                    min="5"
+                    max="30"
+                    value={scheduleSettings.break_duration_minutes}
+                    onChange={(e) =>
+                      setScheduleSettings({
+                        ...scheduleSettings,
+                        break_duration_minutes: parseInt(e.target.value),
+                      })
+                    }
                   />
+                  <p className="text-xs text-gray-500">Standart: 10 daqiqa</p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="address">Manzil</Label>
+                  <Label htmlFor="schoolStart">Darslar boshlanish vaqti</Label>
                   <Input
-                    id="address"
-                    value={generalSettings.address}
+                    id="schoolStart"
+                    type="time"
+                    step="1"
+                    value={scheduleSettings.school_start_time}
                     onChange={(e) =>
-                      setGeneralSettings({ ...generalSettings, address: e.target.value })
+                      setScheduleSettings({
+                        ...scheduleSettings,
+                        school_start_time: e.target.value + (e.target.value.length === 5 ? ":00" : ""),
+                      })
                     }
-                    placeholder="Filial manzilini kiriting"
                   />
+                  <p className="text-xs text-gray-500">HH:MM formatida</p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Telefon</Label>
+                  <Label htmlFor="schoolEnd">Darslar tugash vaqti</Label>
                   <Input
-                    id="phone"
-                    value={generalSettings.phone}
+                    id="schoolEnd"
+                    type="time"
+                    step="1"
+                    value={scheduleSettings.school_end_time}
                     onChange={(e) =>
-                      setGeneralSettings({ ...generalSettings, phone: e.target.value })
+                      setScheduleSettings({
+                        ...scheduleSettings,
+                        school_end_time: e.target.value + (e.target.value.length === 5 ? ":00" : ""),
+                      })
                     }
-                    placeholder="+998 XX XXX-XX-XX"
                   />
-                </div>
-
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={generalSettings.email}
-                    onChange={(e) =>
-                      setGeneralSettings({ ...generalSettings, email: e.target.value })
-                    }
-                    placeholder="example@school.uz"
-                  />
+                  <p className="text-xs text-gray-500">HH:MM formatida</p>
                 </div>
               </div>
 
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Dars jadvali sozlamalari avtomatik ravishda barcha yangi dars jadvallariga qo'llaniladi
+                </AlertDescription>
+              </Alert>
+
               <div className="flex justify-end">
                 <Button
-                  onClick={handleSaveGeneral}
-                  disabled={loading}
+                  onClick={handleSaveSchedule}
+                  disabled={updateMutation.isPending}
                   className="bg-blue-600 hover:bg-blue-700"
                 >
-                  {loading ? (
+                  {updateMutation.isPending ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                       Saqlanmoqda...
@@ -245,125 +351,72 @@ export default function BranchSettingsPage() {
         <TabsContent value="academic" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>O'quv Yili Sozlamalari</CardTitle>
+              <CardTitle>Akademik Yil Sozlamalari</CardTitle>
+              <CardDescription>
+                O'quv yilining boshlanish va tugash oylarini belgilang
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="academicYearStart">O'quv yili boshlanishi</Label>
-                  <Input
-                    id="academicYearStart"
-                    type="date"
-                    value={academicSettings.academicYearStart}
+                  <Label htmlFor="yearStart">Akademik yil boshlanish oyi</Label>
+                  <select
+                    id="yearStart"
+                    className="w-full h-10 px-3 rounded-md border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={academicSettings.academic_year_start_month}
                     onChange={(e) =>
                       setAcademicSettings({
                         ...academicSettings,
-                        academicYearStart: e.target.value,
+                        academic_year_start_month: parseInt(e.target.value),
                       })
                     }
-                  />
+                  >
+                    {MONTHS.map((month) => (
+                      <option key={month.value} value={month.value}>
+                        {month.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500">Standart: Sentabr</p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="academicYearEnd">O'quv yili tugashi</Label>
-                  <Input
-                    id="academicYearEnd"
-                    type="date"
-                    value={academicSettings.academicYearEnd}
+                  <Label htmlFor="yearEnd">Akademik yil tugash oyi</Label>
+                  <select
+                    id="yearEnd"
+                    className="w-full h-10 px-3 rounded-md border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={academicSettings.academic_year_end_month}
                     onChange={(e) =>
                       setAcademicSettings({
                         ...academicSettings,
-                        academicYearEnd: e.target.value,
+                        academic_year_end_month: parseInt(e.target.value),
                       })
                     }
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="quarterCount">Choraklar soni</Label>
-                  <Input
-                    id="quarterCount"
-                    type="number"
-                    min="2"
-                    max="4"
-                    value={academicSettings.quarterCount}
-                    onChange={(e) =>
-                      setAcademicSettings({
-                        ...academicSettings,
-                        quarterCount: parseInt(e.target.value),
-                      })
-                    }
-                  />
+                  >
+                    {MONTHS.map((month) => (
+                      <option key={month.value} value={month.value}>
+                        {month.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500">Standart: Iyun</p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Dars Sozlamalari</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="lessonDuration">Dars davomiyligi (daqiqa)</Label>
-                  <Input
-                    id="lessonDuration"
-                    type="number"
-                    min="30"
-                    max="90"
-                    value={academicSettings.lessonDuration}
-                    onChange={(e) =>
-                      setAcademicSettings({
-                        ...academicSettings,
-                        lessonDuration: parseInt(e.target.value),
-                      })
-                    }
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="breakDuration">Tanaffus davomiyligi (daqiqa)</Label>
-                  <Input
-                    id="breakDuration"
-                    type="number"
-                    min="5"
-                    max="30"
-                    value={academicSettings.breakDuration}
-                    onChange={(e) =>
-                      setAcademicSettings({
-                        ...academicSettings,
-                        breakDuration: parseInt(e.target.value),
-                      })
-                    }
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="lunchBreakDuration">Tushlik tanaffusi (daqiqa)</Label>
-                  <Input
-                    id="lunchBreakDuration"
-                    type="number"
-                    min="15"
-                    max="60"
-                    value={academicSettings.lunchBreakDuration}
-                    onChange={(e) =>
-                      setAcademicSettings({
-                        ...academicSettings,
-                        lunchBreakDuration: parseInt(e.target.value),
-                      })
-                    }
-                  />
-                </div>
-              </div>
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Bu sozlamalar yangi akademik yillar yaratishda foydalaniladi
+                </AlertDescription>
+              </Alert>
 
               <div className="flex justify-end">
                 <Button
                   onClick={handleSaveAcademic}
-                  disabled={loading}
+                  disabled={updateMutation.isPending}
                   className="bg-blue-600 hover:bg-blue-700"
                 >
-                  {loading ? (
+                  {updateMutation.isPending ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                       Saqlanmoqda...
@@ -380,95 +433,88 @@ export default function BranchSettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* Financial Settings */}
-        <TabsContent value="financial" className="space-y-6">
+        {/* Salary Settings */}
+        <TabsContent value="salary" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>To'lov Sozlamalari</CardTitle>
+              <CardTitle>Maosh Hisoblash Sozlamalari</CardTitle>
+              <CardDescription>
+                Avtomatik maosh hisoblash va to'lash parametrlari
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="currency">Valyuta</Label>
-                  <Input id="currency" value={financialSettings.currency} disabled className="bg-gray-50" />
+                  <Label htmlFor="salaryTime">Maosh hisoblash vaqti</Label>
+                  <Input
+                    id="salaryTime"
+                    type="time"
+                    step="1"
+                    value={salarySettings.salary_calculation_time}
+                    onChange={(e) =>
+                      setSalarySettings({
+                        ...salarySettings,
+                        salary_calculation_time: e.target.value + (e.target.value.length === 5 ? ":00" : ""),
+                      })
+                    }
+                  />
+                  <p className="text-xs text-gray-500">Celery Beat har kuni shu vaqtda ishga tushadi</p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="paymentDueDay">To'lov muddati (oy kuni)</Label>
+                  <Label htmlFor="salaryDay">Maosh to'lash kuni (oyning)</Label>
                   <Input
-                    id="paymentDueDay"
+                    id="salaryDay"
                     type="number"
                     min="1"
                     max="31"
-                    value={financialSettings.paymentDueDay}
+                    value={salarySettings.salary_calculation_day}
                     onChange={(e) =>
-                      setFinancialSettings({
-                        ...financialSettings,
-                        paymentDueDay: parseInt(e.target.value),
+                      setSalarySettings({
+                        ...salarySettings,
+                        salary_calculation_day: parseInt(e.target.value),
                       })
                     }
                   />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="latePaymentFee">Kechikish jarima (UZS)</Label>
-                  <Input
-                    id="latePaymentFee"
-                    type="number"
-                    min="0"
-                    value={financialSettings.latePaymentFee}
-                    onChange={(e) =>
-                      setFinancialSettings({
-                        ...financialSettings,
-                        latePaymentFee: parseInt(e.target.value),
-                      })
-                    }
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="reminderDaysBefore">Eslatma kunlar oldin</Label>
-                  <Input
-                    id="reminderDaysBefore"
-                    type="number"
-                    min="1"
-                    max="10"
-                    value={financialSettings.reminderDaysBefore}
-                    onChange={(e) =>
-                      setFinancialSettings({
-                        ...financialSettings,
-                        reminderDaysBefore: parseInt(e.target.value),
-                      })
-                    }
-                  />
+                  <p className="text-xs text-gray-500">1-31 oralig'ida</p>
                 </div>
               </div>
 
-              <div className="flex items-center space-x-2 pt-4">
-                <input
-                  type="checkbox"
-                  id="enableAutoReminders"
-                  checked={financialSettings.enableAutoReminders}
-                  onChange={(e) =>
-                    setFinancialSettings({
-                      ...financialSettings,
-                      enableAutoReminders: e.target.checked,
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                <div className="space-y-1">
+                  <Label htmlFor="autoCalculate" className="text-base">
+                    Avtomatik maosh hisoblash
+                  </Label>
+                  <p className="text-sm text-gray-600">
+                    Har kuni avtomatik ravishda xodimlarning oylik maoshini hisoblash
+                  </p>
+                </div>
+                <Switch
+                  id="autoCalculate"
+                  checked={salarySettings.auto_calculate_salary}
+                  onCheckedChange={(checked: boolean) =>
+                    setSalarySettings({
+                      ...salarySettings,
+                      auto_calculate_salary: checked,
                     })
                   }
-                  className="w-4 h-4 text-blue-600 rounded"
                 />
-                <Label htmlFor="enableAutoReminders" className="cursor-pointer">
-                  Avtomatik eslatmalarni yoqish
-                </Label>
               </div>
+
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Avtomatik hisoblash o'chirilgan bo'lsa, faqat qo'lda maosh qo'shish mumkin
+                </AlertDescription>
+              </Alert>
 
               <div className="flex justify-end">
                 <Button
-                  onClick={handleSaveFinancial}
-                  disabled={loading}
+                  onClick={handleSaveSalary}
+                  disabled={updateMutation.isPending}
                   className="bg-blue-600 hover:bg-blue-700"
                 >
-                  {loading ? (
+                  {updateMutation.isPending ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                       Saqlanmoqda...
@@ -485,174 +531,184 @@ export default function BranchSettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* Notification Settings */}
-        <TabsContent value="notifications" className="space-y-6">
+        {/* Payment Settings */}
+        <TabsContent value="payment" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Bildirishnoma Kanallari</CardTitle>
+              <CardTitle>To'lov Sozlamalari</CardTitle>
+              <CardDescription>
+                Jarima va chegirma parametrlari
+              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <Label htmlFor="enableSMS">SMS Bildirishnomalar</Label>
-                  <p className="text-sm text-gray-600">
-                    SMS orqali bildirishnoma yuborish
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="lateFee">Kechikish jarimasi (%)</Label>
+                  <Input
+                    id="lateFee"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    value={paymentSettings.late_payment_penalty_percent}
+                    onChange={(e) =>
+                      setPaymentSettings({
+                        ...paymentSettings,
+                        late_payment_penalty_percent: e.target.value,
+                      })
+                    }
+                  />
+                  <p className="text-xs text-gray-500">
+                    Muddatidan keyin to'lansa qo'llaniladigan jarima
                   </p>
                 </div>
-                <input
-                  type="checkbox"
-                  id="enableSMS"
-                  checked={notificationSettings.enableSMS}
-                  onChange={(e) =>
-                    setNotificationSettings({
-                      ...notificationSettings,
-                      enableSMS: e.target.checked,
-                    })
-                  }
-                  className="w-4 h-4 text-blue-600 rounded"
-                />
+
+                <div className="space-y-2">
+                  <Label htmlFor="earlyDiscount">Erta to'lash chegirmasi (%)</Label>
+                  <Input
+                    id="earlyDiscount"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    value={paymentSettings.early_payment_discount_percent}
+                    onChange={(e) =>
+                      setPaymentSettings({
+                        ...paymentSettings,
+                        early_payment_discount_percent: e.target.value,
+                      })
+                    }
+                  />
+                  <p className="text-xs text-gray-500">
+                    Muddatidan oldin to'lansa beriladigan chegirma
+                  </p>
+                </div>
               </div>
 
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <Label htmlFor="enableEmail">Email Bildirishnomalar</Label>
-                  <p className="text-sm text-gray-600">
-                    Email orqali bildirishnoma yuborish
+              <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <h4 className="font-medium text-blue-900 mb-2">Hisoblash namunasi</h4>
+                <div className="text-sm text-blue-800 space-y-1">
+                  <p>
+                    • To'lov: 1,000,000 so'm
+                  </p>
+                  <p>
+                    • Kechikish jarimasi ({paymentSettings.late_payment_penalty_percent}%):{" "}
+                    <span className="font-semibold">
+                      {(1000000 * parseFloat(paymentSettings.late_payment_penalty_percent || "0") / 100).toLocaleString()} so'm
+                    </span>
+                  </p>
+                  <p>
+                    • Erta to'lash chegirmasi ({paymentSettings.early_payment_discount_percent}%):{" "}
+                    <span className="font-semibold">
+                      {(1000000 * parseFloat(paymentSettings.early_payment_discount_percent || "0") / 100).toLocaleString()} so'm
+                    </span>
                   </p>
                 </div>
-                <input
-                  type="checkbox"
-                  id="enableEmail"
-                  checked={notificationSettings.enableEmail}
-                  onChange={(e) =>
-                    setNotificationSettings({
-                      ...notificationSettings,
-                      enableEmail: e.target.checked,
-                    })
-                  }
-                  className="w-4 h-4 text-blue-600 rounded"
-                />
               </div>
 
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <Label htmlFor="enablePush">Push Bildirishnomalar</Label>
-                  <p className="text-sm text-gray-600">
-                    Mobil ilovaga push yuborish
-                  </p>
-                </div>
-                <input
-                  type="checkbox"
-                  id="enablePush"
-                  checked={notificationSettings.enablePush}
-                  onChange={(e) =>
-                    setNotificationSettings({
-                      ...notificationSettings,
-                      enablePush: e.target.checked,
-                    })
-                  }
-                  className="w-4 h-4 text-blue-600 rounded"
-                />
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleSavePayment}
+                  disabled={updateMutation.isPending}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  {updateMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Saqlanmoqda...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4 mr-2" />
+                      Saqlash
+                    </>
+                  )}
+                </Button>
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
 
+        {/* Work Settings */}
+        <TabsContent value="work" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Bildirishnoma Turlari</CardTitle>
+              <CardTitle>Ish Vaqti Sozlamalari</CardTitle>
+              <CardDescription>
+                Xodimlar ish vaqti va kunlarini belgilang
+              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <Label htmlFor="attendanceNotifications">Davomat</Label>
-                  <p className="text-sm text-gray-600">
-                    Davomat haqida bildirishnomalar
-                  </p>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="workDays">Haftada ish kunlari</Label>
+                  <Input
+                    id="workDays"
+                    type="number"
+                    min="1"
+                    max="7"
+                    value={workSettings.work_days_per_week}
+                    onChange={(e) =>
+                      setWorkSettings({
+                        ...workSettings,
+                        work_days_per_week: parseInt(e.target.value),
+                      })
+                    }
+                  />
+                  <p className="text-xs text-gray-500">1-7 oralig'ida</p>
                 </div>
-                <input
-                  type="checkbox"
-                  id="attendanceNotifications"
-                  checked={notificationSettings.attendanceNotifications}
-                  onChange={(e) =>
-                    setNotificationSettings({
-                      ...notificationSettings,
-                      attendanceNotifications: e.target.checked,
-                    })
-                  }
-                  className="w-4 h-4 text-blue-600 rounded"
-                />
+
+                <div className="space-y-2">
+                  <Label htmlFor="workHours">Kunlik ish soatlari</Label>
+                  <Input
+                    id="workHours"
+                    type="number"
+                    min="1"
+                    max="24"
+                    value={workSettings.work_hours_per_day}
+                    onChange={(e) =>
+                      setWorkSettings({
+                        ...workSettings,
+                        work_hours_per_day: parseInt(e.target.value),
+                      })
+                    }
+                  />
+                  <p className="text-xs text-gray-500">Standart: 8 soat</p>
+                </div>
               </div>
 
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <Label htmlFor="gradeNotifications">Baholar</Label>
-                  <p className="text-sm text-gray-600">
-                    Baholar haqida bildirishnomalar
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-2">Hisoblash</h4>
+                <div className="text-sm text-gray-700 space-y-1">
+                  <p>
+                    • Haftalik ish soatlari:{" "}
+                    <span className="font-semibold">
+                      {workSettings.work_days_per_week * workSettings.work_hours_per_day} soat
+                    </span>
+                  </p>
+                  <p>
+                    • Oylik ish soatlari (4.3 hafta):{" "}
+                    <span className="font-semibold">
+                      {Math.round(workSettings.work_days_per_week * workSettings.work_hours_per_day * 4.3)} soat
+                    </span>
                   </p>
                 </div>
-                <input
-                  type="checkbox"
-                  id="gradeNotifications"
-                  checked={notificationSettings.gradeNotifications}
-                  onChange={(e) =>
-                    setNotificationSettings({
-                      ...notificationSettings,
-                      gradeNotifications: e.target.checked,
-                    })
-                  }
-                  className="w-4 h-4 text-blue-600 rounded"
-                />
               </div>
 
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <Label htmlFor="paymentNotifications">To'lovlar</Label>
-                  <p className="text-sm text-gray-600">
-                    To'lovlar haqida bildirishnomalar
-                  </p>
-                </div>
-                <input
-                  type="checkbox"
-                  id="paymentNotifications"
-                  checked={notificationSettings.paymentNotifications}
-                  onChange={(e) =>
-                    setNotificationSettings({
-                      ...notificationSettings,
-                      paymentNotifications: e.target.checked,
-                    })
-                  }
-                  className="w-4 h-4 text-blue-600 rounded"
-                />
-              </div>
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Bu sozlamalar xodimlar soatlik maoshini hisoblashda ishlatiladi
+                </AlertDescription>
+              </Alert>
 
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <Label htmlFor="homeworkNotifications">Uyga vazifalar</Label>
-                  <p className="text-sm text-gray-600">
-                    Uyga vazifalar haqida bildirishnomalar
-                  </p>
-                </div>
-                <input
-                  type="checkbox"
-                  id="homeworkNotifications"
-                  checked={notificationSettings.homeworkNotifications}
-                  onChange={(e) =>
-                    setNotificationSettings({
-                      ...notificationSettings,
-                      homeworkNotifications: e.target.checked,
-                    })
-                  }
-                  className="w-4 h-4 text-blue-600 rounded"
-                />
-              </div>
-
-              <div className="flex justify-end pt-4">
+              <div className="flex justify-end">
                 <Button
-                  onClick={handleSaveNotifications}
-                  disabled={loading}
+                  onClick={handleSaveWork}
+                  disabled={updateMutation.isPending}
                   className="bg-blue-600 hover:bg-blue-700"
                 >
-                  {loading ? (
+                  {updateMutation.isPending ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                       Saqlanmoqda...
@@ -669,6 +725,28 @@ export default function BranchSettingsPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Currency Info (Read-only) */}
+      <Card className="border-gray-200 bg-gray-50">
+        <CardHeader>
+          <CardTitle className="text-lg">Valyuta Ma'lumotlari</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label className="text-gray-600">Valyuta kodi</Label>
+              <p className="text-lg font-semibold text-gray-900">{settings?.currency}</p>
+            </div>
+            <div>
+              <Label className="text-gray-600">Valyuta belgisi</Label>
+              <p className="text-lg font-semibold text-gray-900">{settings?.currency_symbol}</p>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 mt-4">
+            Valyuta sozlamalari tizim tomonidan boshqariladi va o'zgartirilmaydi
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 }

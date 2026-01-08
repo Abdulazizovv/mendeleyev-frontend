@@ -77,7 +77,7 @@ export const schoolApi = {
   ): Promise<AcademicYear> => {
     const response = await apiClient.post<AcademicYear>(
       `/school/branches/${branchId}/academic-years/`,
-      data
+      { ...data, branch: branchId }
     );
     return response.data;
   },
@@ -110,10 +110,10 @@ export const schoolApi = {
    * Akademik yildagi choraklarni olish
    */
   getQuarters: async (academicYearId: string): Promise<Quarter[]> => {
-    const response = await apiClient.get<Quarter[]>(
+    const response = await apiClient.get<Quarter[] | PaginatedResponse<Quarter>>(
       `/school/academic-years/${academicYearId}/quarters/`
     );
-    return response.data;
+    return unwrapResults(response.data);
   },
 
   /**

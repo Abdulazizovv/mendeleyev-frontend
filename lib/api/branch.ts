@@ -1,6 +1,6 @@
 import apiClient from "./client";
 import type { Branch, BranchMembership } from "@/types";
-import type { PaginatedResponse } from "@/types/school";
+import type { PaginatedResponse, BranchSettings, UpdateBranchSettingsPayload } from "@/types/school";
 
 /**
  * Role interface - Branch rollar
@@ -226,6 +226,32 @@ export const branchApi = {
     // Hozircha memberships va school data dan hisoblash mumkin
     const response = await apiClient.get<BranchStatistics>(
       `/branches/${branchId}/statistics/`
+    );
+    return response.data;
+  },
+
+  // ==================== BRANCH SETTINGS ====================
+
+  /**
+   * Filial sozlamalarini olish
+   */
+  getBranchSettings: async (branchId: string): Promise<BranchSettings> => {
+    const response = await apiClient.get<BranchSettings>(
+      `/branches/settings/${branchId}/`
+    );
+    return response.data;
+  },
+
+  /**
+   * Filial sozlamalarini yangilash (qisman yangilash)
+   */
+  updateBranchSettings: async (
+    branchId: string,
+    data: UpdateBranchSettingsPayload
+  ): Promise<BranchSettings> => {
+    const response = await apiClient.patch<BranchSettings>(
+      `/branches/settings/${branchId}/`,
+      data
     );
     return response.data;
   },

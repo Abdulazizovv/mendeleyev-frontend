@@ -60,10 +60,13 @@ export function WeeklyTimetableGrid({
     <div className="w-full overflow-x-auto">
       <div className="min-w-[1200px]">
         {/* Header - Days */}
-        <div className="grid grid-cols-[100px_repeat(6,1fr)] gap-2 mb-4 sticky top-0 bg-white z-10 pb-2">
+        <div className="grid grid-cols-[120px_repeat(6,1fr)] gap-3 mb-4 sticky top-0 bg-white z-10 pb-2">
           {/* Empty corner cell */}
-          <div className="h-16 flex items-center justify-center">
-            <span className="text-sm font-semibold text-gray-500">Vaqt</span>
+          <div className="h-20 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg border-2 border-gray-200">
+            <div className="text-center">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Dars</span>
+              <span className="block text-xs text-gray-400 mt-0.5">vaqti</span>
+            </div>
           </div>
           
           {/* Day headers */}
@@ -73,20 +76,23 @@ export function WeeklyTimetableGrid({
               <div
                 key={value}
                 className={cn(
-                  'h-16 rounded-lg flex flex-col items-center justify-center border-2 transition-colors',
+                  'h-20 rounded-lg flex flex-col items-center justify-center border-2 transition-all duration-200',
                   isToday
-                    ? 'bg-blue-50 border-blue-400 shadow-sm'
-                    : 'bg-gray-50 border-gray-200'
+                    ? 'bg-gradient-to-br from-blue-50 to-blue-100 border-blue-400 shadow-md'
+                    : 'bg-gradient-to-br from-gray-50 to-white border-gray-200 hover:border-gray-300'
                 )}
               >
-                <span className={cn('text-sm font-semibold', isToday ? 'text-blue-700' : 'text-gray-900')}>
+                <span className={cn('text-base font-bold', isToday ? 'text-blue-700' : 'text-gray-900')}>
                   {full}
                 </span>
-                <span className={cn('text-xs', isToday ? 'text-blue-600' : 'text-gray-500')}>
-                  {format(date, 'd MMM')}
+                <span className={cn('text-sm font-medium mt-1', isToday ? 'text-blue-600' : 'text-gray-600')}>
+                  {format(date, 'd MMMM')}
                 </span>
                 {isToday && (
-                  <div className="mt-1 h-1.5 w-1.5 bg-blue-600 rounded-full" />
+                  <div className="mt-2 flex items-center gap-1">
+                    <div className="h-2 w-2 bg-blue-600 rounded-full animate-pulse" />
+                    <span className="text-xs text-blue-700 font-semibold">Bugun</span>
+                  </div>
                 )}
               </div>
             );
@@ -94,7 +100,7 @@ export function WeeklyTimetableGrid({
         </div>
 
         {/* Grid - Time slots and lessons */}
-        <div className="space-y-2">
+        <div className="space-y-3">
           {TIME_SLOTS.map((timeSlot) => {
             const isCurrentLesson = timeSlot.number === currentLessonNumber;
             
@@ -102,30 +108,41 @@ export function WeeklyTimetableGrid({
               <div
                 key={timeSlot.number}
                 className={cn(
-                  'grid grid-cols-[100px_repeat(6,1fr)] gap-2 min-h-[100px]',
-                  isCurrentLesson && 'ring-2 ring-green-400 rounded-lg p-1'
+                  'grid grid-cols-[120px_repeat(6,1fr)] gap-3 min-h-[110px]',
+                  isCurrentLesson && 'ring-2 ring-green-400 rounded-xl p-2 bg-green-50/30'
                 )}
               >
                 {/* Time slot label */}
                 <div
                   className={cn(
-                    'flex flex-col items-center justify-center rounded-lg border-2',
+                    'flex flex-col items-center justify-center rounded-lg border-2 shadow-sm',
                     isCurrentLesson
-                      ? 'bg-green-50 border-green-300'
-                      : 'bg-gray-50 border-gray-200'
+                      ? 'bg-gradient-to-br from-green-50 to-green-100 border-green-400'
+                      : 'bg-gradient-to-br from-gray-50 to-white border-gray-200'
                   )}
                 >
-                  <span className={cn('text-xs font-semibold', isCurrentLesson ? 'text-green-700' : 'text-gray-700')}>
-                    {timeSlot.number}-dars
-                  </span>
-                  <span className={cn('text-xs mt-1', isCurrentLesson ? 'text-green-600' : 'text-gray-500')}>
+                  <div className={cn(
+                    'text-lg font-bold',
+                    isCurrentLesson ? 'text-green-700' : 'text-gray-700'
+                  )}>
+                    {timeSlot.number}
+                  </div>
+                  <div className={cn(
+                    'text-xs font-medium mt-1',
+                    isCurrentLesson ? 'text-green-600' : 'text-gray-500'
+                  )}>
                     {timeSlot.start}
-                  </span>
-                  <span className={cn('text-xs', isCurrentLesson ? 'text-green-600' : 'text-gray-500')}>
+                  </div>
+                  <div className={cn(
+                    'text-xs font-medium',
+                    isCurrentLesson ? 'text-green-600' : 'text-gray-500'
+                  )}>
                     {timeSlot.end}
-                  </span>
+                  </div>
                   {isCurrentLesson && (
-                    <div className="mt-1.5 h-1.5 w-1.5 bg-green-600 rounded-full animate-pulse" />
+                    <div className="mt-2 px-2 py-0.5 bg-green-600 text-white text-xs font-semibold rounded-full">
+                      Hozir
+                    </div>
                   )}
                 </div>
 
@@ -133,19 +150,23 @@ export function WeeklyTimetableGrid({
                 {weekDays.map(({ value, date }) => {
                   const dateKey = format(date, 'yyyy-MM-dd');
                   const lessonsInCell = groupedLessons[dateKey]?.[timeSlot.number] || [];
+                  const isToday = isSameDay(date, today);
 
                   return (
                     <div
                       key={`${value}-${timeSlot.number}`}
                       className={cn(
-                        'min-h-[100px] rounded-lg border-2 transition-all',
+                        'min-h-[110px] rounded-lg border-2 transition-all duration-200',
                         lessonsInCell.length === 0
-                          ? 'border-dashed border-gray-200 hover:border-blue-300 hover:bg-blue-50/30'
+                          ? cn(
+                              'border-dashed hover:border-blue-400 hover:bg-blue-50 hover:shadow-sm group cursor-pointer',
+                              isToday ? 'border-blue-200 bg-blue-50/30' : 'border-gray-200'
+                            )
                           : 'border-transparent'
                       )}
                     >
                       {lessonsInCell.length > 0 ? (
-                        <div className="space-y-2 p-1">
+                        <div className="space-y-2 p-2">
                           {lessonsInCell.map((lesson) => (
                             <LessonCard
                               key={lesson.id}
@@ -159,10 +180,12 @@ export function WeeklyTimetableGrid({
                       ) : (
                         <button
                           onClick={() => onAddLesson(date, timeSlot.number)}
-                          className="w-full h-full flex flex-col items-center justify-center gap-2 group hover:bg-blue-50/50 transition-colors rounded-lg"
+                          className="w-full h-full flex flex-col items-center justify-center gap-2 hover:bg-blue-100/50 transition-all rounded-lg"
                         >
-                          <Plus className="h-5 w-5 text-gray-400 group-hover:text-blue-600 transition-colors" />
-                          <span className="text-xs text-gray-400 group-hover:text-blue-600 transition-colors">
+                          <div className="p-2 rounded-full bg-white shadow-sm group-hover:shadow-md transition-shadow">
+                            <Plus className="h-5 w-5 text-gray-400 group-hover:text-blue-600 transition-colors" />
+                          </div>
+                          <span className="text-xs text-gray-500 group-hover:text-blue-700 font-medium transition-colors">
                             Dars qo'shish
                           </span>
                         </button>
@@ -176,28 +199,34 @@ export function WeeklyTimetableGrid({
         </div>
 
         {/* Legend */}
-        <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-          <h4 className="text-sm font-semibold text-gray-700 mb-3">Belgilar</h4>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
-            <div className="flex items-center gap-2">
-              <div className="h-3 w-3 bg-blue-200 border-2 border-blue-400 rounded" />
-              <span>Rejalashtirilgan</span>
+        <div className="mt-8 p-6 bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-gray-200 shadow-sm">
+          <h4 className="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+            <div className="h-5 w-1 bg-blue-600 rounded" />
+            Ranglar tavsifi
+          </h4>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-blue-50 transition-colors">
+              <div className="h-4 w-4 bg-blue-100 border-2 border-blue-400 rounded shadow-sm" />
+              <span className="text-sm font-medium text-gray-700">Rejalashtirilgan</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="h-3 w-3 bg-green-200 border-2 border-green-400 rounded ring-2 ring-green-400" />
-              <span>Hozirgi dars</span>
+            <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-green-50 transition-colors">
+              <div className="relative">
+                <div className="h-4 w-4 bg-green-100 border-2 border-green-400 rounded shadow-sm" />
+                <div className="absolute -top-0.5 -right-0.5 h-2 w-2 bg-green-600 rounded-full animate-pulse" />
+              </div>
+              <span className="text-sm font-medium text-gray-700">Hozirgi dars</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="h-3 w-3 bg-emerald-200 border-2 border-emerald-400 rounded" />
-              <span>Tugallangan</span>
+            <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-emerald-50 transition-colors">
+              <div className="h-4 w-4 bg-emerald-100 border-2 border-emerald-400 rounded shadow-sm" />
+              <span className="text-sm font-medium text-gray-700">Tugallangan</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="h-3 w-3 bg-gray-200 border-2 border-gray-300 rounded opacity-70" />
-              <span>O'tgan darslar</span>
+            <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors">
+              <div className="h-4 w-4 bg-gray-100 border-2 border-gray-300 rounded opacity-70 shadow-sm" />
+              <span className="text-sm font-medium text-gray-700">O'tgan darslar</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="h-3 w-3 bg-red-200 border-2 border-red-300 rounded" />
-              <span>Bekor qilingan</span>
+            <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-red-50 transition-colors">
+              <div className="h-4 w-4 bg-red-100 border-2 border-red-300 rounded shadow-sm" />
+              <span className="text-sm font-medium text-gray-700">Bekor qilingan</span>
             </div>
           </div>
         </div>

@@ -23,15 +23,36 @@ export interface BaseEntity {
 export interface TimetableTemplate extends BaseEntity {
   name: string;
   academic_year: string;
-  start_date: string; // "2024-09-01"
-  end_date: string; // "2025-06-01"
+  academic_year_name?: string; // "2025-2026"
+  branch: string; // Branch ID
+  branch_name?: string;
+  effective_from: string; // "2024-09-01"
+  effective_until: string; // "2025-06-01"
   is_active: boolean;
-  branch_id: string;
   description?: string;
+  slots_count?: number; // Number of slots in this template
+  // Legacy fields for compatibility
+  start_date?: string;
+  end_date?: string;
+  branch_id?: string;
 }
 
 // Type alias for compatibility
 export type Timetable = TimetableTemplate;
+
+export interface Quarter {
+  id: string;
+  name: string;
+  number: number;
+  start_date: string;
+  end_date: string;
+}
+
+export interface CurrentTimetableResponse {
+  error?: string;
+  quarter?: Quarter;
+  // If template exists, it returns TimetableTemplate fields directly
+}
 
 export interface TimetableSlot extends BaseEntity {
   timetable: string; // Backend field name

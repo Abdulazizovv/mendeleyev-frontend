@@ -33,6 +33,11 @@ export const getNavigationItems = (branchType: BranchType): NavigationItem[] => 
     return [
       ...commonItems,
       {
+        name: "Akademik Yillar",
+        href: "/branch-admin/academic-years",
+        description: "Akademik yillar va choraklarni boshqarish",
+      },
+      {
         name: "Sinflar",
         href: "/branch-admin/classes",
         description: "Sinflarni boshqarish",
@@ -72,6 +77,11 @@ export const getNavigationItems = (branchType: BranchType): NavigationItem[] => 
     // center
     return [
       ...commonItems,
+      {
+        name: "Akademik Yillar",
+        href: "/branch-admin/academic-years",
+        description: "Akademik yillar va choraklarni boshqarish",
+      },
       {
         name: "Guruhlar",
         href: "/branch-admin/groups",

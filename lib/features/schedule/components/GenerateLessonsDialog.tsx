@@ -30,7 +30,8 @@ import { formatDateUz } from '../constants/translations';
 interface GenerateLessonsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  branchId: number;
+  currentTemplateId: string; // Use current template automatically
+  currentTemplateName?: string; // Display name in UI
   onSubmit: (data: GenerateLessonsData) => void;
   isGenerating?: boolean;
   generationResult?: {
@@ -41,7 +42,7 @@ interface GenerateLessonsDialogProps {
 }
 
 export interface GenerateLessonsData {
-  timetable_id: number;
+  timetable_id: string; // Changed to string to match backend
   start_date: string;
   end_date: string;
   skip_existing: boolean;
@@ -52,7 +53,8 @@ type DateRangePreset = 'this_week' | 'next_week' | 'this_month' | 'next_month' |
 export function GenerateLessonsDialog({
   open,
   onOpenChange,
-  branchId,
+  currentTemplateId,
+  currentTemplateName,
   onSubmit,
   isGenerating = false,
   generationResult = null,
@@ -60,23 +62,7 @@ export function GenerateLessonsDialog({
   const [preset, setPreset] = useState<DateRangePreset>('this_week');
   const [customStartDate, setCustomStartDate] = useState<Date | undefined>(undefined);
   const [customEndDate, setCustomEndDate] = useState<Date | undefined>(undefined);
-  const [selectedTimetableId, setSelectedTimetableId] = useState<string>('');
   const [skipExisting, setSkipExisting] = useState(true);
-
-  // Fetch active timetables
-  const { data: timetables = [] } = useQuery({
-    queryKey: ['timetables', branchId, 'active'],
-    queryFn: async () => {
-      const response = await api.get<Timetable[]>('/api/v1/school/timetables/', {
-        params: {
-          branch: branchId,
-          is_active: true,
-        },
-      });
-      return response.data;
-    },
-    enabled: open,
-  });
 
   // Calculate date range based on preset
   const getDateRange = (): { start: Date; end: Date } => {
@@ -114,12 +100,12 @@ export function GenerateLessonsDialog({
   };
 
   const handleGenerate = () => {
-    if (!selectedTimetableId) return;
+    if (!currentTemplateId) return;
     
     const { start, end } = getDateRange();
     
     onSubmit({
-      timetable_id: parseInt(selectedTimetableId),
+      timetable_id: currentTemplateId,
       start_date: format(start, 'yyyy-MM-dd'),
       end_date: format(end, 'yyyy-MM-dd'),
       skip_existing: skipExisting,
@@ -127,7 +113,7 @@ export function GenerateLessonsDialog({
   };
 
   const { start, end } = getDateRange();
-  const isFormValid = selectedTimetableId && (!isGenerating);
+  const isFormValid = currentTemplateId && !isGenerating;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -186,40 +172,18 @@ export function GenerateLessonsDialog({
         ) : (
           // Form view
           <div className="space-y-6 py-4">
-            {/* Timetable Selection */}
-            <div className="space-y-2">
-              <Label htmlFor="timetable">
-                Jadval shabloni <span className="text-red-500">*</span>
-              </Label>
-              <Select
-                value={selectedTimetableId}
-                onValueChange={setSelectedTimetableId}
-                disabled={isGenerating}
-              >
-                <SelectTrigger id="timetable">
-                  <SelectValue placeholder="Jadvalni tanlang" />
-                </SelectTrigger>
-                <SelectContent>
-                  {timetables.length === 0 ? (
-                    <SelectItem value="_none" disabled>
-                      Faol jadvallar topilmadi
-                    </SelectItem>
-                  ) : (
-                    timetables.map((timetable) => (
-                      <SelectItem key={timetable.id} value={timetable.id.toString()}>
-                        {timetable.name} ({timetable.academic_year})
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-              {timetables.length === 0 && (
-                <p className="text-xs text-amber-600 flex items-center gap-1">
-                  <AlertCircle className="h-3 w-3" />
-                  Avval jadval yaratilishi kerak
-                </p>
-              )}
-            </div>
+            {/* Current Template Info */}
+            {currentTemplateName && (
+              <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-blue-600" />
+                  <div>
+                    <p className="text-sm font-semibold text-blue-900">Aktiv jadval</p>
+                    <p className="text-sm text-blue-700">{currentTemplateName}</p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Date Range Preset */}
             <div className="space-y-2">

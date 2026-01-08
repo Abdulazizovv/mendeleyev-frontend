@@ -147,6 +147,65 @@ export interface Room {
   updated_at: string;
 }
 
+// Branch Settings Types
+export interface BranchSettings {
+  id: string;
+  branch_id: string;
+  branch_name: string;
+  
+  // Dars jadvali sozlamalari
+  lesson_duration_minutes: number;
+  break_duration_minutes: number;
+  school_start_time: string; // HH:MM:SS
+  school_end_time: string; // HH:MM:SS
+  
+  // Akademik sozlamalar
+  academic_year_start_month: number; // 1-12
+  academic_year_end_month: number; // 1-12
+  
+  // Moliya sozlamalari
+  currency: string;
+  currency_symbol: string;
+  
+  // Maosh hisoblash sozlamalari
+  salary_calculation_time: string; // HH:MM:SS
+  auto_calculate_salary: boolean;
+  salary_calculation_day: number; // 1-31
+  
+  // To'lov va chegirmalar
+  late_payment_penalty_percent: string; // decimal
+  early_payment_discount_percent: string; // decimal
+  
+  // Ish vaqti sozlamalari
+  work_days_per_week: number; // 1-7
+  work_hours_per_day: number;
+  
+  // Qo'shimcha sozlamalar
+  additional_settings: Record<string, any>;
+  
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UpdateBranchSettingsPayload {
+  lesson_duration_minutes?: number;
+  break_duration_minutes?: number;
+  school_start_time?: string;
+  school_end_time?: string;
+  academic_year_start_month?: number;
+  academic_year_end_month?: number;
+  currency?: string;
+  currency_symbol?: string;
+  salary_calculation_time?: string;
+  auto_calculate_salary?: boolean;
+  salary_calculation_day?: number;
+  late_payment_penalty_percent?: string;
+  early_payment_discount_percent?: string;
+  work_days_per_week?: number;
+  work_hours_per_day?: number;
+  additional_settings?: Record<string, any>;
+}
+
 // Dashboard Types - Teacher
 export interface TeacherClass {
   id: string;
@@ -443,6 +502,7 @@ export interface StudentPhoneCheckResponse {
 
 // Request Types
 export interface CreateAcademicYearRequest {
+  branch?: string; // UUID - backend talab qiladi
   name: string;
   start_date: string;
   end_date: string;
