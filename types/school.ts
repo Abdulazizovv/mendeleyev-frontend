@@ -158,6 +158,13 @@ export interface BranchSettings {
   break_duration_minutes: number;
   school_start_time: string; // HH:MM:SS
   school_end_time: string; // HH:MM:SS
+  daily_lesson_start_time?: string; // HH:MM:SS - darslar boshlanish vaqti
+  daily_lesson_end_time?: string; // HH:MM:SS - darslar tugash vaqti (school_end_time dan kech bo'lishi mumkin)
+  max_lessons_per_day?: number; // Kunlik maksimal darslar soni
+  
+  // Tushlik vaqti sozlamalari
+  lunch_break_start?: string; // HH:MM:SS, masalan "12:25:00"
+  lunch_break_end?: string; // HH:MM:SS, masalan "13:00:00"
   
   // Akademik sozlamalar
   academic_year_start_month: number; // 1-12
@@ -192,6 +199,11 @@ export interface UpdateBranchSettingsPayload {
   break_duration_minutes?: number;
   school_start_time?: string;
   school_end_time?: string;
+  daily_lesson_start_time?: string;
+  daily_lesson_end_time?: string;
+  max_lessons_per_day?: number;
+  lunch_break_start?: string;
+  lunch_break_end?: string;
   academic_year_start_month?: number;
   academic_year_end_month?: number;
   currency?: string;

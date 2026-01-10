@@ -1,6 +1,10 @@
 /**
  * Time to Lesson Number Mapping Utility
  * Derives lesson_number from start_time for proper API integration
+ * 
+ * IMPORTANT: Tushlik vaqti 12:25-13:00 oralig'ida (35 daqiqa)
+ * Bu vaqt hozirda hardcoded, keyinchalik branch settings API'dan olinadi
+ * TODO: Branch settings'dan lunch_break_start va lunch_break_end olish
  */
 
 export interface TimeSlotDefinition {
@@ -13,16 +17,18 @@ export interface TimeSlotDefinition {
 /**
  * Standard school time slots with lesson numbers
  * This is the SOURCE OF TRUTH for time → lesson_number mapping
+ * Note: 12:25-13:00 is lunch break (no lessons)
  */
 export const STANDARD_TIME_SLOTS: TimeSlotDefinition[] = [
-  { lesson_number: 1, start_time: '08:00:00', end_time: '08:45:00', label: 'Period 1' },
-  { lesson_number: 2, start_time: '08:55:00', end_time: '09:40:00', label: 'Period 2' },
-  { lesson_number: 3, start_time: '09:50:00', end_time: '10:35:00', label: 'Period 3' },
-  { lesson_number: 4, start_time: '10:45:00', end_time: '11:30:00', label: 'Period 4' },
-  { lesson_number: 5, start_time: '11:40:00', end_time: '12:25:00', label: 'Period 5' },
-  { lesson_number: 6, start_time: '13:00:00', end_time: '13:45:00', label: 'Period 6' },
-  { lesson_number: 7, start_time: '13:55:00', end_time: '14:40:00', label: 'Period 7' },
-  { lesson_number: 8, start_time: '14:50:00', end_time: '15:35:00', label: 'Period 8' },
+  { lesson_number: 1, start_time: '08:00:00', end_time: '08:45:00', label: '1-dars' },
+  { lesson_number: 2, start_time: '08:55:00', end_time: '09:40:00', label: '2-dars' },
+  { lesson_number: 3, start_time: '09:50:00', end_time: '10:35:00', label: '3-dars' },
+  { lesson_number: 4, start_time: '10:45:00', end_time: '11:30:00', label: '4-dars' },
+  { lesson_number: 5, start_time: '11:40:00', end_time: '12:25:00', label: '5-dars' },
+  // TUSHLIK VAQTI: 12:25 - 13:00 (35 daqiqa)
+  { lesson_number: 6, start_time: '13:00:00', end_time: '13:45:00', label: '6-dars' },
+  { lesson_number: 7, start_time: '13:55:00', end_time: '14:40:00', label: '7-dars' },
+  { lesson_number: 8, start_time: '14:50:00', end_time: '15:35:00', label: '8-dars' },
 ];
 
 /**

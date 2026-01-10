@@ -27,11 +27,12 @@ export const TIME_SLOTS = [
   { number: 1, start: '08:00', end: '08:45', label: '1-dars (08:00-08:45)' },
   { number: 2, start: '08:55', end: '09:40', label: '2-dars (08:55-09:40)' },
   { number: 3, start: '09:50', end: '10:35', label: '3-dars (09:50-10:35)' },
-  { number: 4, start: '10:55', end: '11:40', label: '4-dars (10:55-11:40)' },
-  { number: 5, start: '11:50', end: '12:35', label: '5-dars (11:50-12:35)' },
-  { number: 6, start: '13:30', end: '14:15', label: '6-dars (13:30-14:15)' },
-  { number: 7, start: '14:25', end: '15:10', label: '7-dars (14:25-15:10)' },
-  { number: 8, start: '15:20', end: '16:05', label: '8-dars (15:20-16:05)' },
+  { number: 4, start: '10:45', end: '11:30', label: '4-dars (10:45-11:30)' },
+  { number: 5, start: '11:40', end: '12:25', label: '5-dars (11:40-12:25)' },
+  // TUSHLIK VAQTI: 12:25 - 13:00
+  { number: 6, start: '13:00', end: '13:45', label: '6-dars (13:00-13:45)' },
+  { number: 7, start: '13:55', end: '14:40', label: '7-dars (13:55-14:40)' },
+  { number: 8, start: '14:50', end: '15:35', label: '8-dars (14:50-15:35)' },
 ] as const;
 
 export const SCHEDULE_TRANSLATIONS = {
@@ -176,14 +177,26 @@ export function formatTimeUz(time: string): string {
 
 /**
  * Get current lesson based on time
+ * Returns null during lunch break (12:25-13:00)
+ * Adjusts lesson number to account for lunch break position
  */
 export function getCurrentLessonNumber(currentTime: Date): number | null {
   const hours = currentTime.getHours();
   const minutes = currentTime.getMinutes();
   const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
   
+  // Check if it's lunch break (12:25-13:00)
+  if (timeString >= '12:25' && timeString < '13:00') {
+    return null; // Tushlik vaqti - no lesson
+  }
+  
+  // Find which time slot matches current time
   for (const slot of TIME_SLOTS) {
     if (timeString >= slot.start && timeString <= slot.end) {
+      // If current time is after lunch, the lesson number should be adjusted
+      // because the lesson numbers in TIME_SLOTS don't account for lunch break
+      // But since TIME_SLOTS.number already represents the logical lesson number,
+      // we return it as-is
       return slot.number;
     }
   }

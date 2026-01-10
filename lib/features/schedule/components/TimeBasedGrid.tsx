@@ -144,12 +144,17 @@ const DroppableCell: React.FC<{
   onDelete?: (slot: TimetableSlot) => void;
 }> = ({ classId, timeSlot, slot, onClick, onEdit, onDelete }) => {
   const dropId = `${classId}-${timeSlot.lesson_number}`;
+  
+  // Don't allow drop on lunch break slots
+  const isLunchBreak = timeSlot.lesson_number === 0;
+  
   const { setNodeRef, isOver } = useDroppable({
     id: dropId,
     data: {
       classId,
       timeSlot,
     },
+    disabled: isLunchBreak, // Disable dropping on lunch break
   });
 
   return (
@@ -274,35 +279,60 @@ export const TimeBasedGrid: React.FC<TimeBasedGridProps> = ({
             ))}
 
             {/* Time Slot Rows */}
-            {timeSlots.map((timeSlot) => (
-              <React.Fragment key={timeSlot.lesson_number}>
-                {/* Time Label */}
-                <div className="bg-white p-2 text-xs text-gray-600 flex flex-col items-center justify-center border-t border-gray-100 sticky left-0 z-10">
-                  <div className="font-medium">{formatTimeDisplay(timeSlot.start_time)}</div>
-                  <div className="text-xs text-gray-400">-</div>
-                  <div className="font-medium">{formatTimeDisplay(timeSlot.end_time)}</div>
-                </div>
+            {timeSlots.map((timeSlot) => {
+              // Check if this is a lunch break slot (lesson_number = 0)
+              const isLunchBreak = timeSlot.lesson_number === 0;
+              
+              return (
+                <React.Fragment key={timeSlot.lesson_number || 'lunch'}>
+                  {/* Time Label */}
+                  <div className={cn(
+                    "p-2 text-xs text-gray-600 flex flex-col items-center justify-center border-t border-gray-100 sticky left-0 z-10",
+                    isLunchBreak ? "bg-amber-50" : "bg-white"
+                  )}>
+                    <div className="font-medium">{formatTimeDisplay(timeSlot.start_time)}</div>
+                    <div className="text-xs text-gray-400">-</div>
+                    <div className="font-medium">{formatTimeDisplay(timeSlot.end_time)}</div>
+                  </div>
 
-                {/* Class Cells */}
-                {classes.map((cls) => {
-                  const key = `${cls.id}-${timeSlot.lesson_number}`;
-                  const slot = slotsByClassAndTime.get(key);
-
-                  return (
-                    <div key={key} className="bg-white p-1 border-t border-gray-100">
-                      <DroppableCell
-                        classId={cls.id}
-                        timeSlot={timeSlot}
-                        slot={slot}
-                        onClick={() => onSlotClick && onSlotClick(cls.id, timeSlot)}
-                        onEdit={onSlotEdit}
-                        onDelete={onSlotDelete}
-                      />
+                  {/* Class Cells or Lunch Break Row */}
+                  {isLunchBreak ? (
+                    // Lunch break - spans all columns
+                    <div 
+                      className="bg-amber-50 p-4 border-t border-amber-200 flex items-center justify-center"
+                      style={{ gridColumn: `span ${classes.length}` }}
+                    >
+                      <div className="text-center">
+                        <div className="text-2xl mb-1">🍽️</div>
+                        <div className="font-semibold text-amber-900 text-sm">Tushlik vaqti</div>
+                        <div className="text-xs text-amber-700 mt-1">
+                          {formatTimeDisplay(timeSlot.start_time)} - {formatTimeDisplay(timeSlot.end_time)}
+                        </div>
+                      </div>
                     </div>
-                  );
-                })}
-              </React.Fragment>
-            ))}
+                  ) : (
+                    // Regular lesson cells
+                    classes.map((cls) => {
+                      const key = `${cls.id}-${timeSlot.lesson_number}`;
+                      const slot = slotsByClassAndTime.get(key);
+
+                      return (
+                        <div key={key} className="bg-white p-1 border-t border-gray-100">
+                          <DroppableCell
+                            classId={cls.id}
+                            timeSlot={timeSlot}
+                            slot={slot}
+                            onClick={() => onSlotClick && onSlotClick(cls.id, timeSlot)}
+                            onEdit={onSlotEdit}
+                            onDelete={onSlotDelete}
+                          />
+                        </div>
+                      );
+                    })
+                  )}
+                </React.Fragment>
+              );
+            })}
           </div>
         </div>
       </div>

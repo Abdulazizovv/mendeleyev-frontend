@@ -2,15 +2,77 @@
 
 import React, { useState, useEffect } from 'react';
 import { Clock, Calendar } from 'lucide-react';
-import { formatDateUz, getCurrentLessonNumber } from '../constants/translations';
+import { formatDateUz } from '../constants/translations';
 import { cn } from '@/lib/utils';
+import type { BranchSettings } from '@/types/school';
+import { parse, addMinutes, format as formatTime } from 'date-fns';
 
 interface CurrentTimeDisplayProps {
   className?: string;
   showSeconds?: boolean;
+  branchSettings?: BranchSettings;
 }
 
-export function CurrentTimeDisplay({ className, showSeconds = true }: CurrentTimeDisplayProps) {
+/**
+ * Get current lesson number based on branch settings
+ * Returns null if not during a lesson (break, before school, after school, or lunch)
+ */
+function getCurrentLessonFromSettings(branchSettings: BranchSettings, currentTime: Date): number | null {
+  const hours = currentTime.getHours();
+  const minutes = currentTime.getMinutes();
+  const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+  
+  // Parse lunch break times if available
+  const lunchStart = branchSettings.lunch_break_start?.substring(0, 5);
+  const lunchEnd = branchSettings.lunch_break_end?.substring(0, 5);
+  
+  // Check if it's lunch break
+  if (lunchStart && lunchEnd && timeString >= lunchStart && timeString < lunchEnd) {
+    return null; // Tushlik vaqti
+  }
+  
+  // Generate time slots dynamically
+  const startTime = parse(branchSettings.school_start_time.substring(0, 5), 'HH:mm', new Date());
+  // Use daily_lesson_end_time if available, otherwise fall back to school_end_time
+  const endTimeStr = branchSettings.daily_lesson_end_time || branchSettings.school_end_time;
+  const endTime = parse(endTimeStr.substring(0, 5), 'HH:mm', new Date());
+  const lunchStartTime = lunchStart ? parse(lunchStart, 'HH:mm', new Date()) : null;
+  const lunchEndTime = lunchEnd ? parse(lunchEnd, 'HH:mm', new Date()) : null;
+  
+  let currentSlotTime = startTime;
+  let lessonNumber = 1;
+  let lunchAdded = false;
+  
+  while (currentSlotTime < endTime) {
+    const slotEnd = addMinutes(currentSlotTime, branchSettings.lesson_duration_minutes);
+    
+    if (slotEnd > endTime) break;
+    
+    // Check if this lesson would overlap with lunch break
+    if (lunchStartTime && lunchEndTime && !lunchAdded && slotEnd > lunchStartTime && currentSlotTime < lunchEndTime) {
+      lunchAdded = true;
+      // Move to end of lunch break and continue
+      currentSlotTime = lunchEndTime;
+      continue;
+    }
+    
+    // Check if current time is within this lesson
+    const slotStartStr = formatTime(currentSlotTime, 'HH:mm');
+    const slotEndStr = formatTime(slotEnd, 'HH:mm');
+    
+    if (timeString >= slotStartStr && timeString < slotEndStr) {
+      return lessonNumber;
+    }
+    
+    // Move to next slot
+    currentSlotTime = addMinutes(slotEnd, branchSettings.break_duration_minutes);
+    lessonNumber++;
+  }
+  
+  return null; // Not during a lesson
+}
+
+export function CurrentTimeDisplay({ className, showSeconds = true, branchSettings }: CurrentTimeDisplayProps) {
   const [currentTime, setCurrentTime] = useState(new Date());
   
   useEffect(() => {
@@ -27,7 +89,7 @@ export function CurrentTimeDisplay({ className, showSeconds = true }: CurrentTim
   const timeString = showSeconds ? `${hours}:${minutes}:${seconds}` : `${hours}:${minutes}`;
   
   const dateString = formatDateUz(currentTime);
-  const currentLesson = getCurrentLessonNumber(currentTime);
+  const currentLesson = branchSettings ? getCurrentLessonFromSettings(branchSettings, currentTime) : null;
   
   return (
     <div className={cn('flex items-center gap-6', className)}>

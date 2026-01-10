@@ -56,34 +56,38 @@ export function LessonCard({ lesson, onClick, onDelete, compact = false, isCurre
   return (
     <div className={cardClasses} onClick={() => onClick(lesson)}>
       {/* Top Section - Subject & Status */}
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="flex-1 min-w-0">
+      <div className="space-y-1.5 mb-2">
+        <div className="flex items-start justify-between gap-2">
           <h4 className={cn(
-            "font-semibold text-sm truncate",
+            "font-semibold text-sm truncate flex-1",
             isNow ? "text-green-900" : "text-gray-900"
           )}>
             {lesson.subject_name || 'Fan nomi'}
           </h4>
-          {!compact && lesson.topic?.title && (
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          {!compact && lesson.topic?.title ? (
             <p className={cn(
-              "text-xs truncate mt-0.5",
+              "text-xs truncate flex-1",
               isNow ? "text-green-700" : "text-gray-600"
             )}>
               {lesson.topic.title}
             </p>
+          ) : (
+            <div className="flex-1" />
           )}
+          <Badge 
+            variant="secondary" 
+            className={cn('text-xs px-1.5 py-0 h-5 shrink-0', {
+              'bg-blue-100 text-blue-700 border-blue-300': lesson.status === 'planned' && !isNow,
+              'bg-green-100 text-green-800 border-green-400 font-bold': isNow,
+              'bg-emerald-100 text-emerald-700 border-emerald-300': lesson.status === 'completed' && !isNow,
+              'bg-red-100 text-red-700 border-red-300': lesson.status === 'cancelled',
+            })}
+          >
+            {isNow ? '⏱️ Hozir' : statusInfo.label}
+          </Badge>
         </div>
-        <Badge 
-          variant="secondary" 
-          className={cn('text-xs px-1.5 py-0 h-5 shrink-0', {
-            'bg-blue-100 text-blue-700 border-blue-300': lesson.status === 'planned' && !isNow,
-            'bg-green-100 text-green-800 border-green-400 font-bold': isNow,
-            'bg-emerald-100 text-emerald-700 border-emerald-300': lesson.status === 'completed' && !isNow,
-            'bg-red-100 text-red-700 border-red-300': lesson.status === 'cancelled',
-          })}
-        >
-          {isNow ? '⏱️ Hozir' : statusInfo.label}
-        </Badge>
       </div>
       
       {/* Info Section */}
@@ -108,8 +112,8 @@ export function LessonCard({ lesson, onClick, onDelete, compact = false, isCurre
         </div>
       )}
       
-      {/* Quick Actions - visible on hover */}
-      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 z-10">
+      {/* Quick Actions - visible on hover (always visible on mobile) */}
+      <div className="absolute top-2 right-2 transition-opacity flex gap-1 z-10 sm:opacity-100 md:opacity-0 md:group-hover:opacity-100">
         <Button
           size="icon"
           variant="ghost"

@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, Calendar, AlertCircle, Loader2, Plus, Pencil, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -109,22 +109,54 @@ export default function TimetableEditPage() {
     enabled: !!branchId,
   });
 
-  // Generate time slots from branch settings
+  // Generate time slots from branch settings (with lunch break support)
   const timeSlots = React.useMemo<TimeSlotDefinition[]>(() => {
     if (!branchSettings) return [];
     
     const slots: TimeSlotDefinition[] = [];
     const startTime = parse(branchSettings.school_start_time.substring(0, 5), 'HH:mm', new Date());
-    const endTime = parse(branchSettings.school_end_time.substring(0, 5), 'HH:mm', new Date());
+    // Use daily_lesson_end_time if available, otherwise fall back to school_end_time
+    const endTimeStr = branchSettings.daily_lesson_end_time || branchSettings.school_end_time;
+    const endTime = parse(endTimeStr.substring(0, 5), 'HH:mm', new Date());
+    
+    // Parse lunch break times if available
+    const lunchStart = branchSettings.lunch_break_start 
+      ? parse(branchSettings.lunch_break_start.substring(0, 5), 'HH:mm', new Date())
+      : null;
+    const lunchEnd = branchSettings.lunch_break_end 
+      ? parse(branchSettings.lunch_break_end.substring(0, 5), 'HH:mm', new Date())
+      : null;
     
     let currentTime = startTime;
     let slotNumber = 1;
+    let lunchAdded = false;
     
     while (currentTime < endTime) {
       const slotEnd = addMinutes(currentTime, branchSettings.lesson_duration_minutes);
       
+      // Check if lesson would exceed school end time
       if (slotEnd > endTime) break;
       
+      // Check if this lesson would overlap with lunch break
+      if (lunchStart && lunchEnd && !lunchAdded && slotEnd > lunchStart && currentTime < lunchEnd) {
+        // Add lunch break slot if we haven't added it yet
+        if (currentTime < lunchStart) {
+          // We're before lunch, so add lunch now
+          slots.push({
+            lesson_number: 0, // Special marker for lunch
+            start_time: formatDate(lunchStart, 'HH:mm:ss'),
+            end_time: formatDate(lunchEnd, 'HH:mm:ss'),
+            label: '🍽️ Tushlik vaqti',
+          });
+          lunchAdded = true;
+        }
+        
+        // Move to end of lunch break and continue
+        currentTime = lunchEnd;
+        continue;
+      }
+      
+      // Add regular lesson slot
       slots.push({
         lesson_number: slotNumber,
         start_time: formatDate(currentTime, 'HH:mm:ss'),
@@ -132,9 +164,10 @@ export default function TimetableEditPage() {
         label: `${slotNumber}-dars`,
       });
       
-      // Add break time before next slot
-      currentTime = addMinutes(slotEnd, branchSettings.break_duration_minutes);
       slotNumber++;
+      
+      // Move to next slot (add break time)
+      currentTime = addMinutes(slotEnd, branchSettings.break_duration_minutes);
     }
     
     return slots;
@@ -198,8 +231,13 @@ export default function TimetableEditPage() {
   // Loading states
   const isLoading = templatesLoading || slotsLoading || classesLoading || settingsLoading;
 
-  // Handle cell click to create new slot
+  // Handle cell click to create new slot (ignore lunch break slots)
   const handleSlotClick = useCallback((classId: string, timeSlot: TimeSlotDefinition) => {
+    // Don't allow creating lessons during lunch break
+    if (timeSlot.lesson_number === 0) {
+      return;
+    }
+    
     setCreateDialogState({
       open: true,
       classId,
@@ -430,6 +468,41 @@ export default function TimetableEditPage() {
           <Link href="/branch-admin/schedule">Tayyor</Link>
         </Button>
       </div>
+
+      {/* Time Slot Info Banner */}
+      {branchSettings && timeSlots.length > 0 && (
+        <Alert className="mb-6 border-blue-200 bg-blue-50">
+          <AlertCircle className="h-4 w-4 text-blue-600" />
+          <AlertTitle className="text-blue-900">Dars vaqtlari ma'lumoti</AlertTitle>
+          <AlertDescription className="text-blue-800 text-sm">
+            <div className="flex items-center gap-4 flex-wrap mt-2">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold">Birinchi dars:</span>
+                <span>{timeSlots[0]?.start_time.substring(0, 5)}</span>
+              </div>
+              <div className="h-4 w-px bg-blue-300" />
+              <div className="flex items-center gap-2">
+                <span className="font-semibold">Oxirgi dars:</span>
+                <span>{timeSlots[timeSlots.length - 1]?.end_time.substring(0, 5)}</span>
+              </div>
+              <div className="h-4 w-px bg-blue-300" />
+              <div className="flex items-center gap-2">
+                <span className="font-semibold">Jami darslar:</span>
+                <span>{timeSlots.filter(t => t.lesson_number > 0).length} ta</span>
+              </div>
+              {branchSettings.lunch_break_start && (
+                <>
+                  <div className="h-4 w-px bg-blue-300" />
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">🍽️ Tushlik:</span>
+                    <span>{branchSettings.lunch_break_start.substring(0, 5)} - {branchSettings.lunch_break_end?.substring(0, 5)}</span>
+                  </div>
+                </>
+              )}
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Day Tabs */}
       <Tabs value={selectedDay.toString()} onValueChange={(v) => setSelectedDay(Number(v))}>

@@ -57,16 +57,16 @@ export default function BranchAdminSchedulePage() {
     getWeekStart(new Date())
   );
   
-  // State for selected day (default to today)
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-
-  // Keep selectedDate within current week range when navigation changes
-  useEffect(() => {
-    const weekEnd = addDays(currentWeekStart, 5);
-    if (selectedDate < currentWeekStart || selectedDate > weekEnd) {
-      setSelectedDate(currentWeekStart);
+  // State for selected day (default to today, but not Sunday)
+  // State for selected day (default to today, but not Sunday)
+  const [selectedDate, setSelectedDate] = useState<Date>(() => {
+    const today = new Date();
+    // If today is Sunday (0), select Monday instead
+    if (today.getDay() === 0) {
+      return getWeekStart(today); // Returns Monday
     }
-  }, [currentWeekStart, selectedDate]);
+    return today;
+  });
 
   // State for modals
   const [selectedLesson, setSelectedLesson] = useState<LessonInstance | null>(null);
@@ -152,11 +152,13 @@ export default function BranchAdminSchedulePage() {
   };
 
   const handleToday = () => {
-    setCurrentWeekStart(getWeekStart(new Date()));
+    const today = new Date();
+    setCurrentWeekStart(getWeekStart(today));
+    setSelectedDate(today);
   };
 
   const handleEditSchedule = () => {
-    router.push('/branch-admin/schedule/edit');
+    router.push('/school/schedule/edit');
   };
 
   // Lesson interaction handlers
@@ -319,21 +321,56 @@ export default function BranchAdminSchedulePage() {
     );
   }
 
-  // Show loading state
+  // Show loading state with better skeleton
   if (isTemplateLoading || isSettingsLoading || isClassesLoading) {
     return (
       <div className="space-y-6 p-6">
-        <div className="flex items-center justify-between">
+        {/* Header Skeleton */}
+        <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="space-y-2">
-            <Skeleton className="h-8 w-64" />
-            <Skeleton className="h-4 w-96" />
+            <Skeleton className="h-9 w-80" />
+            <Skeleton className="h-4 w-64" />
           </div>
+          <Skeleton className="h-20 w-48" />
         </div>
-        <Card>
+
+        {/* Template Banner Skeleton */}
+        <Skeleton className="h-24 w-full" />
+
+        {/* Controls Skeleton */}
+        <Card className="border-2 border-gray-200">
+          <CardHeader className="pb-4">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="space-y-2">
+                <Skeleton className="h-6 w-72" />
+                <Skeleton className="h-5 w-32" />
+              </div>
+              <div className="flex gap-2">
+                <Skeleton className="h-10 w-32" />
+                <Skeleton className="h-10 w-32" />
+                <Skeleton className="h-10 w-24" />
+                <Skeleton className="h-10 w-24" />
+                <Skeleton className="h-10 w-10" />
+              </div>
+            </div>
+          </CardHeader>
+        </Card>
+
+        {/* Timetable Grid Skeleton */}
+        <Card className="border-2 border-gray-200">
           <CardContent className="p-6">
             <div className="space-y-4">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-24 w-full" />
+              {/* Day selector skeleton */}
+              <div className="flex gap-2 overflow-x-auto pb-2">
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <Skeleton key={i} className="h-20 w-32 shrink-0" />
+                ))}
+              </div>
+              
+              {/* Grid skeleton */}
+              <Skeleton className="h-12 w-full" />
+              {[1, 2, 3, 4, 5].map((i) => (
+                <Skeleton key={i} className="h-32 w-full" />
               ))}
             </div>
           </CardContent>
@@ -356,7 +393,7 @@ export default function BranchAdminSchedulePage() {
               {SCHEDULE_TRANSLATIONS.description}
             </p>
           </div>
-          <CurrentTimeDisplay />
+          <CurrentTimeDisplay branchSettings={branchSettings} />
         </div>
 
         {/* Empty State */}
@@ -405,7 +442,7 @@ export default function BranchAdminSchedulePage() {
                 <Button
                   size="lg"
                   variant="outline"
-                  onClick={() => router.push('/branch-admin/schedule/edit')}
+                  onClick={() => router.push('/school/schedule/edit')}
                   className="gap-2"
                 >
                   <Settings className="h-5 w-5" />
@@ -447,7 +484,7 @@ export default function BranchAdminSchedulePage() {
         </div>
 
         <div className="flex items-center gap-3">
-          <CurrentTimeDisplay />
+          <CurrentTimeDisplay branchSettings={branchSettings} />
         </div>
       </div>
 
@@ -479,7 +516,7 @@ export default function BranchAdminSchedulePage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => router.push('/branch-admin/schedule/edit')}
+              onClick={() => router.push('/school/schedule/edit')}
               className="gap-2 bg-white hover:bg-blue-50 border-blue-300 hover:border-blue-400"
             >
               <Settings className="h-4 w-4" />
@@ -488,6 +525,41 @@ export default function BranchAdminSchedulePage() {
           </div>
         </AlertDescription>
       </Alert>
+
+      {/* Time Slot Info Banner */}
+      {branchSettings && (
+        <Alert className="border-blue-200 bg-blue-50">
+          <AlertCircle className="h-4 w-4 text-blue-600" />
+          <AlertTitle className="text-blue-900">Dars vaqtlari</AlertTitle>
+          <AlertDescription className="text-blue-800 text-sm">
+            <div className="flex items-center gap-4 flex-wrap mt-2">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold">Darslar:</span>
+                <span>{branchSettings.school_start_time.substring(0, 5)} - {(branchSettings.daily_lesson_end_time || branchSettings.school_end_time).substring(0, 5)}</span>
+              </div>
+              <div className="h-4 w-px bg-blue-300" />
+              <div className="flex items-center gap-2">
+                <span className="font-semibold">Dars davomiyligi:</span>
+                <span>{branchSettings.lesson_duration_minutes} daqiqa</span>
+              </div>
+              <div className="h-4 w-px bg-blue-300" />
+              <div className="flex items-center gap-2">
+                <span className="font-semibold">Tanaffus:</span>
+                <span>{branchSettings.break_duration_minutes} daqiqa</span>
+              </div>
+              {branchSettings.lunch_break_start && (
+                <>
+                  <div className="h-4 w-px bg-blue-300" />
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">🍽️ Tushlik:</span>
+                    <span>{branchSettings.lunch_break_start.substring(0, 5)} - {branchSettings.lunch_break_end?.substring(0, 5)}</span>
+                  </div>
+                </>
+              )}
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Controls Card - Enhanced with better styling */}
       <Card className="border-2 border-gray-200 shadow-sm">

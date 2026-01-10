@@ -33,6 +33,9 @@ Barcha filiallarning sozlamalarini olish (faqat superadmin).
     "school_start_time": "08:00:00",
     "school_end_time": "17:00:00",
     
+    "lunch_break_start": "12:25:00",
+    "lunch_break_end": "13:00:00",
+    
     "academic_year_start_month": 9,
     "academic_year_end_month": 6,
     
@@ -91,6 +94,9 @@ Konkret filialning sozlamalarini olish.
   "break_duration_minutes": 10,
   "school_start_time": "08:00:00",
   "school_end_time": "17:00:00",
+  
+  "lunch_break_start": "12:25:00",
+  "lunch_break_end": "13:00:00",
   
   "academic_year_start_month": 9,
   "academic_year_end_month": 6,
@@ -159,6 +165,9 @@ Filial sozlamalarini o'zgartirish (qisman yangilash).
   "lesson_duration_minutes": 50,
   "break_duration_minutes": 15,
   "school_start_time": "08:30:00",
+  "school_end_time": "17:00:00",
+  "lunch_break_start": "12:30:00",
+  "lunch_break_end": "13:15:00",
   "salary_calculation_time": "01:00:00",
   "auto_calculate_salary": true,
   "salary_calculation_day": 5,
@@ -184,6 +193,9 @@ Filial sozlamalarini o'zgartirish (qisman yangilash).
   "break_duration_minutes": 15,
   "school_start_time": "08:30:00",
   "school_end_time": "17:00:00",
+  
+  "lunch_break_start": "12:30:00",
+  "lunch_break_end": "13:15:00",
   
   "academic_year_start_month": 9,
   "academic_year_end_month": 6,
@@ -242,11 +254,19 @@ Filial sozlamalarini o'zgartirish (qisman yangilash).
 | `break_duration_minutes` | integer | 10 | Tanaffus davomiyligi (daqiqa) |
 | `school_start_time` | time | "08:00" | Darslar boshlanish vaqti |
 | `school_end_time` | time | "17:00" | Darslar tugash vaqti |
+| `lunch_break_start` | time | "12:25" | Tushlik vaqti boshlanishi (ixtiyoriy) |
+| `lunch_break_end` | time | "13:00" | Tushlik vaqti tugashi (ixtiyoriy) |
 
 **Foydalanish:**
 - Dars jadvali tuzishda
 - Xona band qilishda
 - Darslarga qo'ng'iroq vaqtlarini belgilashda
+- Tushlik vaqtida darslar rejalashtirilmaydi
+
+**Tushlik vaqti:**
+- Agar `lunch_break_start` va `lunch_break_end` belgilangan bo'lsa, bu vaqtda darslar o'tkazilmaydi
+- Jadval grid'da tushlik vaqti 🍽️ emoji bilan ko'rsatiladi
+- Odatda 12:25-13:00 oralig'ida (35 daqiqa)
 
 ---
 
