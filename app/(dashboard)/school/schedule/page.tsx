@@ -433,31 +433,46 @@ export default function BranchAdminSchedulePage() {
   return (
     <div className="space-y-6 p-6">
       {/* Header with Real-Time Clock and Template Info */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">{SCHEDULE_TRANSLATIONS.title}</h1>
-          <p className="text-muted-foreground mt-2">
-            {currentTemplate.name} • {currentTemplate.academic_year_name}
-          </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="space-y-2">
+          <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+            {SCHEDULE_TRANSLATIONS.title}
+          </h1>
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <BookOpen className="h-4 w-4" />
+            <p className="text-sm">
+              {currentTemplate.name} • {currentTemplate.academic_year_name}
+            </p>
+          </div>
         </div>
 
-        <CurrentTimeDisplay />
+        <div className="flex items-center gap-3">
+          <CurrentTimeDisplay />
+        </div>
       </div>
 
-      {/* Template Info Banner */}
-      <Alert className="border-blue-200 bg-blue-50">
-        <BookOpen className="h-4 w-4 text-blue-600" />
-        <AlertTitle className="text-blue-900">Aktiv jadval</AlertTitle>
+      {/* Template Info Banner - Enhanced */}
+      <Alert className="border-2 border-blue-300 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50">
+        <BookOpen className="h-5 w-5 text-blue-600" />
+        <AlertTitle className="text-blue-900 font-bold">Aktiv jadval shabloni</AlertTitle>
         <AlertDescription className="text-blue-800">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="font-semibold">{currentTemplate.name}</span>
-              <span className="mx-2">•</span>
-              <span>{formatDateUz(new Date(currentTemplate.effective_from))} - {formatDateUz(new Date(currentTemplate.effective_until))}</span>
+          <div className="flex items-center justify-between flex-wrap gap-3 mt-2">
+            <div className="flex items-center gap-4 flex-wrap text-sm">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-blue-900">{currentTemplate.name}</span>
+              </div>
+              <div className="h-4 w-px bg-blue-300" />
+              <div className="flex items-center gap-1.5">
+                <CalendarDays className="h-4 w-4" />
+                <span>{formatDateUz(new Date(currentTemplate.effective_from))} - {formatDateUz(new Date(currentTemplate.effective_until))}</span>
+              </div>
               {currentTemplate.slots_count !== undefined && (
                 <>
-                  <span className="mx-2">•</span>
-                  <span>{currentTemplate.slots_count} ta dars slot</span>
+                  <div className="h-4 w-px bg-blue-300" />
+                  <div className="flex items-center gap-1.5">
+                    <BookOpen className="h-4 w-4" />
+                    <span>{currentTemplate.slots_count} ta dars slot</span>
+                  </div>
                 </>
               )}
             </div>
@@ -465,7 +480,7 @@ export default function BranchAdminSchedulePage() {
               variant="outline"
               size="sm"
               onClick={() => router.push('/branch-admin/schedule/edit')}
-              className="gap-2"
+              className="gap-2 bg-white hover:bg-blue-50 border-blue-300 hover:border-blue-400"
             >
               <Settings className="h-4 w-4" />
               Tahrirlash
@@ -474,44 +489,47 @@ export default function BranchAdminSchedulePage() {
         </AlertDescription>
       </Alert>
 
-      {/* Controls Card */}
-      <Card>
-        <CardHeader className="pb-4">
+      {/* Controls Card - Enhanced with better styling */}
+      <Card className="border-2 border-gray-200 shadow-sm">
+        <CardHeader className="pb-4 bg-gradient-to-r from-gray-50 to-white">
           <div className="flex items-center justify-between flex-wrap gap-4">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <CalendarDays className="h-5 w-5" />
-                {formatDateUz(currentWeekStart)} - {formatDateUz(weekEnd)}
+            <div className="space-y-1">
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <CalendarDays className="h-5 w-5 text-blue-600" />
+                <span className="font-bold">{formatDateUz(currentWeekStart)} - {formatDateUz(weekEnd)}</span>
               </CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">
-                {lessons.length} {SCHEDULE_TRANSLATIONS.lessonsCount}
+              <p className="text-sm text-muted-foreground flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">
+                  <BookOpen className="h-3 w-3" />
+                  {lessons.length} {SCHEDULE_TRANSLATIONS.lessonsCount}
+                </span>
               </p>
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
-              {/* Generate Button */}
+              {/* Generate Button - Highlighted */}
               <Button 
                 onClick={() => setGenerateDialogOpen(true)} 
-                variant="outline"
-                className="gap-2"
+                variant="default"
+                className="gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 shadow-md"
               >
                 <Sparkles className="h-4 w-4" />
                 {SCHEDULE_TRANSLATIONS.generateLessons}
               </Button>
 
               {/* Edit Schedule Button */}
-              <Button onClick={handleEditSchedule} variant="outline" className="gap-2">
+              <Button onClick={handleEditSchedule} variant="outline" className="gap-2 border-2 hover:border-blue-400">
                 <Edit className="h-4 w-4" />
                 {SCHEDULE_TRANSLATIONS.editSchedule}
               </Button>
 
               {/* Today Button */}
-              <Button variant="outline" size="sm" onClick={handleToday}>
+              <Button variant="outline" size="sm" onClick={handleToday} className="border-2 hover:border-green-400">
                 {SCHEDULE_TRANSLATIONS.today}
               </Button>
 
               {/* Navigation */}
-              <div className="flex items-center gap-1 border rounded-md">
+              <div className="flex items-center gap-1 border-2 border-gray-200 rounded-md hover:border-blue-300 transition-colors">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -539,6 +557,7 @@ export default function BranchAdminSchedulePage() {
                 onClick={handleRefresh}
                 disabled={isLoading}
                 title={SCHEDULE_TRANSLATIONS.refresh}
+                className="border-2 hover:border-blue-400"
               >
                 <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
               </Button>
@@ -547,8 +566,8 @@ export default function BranchAdminSchedulePage() {
         </CardHeader>
       </Card>
 
-      {/* Timetable Grid */}
-      <Card>
+      {/* Timetable Grid - Enhanced Card */}
+      <Card className="border-2 border-gray-200 shadow-sm">
         <CardContent className="p-6">
           {isLoading ? (
             <div className="space-y-4">
@@ -572,42 +591,151 @@ export default function BranchAdminSchedulePage() {
         </CardContent>
       </Card>
 
-      {/* Stats Cards */}
+      {/* Enhanced Stats Cards */}
       {!isLoading && lessons.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+          {/* Total Lessons */}
+          <Card className="border-2 hover:border-blue-300 transition-colors">
             <CardContent className="p-4">
-              <div className="text-2xl font-bold">
-                {lessons.filter((l) => l.status === 'planned').length}
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-2xl font-bold text-blue-600">
+                    {lessons.length}
+                  </div>
+                  <div className="text-sm text-muted-foreground">Jami darslar</div>
+                </div>
+                <div className="p-3 bg-blue-100 rounded-full">
+                  <BookOpen className="h-5 w-5 text-blue-600" />
+                </div>
               </div>
-              <div className="text-sm text-muted-foreground">{SCHEDULE_TRANSLATIONS.statuses.planned}</div>
             </CardContent>
           </Card>
-          <Card>
+          
+          {/* Planned */}
+          <Card className="border-2 hover:border-purple-300 transition-colors">
             <CardContent className="p-4">
-              <div className="text-2xl font-bold text-green-600">
-                {lessons.filter((l) => l.status === 'completed').length}
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-2xl font-bold text-purple-600">
+                    {lessons.filter((l) => l.status === 'planned').length}
+                  </div>
+                  <div className="text-sm text-muted-foreground">{SCHEDULE_TRANSLATIONS.statuses.planned}</div>
+                </div>
+                <div className="p-3 bg-purple-100 rounded-full">
+                  <CalendarDays className="h-5 w-5 text-purple-600" />
+                </div>
               </div>
-              <div className="text-sm text-muted-foreground">{SCHEDULE_TRANSLATIONS.statuses.completed}</div>
             </CardContent>
           </Card>
-          <Card>
+          
+          {/* Completed */}
+          <Card className="border-2 hover:border-green-300 transition-colors">
             <CardContent className="p-4">
-              <div className="text-2xl font-bold text-red-600">
-                {lessons.filter((l) => l.status === 'cancelled').length}
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-2xl font-bold text-green-600">
+                    {lessons.filter((l) => l.status === 'completed').length}
+                  </div>
+                  <div className="text-sm text-muted-foreground">{SCHEDULE_TRANSLATIONS.statuses.completed}</div>
+                </div>
+                <div className="p-3 bg-green-100 rounded-full">
+                  <svg className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
               </div>
-              <div className="text-sm text-muted-foreground">{SCHEDULE_TRANSLATIONS.statuses.cancelled}</div>
             </CardContent>
           </Card>
-          <Card>
+          
+          {/* Cancelled */}
+          <Card className="border-2 hover:border-red-300 transition-colors">
             <CardContent className="p-4">
-              <div className="text-2xl font-bold text-blue-600">
-                {new Set(lessons.map((l) => l.class_id)).size}
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-2xl font-bold text-red-600">
+                    {lessons.filter((l) => l.status === 'cancelled').length}
+                  </div>
+                  <div className="text-sm text-muted-foreground">{SCHEDULE_TRANSLATIONS.statuses.cancelled}</div>
+                </div>
+                <div className="p-3 bg-red-100 rounded-full">
+                  <AlertCircle className="h-5 w-5 text-red-600" />
+                </div>
               </div>
-              <div className="text-sm text-muted-foreground">{SCHEDULE_TRANSLATIONS.classesCount}</div>
+            </CardContent>
+          </Card>
+          
+          {/* Classes Count */}
+          <Card className="border-2 hover:border-indigo-300 transition-colors">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-2xl font-bold text-indigo-600">
+                    {new Set(lessons.map((l) => l.class_id)).size}
+                  </div>
+                  <div className="text-sm text-muted-foreground">{SCHEDULE_TRANSLATIONS.classesCount}</div>
+                </div>
+                <div className="p-3 bg-indigo-100 rounded-full">
+                  <svg className="h-5 w-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          {/* Teachers Count */}
+          <Card className="border-2 hover:border-cyan-300 transition-colors">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-2xl font-bold text-cyan-600">
+                    {new Set(lessons.map((l) => l.teacher_id).filter(Boolean)).size}
+                  </div>
+                  <div className="text-sm text-muted-foreground">O'qituvchilar</div>
+                </div>
+                <div className="p-3 bg-cyan-100 rounded-full">
+                  <svg className="h-5 w-5 text-cyan-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
+      )}
+      
+      {/* Week Progress Bar */}
+      {!isLoading && lessons.length > 0 && (
+        <Card className="border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50">
+          <CardContent className="p-6">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-900">Haftalik Progress</h3>
+                <span className="text-sm text-gray-600">
+                  {lessons.filter((l) => l.status === 'completed').length} / {lessons.length}
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                <div 
+                  className="bg-gradient-to-r from-blue-500 to-green-500 h-full rounded-full transition-all duration-500 ease-out"
+                  style={{ 
+                    width: `${lessons.length > 0 ? (lessons.filter((l) => l.status === 'completed').length / lessons.length * 100) : 0}%` 
+                  }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-xs text-gray-600">
+                <span>
+                  {lessons.length > 0 
+                    ? Math.round((lessons.filter((l) => l.status === 'completed').length / lessons.length) * 100) 
+                    : 0}% bajarildi
+                </span>
+                <span>
+                  {lessons.filter((l) => l.status === 'planned').length} ta dars qoldi
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Lesson Detail Modal */}

@@ -40,6 +40,7 @@ const DAYS_UZ = [
 
 /**
  * Generate time slots based on branch settings
+ * Creates dynamic time slots considering lesson duration and break times
  */
 function generateTimeSlots(settings: BranchSettings): TimeSlot[] {
   const slots: TimeSlot[] = [];
@@ -52,6 +53,7 @@ function generateTimeSlots(settings: BranchSettings): TimeSlot[] {
   while (currentTime < endTime) {
     const slotEnd = addMinutes(currentTime, settings.lesson_duration_minutes);
     
+    // Stop if lesson would exceed school end time
     if (slotEnd > endTime) break;
     
     slots.push({
@@ -60,8 +62,14 @@ function generateTimeSlots(settings: BranchSettings): TimeSlot[] {
       label: `${slotNumber}-dars`,
     });
     
-    // Add break time before next slot
-    currentTime = addMinutes(slotEnd, settings.break_duration_minutes);
+    // Add break time before next slot (except for last slot)
+    const nextSlotStart = addMinutes(slotEnd, settings.break_duration_minutes);
+    
+    // Check if there's enough time for another lesson
+    const potentialNextEnd = addMinutes(nextSlotStart, settings.lesson_duration_minutes);
+    if (potentialNextEnd > endTime) break;
+    
+    currentTime = nextSlotStart;
     slotNumber++;
   }
   
@@ -151,24 +159,25 @@ export function ModernTimetableGrid({
       }
     });
     
-    return Array.from(classMap.values());
+    // Sort classes by name
+    return Array.from(classMap.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [classes, filteredLessons]);
 
-  // Group lessons by class name and time
-  const groupedLessons = useMemo(() => {
+  // Group lessons by time slot and class - NEW improved structure
+  const lessonsBySlotAndClass = useMemo(() => {
     const grouped: Record<string, Record<string, LessonInstance[]>> = {};
     
     filteredLessons.forEach(lesson => {
+      const timeKey = lesson.start_time?.substring(0, 5) || ''; // HH:mm format
       const className = lesson.class_name || 'Unknown';
-      const timeKey = lesson.start_time?.substring(0, 5) || ''; // Convert HH:mm:ss to HH:mm
       
-      if (!grouped[className]) {
-        grouped[className] = {};
+      if (!grouped[timeKey]) {
+        grouped[timeKey] = {};
       }
-      if (!grouped[className][timeKey]) {
-        grouped[className][timeKey] = [];
+      if (!grouped[timeKey][className]) {
+        grouped[timeKey][className] = [];
       }
-      grouped[className][timeKey].push(lesson);
+      grouped[timeKey][className].push(lesson);
     });
     
     return grouped;
@@ -258,7 +267,10 @@ export function ModernTimetableGrid({
                   <div className="text-center">
                     <div className="text-sm font-bold text-gray-900">{classItem.name}</div>
                     <div className="text-xs text-gray-500 mt-1">
-                      {Object.keys(groupedLessons[classItem.name] || {}).length} ta dars
+                      {/* Count lessons for this class across all time slots */}
+                      {Object.values(lessonsBySlotAndClass).reduce((count, slotLessons) => {
+                        return count + (slotLessons[classItem.name]?.length || 0);
+                      }, 0)} ta dars
                     </div>
                   </div>
                 </div>
@@ -306,22 +318,23 @@ export function ModernTimetableGrid({
                         {timeSlot.end}
                       </div>
                       {isCurrentSlot && (
-                        <div className="mt-2 px-2 py-1 bg-green-600 text-white text-xs font-bold rounded-full">
+                        <div className="mt-2 px-2 py-1 bg-green-600 text-white text-xs font-bold rounded-full animate-pulse">
                           Hozir
                         </div>
                       )}
                     </div>
 
-                    {/* Class Cells */}
+                    {/* Class Cells - Each cell represents one time slot + one class */}
                     {allClasses.map((classItem) => {
-                      const lessonsInCell = groupedLessons[classItem.name]?.[timeSlot.start] || [];
+                      const lessonsInCell = lessonsBySlotAndClass[timeSlot.start]?.[classItem.name] || [];
                       
                       return (
                         <div
-                          key={classItem.name}
+                          key={`${timeSlot.start}-${classItem.name}`}
                           className={cn(
-                            'w-[180px] shrink-0 p-3 border-r border-gray-200 last:border-r-0 min-h-[120px]',
-                            lessonsInCell.length === 0 && 'hover:bg-blue-50/50 cursor-pointer group transition-colors'
+                            'w-[180px] shrink-0 p-3 border-r border-gray-200 last:border-r-0 min-h-[120px] relative',
+                            lessonsInCell.length === 0 && 'hover:bg-blue-50/50 cursor-pointer group transition-colors',
+                            isCurrentSlot && lessonsInCell.length > 0 && 'ring-2 ring-green-500 ring-inset'
                           )}
                         >
                           {lessonsInCell.length > 0 ? (
@@ -333,6 +346,7 @@ export function ModernTimetableGrid({
                                   onClick={onLessonClick}
                                   onDelete={onLessonDelete}
                                   compact={lessonsInCell.length > 1}
+                                  isCurrentLesson={isCurrentSlot}
                                 />
                               ))}
                             </div>
