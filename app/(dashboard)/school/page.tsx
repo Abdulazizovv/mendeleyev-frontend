@@ -2,8 +2,11 @@
 
 import React from "react";
 import { useAuth } from "@/lib/hooks/useAuth";
-import { branchApi, schoolApi } from "@/lib/api";
-import type { MembershipDetail, Role, PaginatedResponse } from "@/lib/api";
+import { branchApi } from "@/lib/api";
+import { useDashboardStatistics, useTodaysLessons } from "@/lib/hooks/dashboard";
+import { DashboardStatisticsCards } from "@/components/dashboard/DashboardStatisticsCards";
+import { TodaysLessonsList } from "@/components/dashboard/TodaysLessonsList";
+import type { MembershipDetail, Role } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,13 +16,10 @@ import {
   BookOpen,
   Building2,
   DollarSign,
-  TrendingUp,
   UserPlus,
   Shield,
   Loader2,
   ChevronRight,
-  BadgeCheck,
-  Calendar,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/translations";
 import { toast } from "sonner";
@@ -41,7 +41,19 @@ export default function BranchAdminDashboard() {
   const isWidgetVisible = (widgetId: string) => 
     widgets.some(w => w.id === widgetId && w.visible);
 
-  // Fetch branch data
+  // Fetch dashboard statistics
+  const {
+    data: dashboardStats,
+    isLoading: statsLoading,
+  } = useDashboardStatistics(branchType);
+
+  // Fetch today's lessons
+  const {
+    data: todaysLessonsData,
+    isLoading: lessonsLoading,
+  } = useTodaysLessons(currentBranch?.branch_id);
+
+  // Fetch branch data (memberships and roles)
   React.useEffect(() => {
     const fetchData = async () => {
       if (!currentBranch?.branch_id) return;
@@ -73,13 +85,13 @@ export default function BranchAdminDashboard() {
     // Ensure memberships and roles are arrays
     const membershipsList = Array.isArray(memberships) ? memberships : [];
     const rolesList = Array.isArray(roles) ? roles : [];
-    const teachers = membershipsList.filter((m) => m.role === "teacher" || m.effective_role.toLowerCase().includes("teacher"));
+    const teachers = membershipsList.filter((m) => m.role === "teacher" || m.effective_role?.toLowerCase().includes("teacher"));
     const students = membershipsList.filter((m) => m.role === "student");
     const totalBalance = membershipsList.reduce((sum, m) => sum + (m.balance || 0), 0);
     const totalSalary = membershipsList.reduce((sum, m) => sum + (m.monthly_salary || 0), 0);
 
     return {
-      totalStaff: membershipsList.length - students.length, // Exclude students from staff count
+      totalStaff: membershipsList.length - students.length,
       totalStudents: students.length,
       totalTeachers: teachers.length,
       totalRoles: rolesList.length,
@@ -88,7 +100,7 @@ export default function BranchAdminDashboard() {
     };
   }, [memberships, roles]);
 
-  if (loading) {
+  if (loading && statsLoading && lessonsLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
@@ -98,6 +110,8 @@ export default function BranchAdminDashboard() {
       </div>
     );
   }
+
+  const todaysLessons = todaysLessonsData?.results || [];
 
   return (
     <div className="space-y-6">
@@ -124,92 +138,20 @@ export default function BranchAdminDashboard() {
         </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* Staff Card */}
-        <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              Xodimlar
-            </CardTitle>
-            <Users className="w-5 h-5 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-gray-900">{stats.totalStaff}</div>
-            <p className="text-xs text-gray-500 mt-1">
-              {stats.totalTeachers} ta o'qituvchi
-            </p>
-          </CardContent>
-        </Card>
+      {/* Dashboard Statistics */}
+      <DashboardStatisticsCards
+        statistics={dashboardStats}
+        isLoading={statsLoading}
+        branchType={branchType}
+      />
 
-        {/* Students Card */}
-        {isWidgetVisible("students") && (
-          <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">
-                {studentTerm.plural}
-              </CardTitle>
-              <GraduationCap className="w-5 h-5 text-green-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-gray-900">{stats.totalStudents}</div>
-              <p className="text-xs text-gray-500 mt-1">Aktiv {studentTerm.plural.toLowerCase()}</p>
-            </CardContent>
-          </Card>
-        )}
+      {/* Today's Lessons */}
+      <TodaysLessonsList
+        lessons={todaysLessons}
+        isLoading={lessonsLoading}
+      />
 
-        {/* Classes/Groups Card - Conditional */}
-        {branchType === "school" ? (
-          isWidgetVisible("classes") && (
-            <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-gray-600">
-                  Sinflar
-                </CardTitle>
-                <BookOpen className="w-5 h-5 text-indigo-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-gray-900">-</div>
-                <p className="text-xs text-gray-500 mt-1">Aktiv sinflar</p>
-              </CardContent>
-            </Card>
-          )
-        ) : (
-          isWidgetVisible("groups") && (
-            <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-gray-600">
-                  Guruhlar
-                </CardTitle>
-                <Users className="w-5 h-5 text-indigo-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-gray-900">-</div>
-                <p className="text-xs text-gray-500 mt-1">Aktiv guruhlar</p>
-              </CardContent>
-            </Card>
-          )
-        )}
-
-        {/* Finance Card */}
-        {isWidgetVisible("finance") && (
-          <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">
-                Moliya
-              </CardTitle>
-              <DollarSign className="w-5 h-5 text-purple-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-gray-900">
-                {formatCurrency(stats.totalSalary)}
-              </div>
-              <p className="text-xs text-gray-500 mt-1">Oylik xarajat</p>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-
+      {/* Staff and Roles Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Staff */}
         <Card className="border-0 shadow-lg">
@@ -334,7 +276,7 @@ export default function BranchAdminDashboard() {
               </Button>
             )}
             
-            {/* Conditional: Classes/Groups or Courses */}
+            {/* Conditional: Classes/Groups */}
             {branchType === "school" ? (
               isWidgetVisible("classes") && (
                 <Button className="h-auto py-6 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700">

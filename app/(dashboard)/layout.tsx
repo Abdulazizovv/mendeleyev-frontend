@@ -77,7 +77,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     if (!isLoading && user && currentBranch) {
       const currentPath = window.location.pathname;
       const role = currentBranch.role;
-      const rolePath = roleToPath(role);
+      const branchType = currentBranch.branch_type as BranchType;
+      const rolePath = roleToPath(role, branchType);
       
       // If user is on wrong dashboard, redirect to their role's dashboard
       if (!currentPath.startsWith(`/${rolePath}`) && !currentPath.startsWith("/dashboard")) {
@@ -107,8 +108,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   }
 
   const role = currentBranch.role;
-  const rolePath = roleToPath(role);
   const branchType = currentBranch.branch_type as BranchType;
+  const rolePath = roleToPath(role, branchType);
 
   // Navigation items based on role and branch type
   const getNavigationItems = () => {

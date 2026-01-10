@@ -211,10 +211,11 @@ export default function LoginPage() {
         if (result.success) {
           toast.success(SUCCESS_MESSAGES.login_success);
           
-          // Redirect based on role
+          // Redirect based on role and branch type
           const meData = await authApi.getMe();
           const role = meData.current_branch?.role || "student";
-          router.push(`/${roleToPath(role)}`);
+          const branchType = meData.current_branch?.branch_type;
+          router.push(`/${roleToPath(role, branchType)}`);
         }
       }
     } catch (error: any) {
@@ -239,10 +240,11 @@ export default function LoginPage() {
       if (result.success) {
         toast.success(SUCCESS_MESSAGES.login_success);
         
-        // Redirect based on role
+        // Redirect based on role and branch type
         const meData = await authApi.getMe();
         const role = meData.current_branch?.role || "student";
-        router.push(`/${roleToPath(role)}`);
+        const branchType = meData.current_branch?.branch_type;
+        router.push(`/${roleToPath(role, branchType)}`);
       }
     } catch (error: any) {
       const errorMessage = parseBackendError(error);
@@ -509,6 +511,7 @@ export default function LoginPage() {
                         type={showPassword ? "text" : "password"}
                         placeholder="Kamida 8 ta belgi"
                         className="h-11 pr-10"
+                        autoComplete="off"
                         {...passwordForm.register("password")}
                       />
                       <button
@@ -538,6 +541,7 @@ export default function LoginPage() {
                         type={showConfirmPassword ? "text" : "password"}
                         placeholder="Parolni qayta kiriting"
                         className="h-11 pr-10"
+                        autoComplete="off"
                         {...passwordForm.register("confirmPassword")}
                       />
                       <button
@@ -599,6 +603,7 @@ export default function LoginPage() {
                         type={showLoginPassword ? "text" : "password"}
                         placeholder="Parolingizni kiriting"
                         className="h-11 pr-10"
+                        autoComplete="off"
                         {...loginForm.register("password")}
                       />
                       <button

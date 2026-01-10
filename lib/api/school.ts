@@ -27,6 +27,8 @@ import type {
   CreateRoomRequest,
   CreateStudentRequest,
   CreateStudentRelativeRequest,
+  DashboardStatistics,
+  TodaysLesson,
 } from "@/types";
 import type { BranchMembership } from "@/types";
 import type { MembershipDetail } from "./branch";
@@ -818,6 +820,40 @@ export const schoolApi = {
         params: {
           phone_number: phoneNumber,
           branch_id: branchId,
+        },
+      }
+    );
+    return response.data;
+  },
+
+  // ==================== DASHBOARD ====================
+
+  /**
+   * Filialdagi dashboard statistikasini olish
+   * API: GET /api/v1/branches/{branchType}/dashboard/statistics/
+   * branchType: "school" yoki "training_center"
+   */
+  getDashboardStatistics: async (branchType: "school" | "training_center"): Promise<DashboardStatistics> => {
+    const response = await apiClient.get<DashboardStatistics>(
+      `/branches/${branchType}/dashboard/statistics/`
+    );
+    return response.data;
+  },
+
+  /**
+   * Bugungi darslarni olish
+   * API: GET /api/v1/school/branches/{branchId}/lessons/?date={today}
+   */
+  getTodaysLessons: async (
+    branchId: string
+  ): Promise<PaginatedResponse<TodaysLesson>> => {
+    const today = new Date().toISOString().split('T')[0];
+    const response = await apiClient.get<PaginatedResponse<TodaysLesson>>(
+      `/school/branches/${branchId}/lessons/`,
+      {
+        params: {
+          date: today,
+          page_size: 100,
         },
       }
     );

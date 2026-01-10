@@ -19,12 +19,15 @@ export interface NavigationItem {
 
 /**
  * Get navigation items based on branch type
+ * Updated to use new routing: /school and /training-center
  */
 export const getNavigationItems = (branchType: BranchType): NavigationItem[] => {
+  const baseRoute = branchType === "training_center" ? "/training-center" : "/school";
+  
   const commonItems: NavigationItem[] = [
     {
       name: "O'quvchilar",
-      href: "/branch-admin/students",
+      href: `${baseRoute}/students`,
       description: "O'quvchilarni boshqarish",
     },
   ];
@@ -34,87 +37,87 @@ export const getNavigationItems = (branchType: BranchType): NavigationItem[] => 
       ...commonItems,
       {
         name: "Akademik Yillar",
-        href: "/branch-admin/academic-years",
+        href: `${baseRoute}/academic-years`,
         description: "Akademik yillar va choraklarni boshqarish",
       },
       {
         name: "Sinflar",
-        href: "/branch-admin/classes",
+        href: `${baseRoute}/classes`,
         description: "Sinflarni boshqarish",
       },
       {
         name: "Fanlar",
-        href: "/branch-admin/subjects",
+        href: `${baseRoute}/subjects`,
         description: "Fanlarni boshqarish",
       },
       {
         name: "Dars Jadvali",
-        href: "/branch-admin/schedule",
+        href: `${baseRoute}/schedule`,
         description: "Dars jadvalini boshqarish",
       },
       {
         name: "Xodimlar",
-        href: "/branch-admin/staff",
+        href: `${baseRoute}/staff`,
         description: "Xodimlarni boshqarish",
       },
       {
         name: "Xonalar va Binolar",
-        href: "/branch-admin/rooms",
+        href: `${baseRoute}/rooms`,
         description: "Xonalar va binolarni boshqarish",
       },
       {
         name: "Rollar",
-        href: "/branch-admin/roles",
+        href: `${baseRoute}/roles`,
         description: "Rollarni boshqarish",
       },
       {
         name: "Moliya",
-        href: "/branch-admin/finance",
+        href: `${baseRoute}/finance`,
         description: "Moliya boshqaruvi",
       },
     ];
   } else {
-    // center
+    // training_center
     return [
       ...commonItems,
       {
         name: "Akademik Yillar",
-        href: "/branch-admin/academic-years",
+        href: `${baseRoute}/academic-years`,
         description: "Akademik yillar va choraklarni boshqarish",
       },
       {
         name: "Guruhlar",
-        href: "/branch-admin/groups",
+        href: `${baseRoute}/groups`,
         description: "Guruhlarni boshqarish",
       },
       {
         name: "Kurslar",
-        href: "/branch-admin/courses",
+        href: `${baseRoute}/courses`,
         description: "Kurslarni boshqarish",
       },
       {
         name: "Dars Jadvali",
-        href: "/branch-admin/schedule",
+        href: `${baseRoute}/schedule`,
         description: "Dars jadvalini boshqarish",
       },
       {
         name: "Xodimlar",
-        href: "/branch-admin/staff",
+        href: `${baseRoute}/staff`,
         description: "Xodimlarni boshqarish",
       },
       {
         name: "Xonalar va Binolar",
-        href: "/branch-admin/rooms",
+        href: `${baseRoute}/rooms`,
         description: "Xonalar va binolarni boshqarish",
       },
       {
         name: "Rollar",
-        href: "/branch-admin/roles",
+        href: `${baseRoute}/roles`,
         description: "Rollarni boshqarish",
       },
       {
         name: "Moliya",
-        href: "/branch-admin/finance",
+        href: `${baseRoute}/finance`,
         description: "Moliya boshqaruvi",
       },
     ];

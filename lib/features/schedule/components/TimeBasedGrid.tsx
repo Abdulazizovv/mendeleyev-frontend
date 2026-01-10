@@ -30,6 +30,7 @@ interface TimeBasedGridProps {
   classes: Class[];
   slots: TimetableSlot[];
   dayOfWeek: number;
+  timeSlots?: TimeSlotDefinition[]; // Optional, will use getAllTimeSlots() if not provided
   onSlotClick?: (classId: string, timeSlot: TimeSlotDefinition) => void;
   onSlotEdit?: (slot: TimetableSlot) => void;
   onSlotDelete?: (slot: TimetableSlot) => void;
@@ -178,12 +179,13 @@ export const TimeBasedGrid: React.FC<TimeBasedGridProps> = ({
   classes,
   slots,
   dayOfWeek,
+  timeSlots: providedTimeSlots,
   onSlotClick,
   onSlotEdit,
   onSlotDelete,
   onSlotDrop,
 }) => {
-  const timeSlots = getAllTimeSlots();
+  const timeSlots = providedTimeSlots || getAllTimeSlots();
 
   // Convert dayOfWeek number to string
   const dayOfWeekMap: Record<number, string> = {
