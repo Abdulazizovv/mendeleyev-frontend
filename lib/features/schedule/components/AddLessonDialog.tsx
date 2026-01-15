@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Dialog,
@@ -20,85 +20,77 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2 } from 'lucide-react';
-import { schoolApi } from '@/lib/api/school';
-import { formatDateUz, TIME_SLOTS } from '../constants/translations';
-import type { ClassSubject, Room } from '@/types/school';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Loader2, AlertTriangle } from 'lucide-react';
+import { scheduleApi } from '../api';
+import { formatDateUz } from '../constants/translations';
+import type { AddLessonData, ScheduleAvailabilityResponse } from '@/types/academic';
 
 interface AddLessonDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  date: Date | null;
-  lessonNumber: number | null;
+  context: { date: Date; lessonNumber: number; startTime: string; endTime: string; classId: string; className: string } | null;
   branchId: string;
   onSubmit: (data: AddLessonData) => void;
   isSubmitting?: boolean;
 }
 
-export interface AddLessonData {
-  class_subject: string;
-  date: string;
-  lesson_number: number;
-  start_time: string;
-  end_time: string;
-  room?: string;
-  topic?: string;
-  homework?: string;
-  teacher_notes?: string;
-}
-
 export function AddLessonDialog({
   open,
   onOpenChange,
-  date,
-  lessonNumber,
+  context,
   branchId,
   onSubmit,
   isSubmitting = false,
 }: AddLessonDialogProps) {
-  const [selectedClassSubjectId, setSelectedClassSubjectId] = useState<string | undefined>();
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string | undefined>();
   const [selectedRoomId, setSelectedRoomId] = useState<string | undefined>();
   const [homework, setHomework] = useState('');
   const [teacherNotes, setTeacherNotes] = useState('');
 
   // Get time slot info
-  const timeSlot = TIME_SLOTS.find((slot) => slot.number === lessonNumber);
+  const timeSlot = context ? {
+    start: context.startTime,
+    end: context.endTime,
+    label: `${context.lessonNumber}-dars (${context.startTime}-${context.endTime})`
+  } : null;
 
-  // Fetch all class subjects
-  const { data: classSubjectsData, isLoading: classSubjectsLoading } = useQuery({
-    queryKey: ['all-class-subjects', branchId],
+  // Check availability when dialog opens and context changes
+  const { data: availability, isLoading: availabilityLoading, error: availabilityError } = useQuery({
+    queryKey: ['schedule-availability', branchId, context?.classId, context?.date, context?.startTime, context?.endTime],
     queryFn: async () => {
-      // Get all active classes
-      const classes = await schoolApi.getClasses(branchId, { is_active: true, page_size: 100 });
-      
-      // Get class subjects for all classes
-      const allClassSubjects: ClassSubject[] = [];
-      for (const cls of classes) {
-        const subjects = await schoolApi.getClassSubjects(cls.id, { is_active: true });
-        allClassSubjects.push(...subjects);
+      if (!context?.classId || !context?.date || !context?.startTime || !context?.endTime) {
+        throw new Error('Missing required parameters');
       }
-      
-      return allClassSubjects;
+      return await scheduleApi.checkScheduleAvailability(branchId, {
+        class_id: context.classId,
+        date: context.date.toISOString().split('T')[0],
+        start_time: context.startTime,
+        end_time: context.endTime,
+      });
     },
-    enabled: open && !!branchId,
+    enabled: open && !!context?.classId && !!context?.date && !!context?.startTime && !!context?.endTime,
   });
 
-  // Fetch rooms
-  const { data: rooms = [], isLoading: roomsLoading } = useQuery<Room[]>({
-    queryKey: ['rooms', branchId],
-    queryFn: () => schoolApi.getRooms(branchId, { is_active: true }),
-    enabled: open && !!branchId,
-  });
+  // Reset form when context changes
+  useEffect(() => {
+    if (context) {
+      setSelectedSubjectId(undefined);
+      setSelectedRoomId(undefined);
+      setHomework('');
+      setTeacherNotes('');
+    }
+  }, [context]);
 
   const handleSubmit = () => {
-    if (!selectedClassSubjectId || !date || !lessonNumber || !timeSlot) return;
+    if (!selectedSubjectId || !context || !timeSlot) return;
 
     const data: AddLessonData = {
-      class_subject: selectedClassSubjectId,
-      date: date.toISOString().split('T')[0],
-      lesson_number: lessonNumber,
-      start_time: `${timeSlot.start}:00`,
-      end_time: `${timeSlot.end}:00`,
+      class_subject: selectedSubjectId,
+      date: context.date.toISOString().split('T')[0],
+      lesson_number: context.lessonNumber,
+      start_time: context.startTime,
+      end_time: context.endTime,
       room: selectedRoomId === '_none' ? undefined : selectedRoomId,
       homework: homework.trim() || undefined,
       teacher_notes: teacherNotes.trim() || undefined,
@@ -108,12 +100,16 @@ export function AddLessonDialog({
   };
 
   const handleClose = () => {
-    setSelectedClassSubjectId(undefined);
+    setSelectedSubjectId(undefined);
     setSelectedRoomId(undefined);
     setHomework('');
     setTeacherNotes('');
     onOpenChange(false);
   };
+
+  if (!context || !timeSlot) {
+    return null;
+  }
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -121,76 +117,105 @@ export function AddLessonDialog({
         <DialogHeader>
           <DialogTitle>Yangi dars qo'shish</DialogTitle>
           <DialogDescription>
-            {date && formatDateUz(date)} - {timeSlot?.label}
+            {context.className} sinfi • {formatDateUz(context.date)} • {timeSlot.label}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Class Subject Select */}
+          {/* Availability Status */}
+          {availabilityLoading && (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin mr-2" />
+              <span>Mavjudlik tekshirilmoqda...</span>
+            </div>
+          )}
+
+          {availabilityError && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                Mavjudlikni tekshirishda xatolik yuz berdi. Iltimos, qayta urinib ko'ring.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {availability && availability.conflicts.length > 0 && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                <div className="font-semibold mb-2">Konfliktlar topildi:</div>
+                <ul className="list-disc list-inside space-y-1">
+                  {availability.conflicts.map((conflict, index) => (
+                    <li key={index} className="text-sm">
+                      {conflict.message}
+                    </li>
+                  ))}
+                </ul>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Subject Select */}
           <div className="space-y-2">
-            <Label htmlFor="class-subject">
-              Sinf va Fan <span className="text-red-500">*</span>
+            <Label htmlFor="subject">
+              Fan <span className="text-red-500">*</span>
             </Label>
-            <Select value={selectedClassSubjectId} onValueChange={setSelectedClassSubjectId}>
-              <SelectTrigger id="class-subject" disabled={classSubjectsLoading}>
-                <SelectValue placeholder={classSubjectsLoading ? 'Yuklanmoqda...' : 'Sinf va fanni tanlang'} />
+            <Select
+              value={selectedSubjectId}
+              onValueChange={setSelectedSubjectId}
+              disabled={availabilityLoading || !availability}
+            >
+              <SelectTrigger id="subject">
+                <SelectValue placeholder={
+                  availabilityLoading ? 'Yuklanmoqda...' :
+                  !availability ? 'Mavjudlik tekshirilmoqda...' :
+                  availability.available_subjects.length === 0 ? 'Mavjud fanlar yo\'q' :
+                  'Fan tanlang'
+                } />
               </SelectTrigger>
               <SelectContent>
-                {classSubjectsLoading ? (
-                  <div className="px-2 py-6 text-center text-sm text-gray-500">
-                    <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2" />
-                    Yuklanmoqda...
-                  </div>
-                ) : classSubjectsData && classSubjectsData.length > 0 ? (
-                  classSubjectsData
-                    .filter((cs) => cs.id && cs.id.trim() !== '')
-                    .map((cs) => (
-                      <SelectItem key={cs.id} value={cs.id}>
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{cs.class_name}</span>
-                          <span className="text-gray-500">-</span>
-                          <span>{cs.subject_name}</span>
-                          {cs.teacher_name && (
-                            <span className="text-xs text-gray-500">({cs.teacher_name})</span>
-                          )}
-                        </div>
-                      </SelectItem>
-                    ))
-                ) : (
-                  <div className="px-2 py-6 text-center text-sm text-gray-500">
-                    Faol sinf-fanlar topilmadi
-                  </div>
-                )}
+                {availability?.available_subjects.map((subject) => (
+                  <SelectItem key={subject.id} value={subject.id}>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{subject.subject_name}</span>
+                      <span className="text-gray-500">-</span>
+                      <span className="text-sm text-gray-600">{subject.teacher_name}</span>
+                    </div>
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Darsni o'tkaziladigan sinf va fanni tanlang
+              Faqat ushbu vaqtda mavjud bo'lgan fanlar ko'rsatiladi
             </p>
           </div>
 
           {/* Room Select */}
           <div className="space-y-2">
             <Label htmlFor="room">Xona</Label>
-            <Select 
-              value={selectedRoomId || '_none'} 
+            <Select
+              value={selectedRoomId || '_none'}
               onValueChange={(v) => setSelectedRoomId(v === '_none' ? undefined : v)}
+              disabled={availabilityLoading || !availability}
             >
-              <SelectTrigger id="room" disabled={roomsLoading}>
-                <SelectValue placeholder={roomsLoading ? 'Yuklanmoqda...' : 'Xonani tanlang (ixtiyoriy)'} />
+              <SelectTrigger id="room">
+                <SelectValue placeholder={
+                  availabilityLoading ? 'Yuklanmoqda...' :
+                  !availability ? 'Mavjudlik tekshirilmoqda...' :
+                  'Xonani tanlang (ixtiyoriy)'
+                } />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">Xonasiz</SelectItem>
-                {rooms
-                  .filter((r) => r?.id && r.id.trim() !== '')
-                  .map((r) => (
-                    <SelectItem key={r.id} value={r.id}>
-                      {r.name} ({r.room_type_display}) - {r.capacity} o'rindi
-                    </SelectItem>
-                  ))}
+                {availability?.available_rooms.map((room) => (
+                  <SelectItem key={room.id} value={room.id}>
+                    {room.name} ({room.capacity} o'rindiq)
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Dars o'tiladigan xonani belgilang
+              Faqat ushbu vaqtda bo'sh bo'lgan xonalar ko'rsatiladi
             </p>
           </div>
 
@@ -223,7 +248,10 @@ export function AddLessonDialog({
           <Button variant="outline" onClick={handleClose} disabled={isSubmitting}>
             Bekor qilish
           </Button>
-          <Button onClick={handleSubmit} disabled={!selectedClassSubjectId || isSubmitting}>
+          <Button
+            onClick={handleSubmit}
+            disabled={!selectedSubjectId || availabilityLoading || !availability || isSubmitting}
+          >
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Dars qo'shish
           </Button>

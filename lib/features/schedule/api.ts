@@ -21,6 +21,7 @@ import type {
   GenerateLessonsRequest,
   GenerateLessonsResponse,
   CompleteLessonRequest,
+  ScheduleAvailabilityResponse,
 } from '@/types/academic';
 
 /**
@@ -337,6 +338,25 @@ export const cancelLesson = async (
   return response.data;
 };
 
+/**
+ * Check schedule availability for a given class, date, and time slot
+ */
+export const checkScheduleAvailability = async (
+  branchId: string,
+  params: {
+    class_id: string;
+    date: string;
+    start_time: string;
+    end_time: string;
+  }
+): Promise<ScheduleAvailabilityResponse> => {
+  const response = await apiClient.get(
+    `${getBasePath(branchId)}/schedule/availability/`,
+    { params }
+  );
+  return response.data;
+};
+
 // Export all functions as scheduleApi object
 export const scheduleApi = {
   getTimetableTemplates,
@@ -362,4 +382,5 @@ export const scheduleApi = {
   generateLessons,
   completeLesson,
   cancelLesson,
+  checkScheduleAvailability,
 };
