@@ -830,7 +830,7 @@ export default function ClassDetailPage() {
 												<SelectValue placeholder="Sinfni tanlang" />
 											</SelectTrigger>
 											<SelectContent>
-												{allClasses
+												{(Array.isArray(allClasses) ? allClasses : [])
 													.filter((c) => c.id && c.id.trim() !== '' && c.id !== classId && c.can_add_student)
 													.map((c) => (
 														<SelectItem key={c.id} value={c.id}>

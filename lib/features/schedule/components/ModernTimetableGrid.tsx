@@ -16,7 +16,7 @@ interface ModernTimetableGridProps {
   onDateChange: (date: Date) => void;
   onLessonClick: (lesson: LessonInstance) => void;
   onLessonDelete: (lesson: LessonInstance) => void;
-  onAddLesson: (date: Date, timeSlot: string) => void;
+  onAddLesson: (date: Date, startTime: string, endTime: string, classId: string, className: string) => void;
   branchSettings: BranchSettings;
   classes: Class[];
   isLoading?: boolean;
@@ -221,7 +221,7 @@ export function ModernTimetableGrid({
   const allClasses = useMemo(() => {
     const classMap = new Map<string, Class>();
     
-    // Add provided classes
+    // Add provided classes first (they come ordered by grade_level from API)
     classes.forEach(cls => {
       classMap.set(cls.name, cls);
     });
@@ -240,13 +240,8 @@ export function ModernTimetableGrid({
       }
     });
     
-    // Sort classes by grade_level, then by section
-    return Array.from(classMap.values()).sort((a, b) => {
-      if (a.grade_level !== b.grade_level) {
-        return a.grade_level - b.grade_level;
-      }
-      return (a.section || '').localeCompare(b.section || '');
-    });
+    // Sort classes by name
+    return Array.from(classMap.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [classes, filteredLessons]);
 
   // Helper function to find the nearest time slot for a given time
@@ -542,7 +537,7 @@ export function ModernTimetableGrid({
                             </div>
                           ) : (
                             <button
-                              onClick={() => onAddLesson(selectedDate, timeSlot.start)}
+                              onClick={() => onAddLesson(selectedDate, timeSlot.start, timeSlot.end, classItem.id, classItem.name)}
                               className="w-full h-full flex flex-col items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity"
                             >
                               <div className="p-2 rounded-full bg-white border-2 border-dashed border-gray-300 group-hover:border-blue-400 transition-colors">

@@ -155,6 +155,33 @@ export interface CompleteLessonRequest {
   notes?: string;
 }
 
+// ==================== SCHEDULE AVAILABILITY ====================
+
+export interface AvailableSubject {
+  id: string; // ClassSubject ID
+  subject_name: string;
+  teacher_name: string;
+  teacher_id: string;
+}
+
+export interface AvailableRoom {
+  id: string;
+  name: string;
+  capacity: number;
+}
+
+export interface ScheduleConflict {
+  type: 'teacher' | 'room';
+  message: string;
+  details: Record<string, any>;
+}
+
+export interface ScheduleAvailabilityResponse {
+  available_subjects: AvailableSubject[];
+  available_rooms: AvailableRoom[];
+  conflicts: ScheduleConflict[];
+}
+
 // ==================== ATTENDANCE ====================
 
 export type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
@@ -367,6 +394,33 @@ export interface HomeworkFilters {
   status?: HomeworkStatus;
   date_from?: string;
   date_to?: string;
+}
+
+// ==================== SCHEDULE AVAILABILITY ====================
+
+export interface AvailableSubject {
+  id: string;
+  subject_name: string;
+  teacher_name: string;
+  teacher_id: string;
+}
+
+export interface AvailableRoom {
+  id: string;
+  name: string;
+  capacity: number;
+}
+
+export interface AvailabilityConflict {
+  type: 'teacher' | 'room';
+  message: string;
+  details: Record<string, any>;
+}
+
+export interface ScheduleAvailabilityResponse {
+  available_subjects: AvailableSubject[];
+  available_rooms: AvailableRoom[];
+  conflicts: AvailabilityConflict[];
 }
 
 // ==================== UI STATE ====================

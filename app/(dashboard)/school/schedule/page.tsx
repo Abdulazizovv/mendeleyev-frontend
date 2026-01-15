@@ -45,7 +45,7 @@ import { toast } from 'sonner';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import api from '@/lib/api/client';
 import { branchApi, schoolApi } from '@/lib/api';
-import { SCHEDULE_TRANSLATIONS, formatDateUz } from '@/lib/features/schedule/constants/translations';
+import { SCHEDULE_TRANSLATIONS, formatDateUz, TIME_SLOTS } from '@/lib/features/schedule/constants/translations';
 
 export default function BranchAdminSchedulePage() {
   const router = useRouter();
@@ -74,7 +74,7 @@ export default function BranchAdminSchedulePage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [lessonToDelete, setLessonToDelete] = useState<LessonInstance | null>(null);
   const [addLessonDialogOpen, setAddLessonDialogOpen] = useState(false);
-  const [addLessonContext, setAddLessonContext] = useState<{ date: Date; lessonNumber: number } | null>(null);
+  const [addLessonContext, setAddLessonContext] = useState<{ date: Date; lessonNumber: number; startTime: string; endTime: string; classId: string; className: string } | null>(null);
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
   const [generationResult, setGenerationResult] = useState<{ created: number; skipped: number; updated: number } | null>(null);
 
@@ -104,6 +104,7 @@ export default function BranchAdminSchedulePage() {
       return await schoolApi.getClassesPaginated(branchId, {
         is_active: true,
         page_size: 100,
+        ordering: 'grade_level',
       });
     },
     enabled: !!branchId,
@@ -178,8 +179,10 @@ export default function BranchAdminSchedulePage() {
   };
 
   // Add lesson handler
-  const handleAddLesson = (date: Date, timeSlot: string) => {
-    setAddLessonContext({ date, lessonNumber: 1 }); // We'll fix this in the dialog
+  const handleAddLesson = (date: Date, startTime: string, endTime: string, classId: string, className: string) => {
+    // Find lesson number from TIME_SLOTS based on start time
+    const lessonNumber = TIME_SLOTS.find(slot => slot.start === startTime)?.number || 1;
+    setAddLessonContext({ date, lessonNumber, startTime, endTime, classId, className });
     setAddLessonDialogOpen(true);
   };
 
@@ -836,8 +839,7 @@ export default function BranchAdminSchedulePage() {
         <AddLessonDialog
           open={addLessonDialogOpen}
           onOpenChange={setAddLessonDialogOpen}
-          date={addLessonContext.date}
-          lessonNumber={addLessonContext.lessonNumber}
+          context={addLessonContext}
           branchId={branchId}
           onSubmit={handleSubmitAddLesson}
           isSubmitting={createLessonMutation.isPending}
