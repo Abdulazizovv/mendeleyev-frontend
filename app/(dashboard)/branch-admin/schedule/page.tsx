@@ -191,7 +191,8 @@ export default function BranchAdminSchedulePage() {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['lesson-instances', branchId] });
+      queryClient.invalidateQueries({ queryKey: ['schedule', 'lessons'] });
+      refetch();
       setAddLessonDialogOpen(false);
       setAddLessonContext(null);
       toast.success(SCHEDULE_TRANSLATIONS.toasts.lessonAdded);
@@ -208,7 +209,8 @@ export default function BranchAdminSchedulePage() {
       await api.delete(`/school/lessons/${lessonId}/`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['lesson-instances', branchId] });
+      queryClient.invalidateQueries({ queryKey: ['schedule', 'lessons'] });
+      refetch();
       setDeleteDialogOpen(false);
       setLessonToDelete(null);
       setDetailModalOpen(false);
@@ -229,7 +231,8 @@ export default function BranchAdminSchedulePage() {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['lesson-instances', branchId] });
+      queryClient.invalidateQueries({ queryKey: ['schedule', 'lessons'] });
+      refetch();
       setDetailModalOpen(false);
       setSelectedLesson(null);
       toast.success(SCHEDULE_TRANSLATIONS.toasts.lessonCompleted);
@@ -250,7 +253,8 @@ export default function BranchAdminSchedulePage() {
       return response.data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['lesson-instances', branchId] });
+      queryClient.invalidateQueries({ queryKey: ['schedule', 'lessons'] });
+      refetch();
       setGenerationResult({
         created: data.created_count || 0,
         skipped: data.skipped_count || 0,

@@ -240,8 +240,10 @@ export function ModernTimetableGrid({
       }
     });
     
-    // Sort classes by name
-    return Array.from(classMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+    // Sort classes by grade_level, then by name
+    return Array.from(classMap.values()).sort((a, b) => 
+      a.grade_level - b.grade_level || a.name.localeCompare(b.name)
+    );
   }, [classes, filteredLessons]);
 
   // Helper function to find the nearest time slot for a given time

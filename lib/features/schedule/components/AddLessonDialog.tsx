@@ -24,6 +24,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { scheduleApi } from '../api';
 import { formatDateUz } from '../constants/translations';
+import { formatDateForAPI } from '../utils/time';
 import type { AddLessonData, ScheduleAvailabilityResponse } from '@/types/academic';
 
 interface AddLessonDialogProps {
@@ -64,7 +65,7 @@ export function AddLessonDialog({
       }
       return await scheduleApi.checkScheduleAvailability(branchId, {
         class_id: context.classId,
-        date: context.date.toISOString().split('T')[0],
+        date: formatDateForAPI(context.date),
         start_time: context.startTime,
         end_time: context.endTime,
       });
@@ -87,7 +88,7 @@ export function AddLessonDialog({
 
     const data: AddLessonData = {
       class_subject: selectedSubjectId,
-      date: context.date.toISOString().split('T')[0],
+      date: formatDateForAPI(context.date),
       lesson_number: context.lessonNumber,
       start_time: context.startTime,
       end_time: context.endTime,
