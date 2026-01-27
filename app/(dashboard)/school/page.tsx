@@ -33,9 +33,10 @@ export default function BranchAdminDashboard() {
   const [loading, setLoading] = React.useState(true);
 
   // Get branch type and terminology
-  const branchType = (currentBranch?.branch_type || "school") as BranchType;
-  const studentTerm = getStudentTerminology(branchType);
-  const widgets = getDashboardWidgets(branchType);
+  const branchTypeRaw = (currentBranch?.branch_type || "school") as BranchType;
+  const branchTypeApi = branchTypeRaw === "center" ? "training_center" : branchTypeRaw;
+  const studentTerm = getStudentTerminology(branchTypeRaw);
+  const widgets = getDashboardWidgets(branchTypeRaw);
   
   // Helper to check if widget is visible
   const isWidgetVisible = (widgetId: string) => 
@@ -45,7 +46,7 @@ export default function BranchAdminDashboard() {
   const {
     data: dashboardStats,
     isLoading: statsLoading,
-  } = useDashboardStatistics(branchType);
+  } = useDashboardStatistics(branchTypeApi);
 
   // Fetch today's lessons
   const {
@@ -124,7 +125,7 @@ export default function BranchAdminDashboard() {
                 Xush kelibsiz, {user?.first_name}!
               </h1>
               <Badge variant="secondary" className="bg-white/20 text-white border-white/30">
-                {branchType === "school" ? "Maktab" : "O'quv Markazi"}
+                {branchTypeRaw === "school" ? "Maktab" : "O'quv Markazi"}
               </Badge>
             </div>
             <p className="text-purple-100 text-lg">
@@ -142,7 +143,7 @@ export default function BranchAdminDashboard() {
       <DashboardStatisticsCards
         statistics={dashboardStats}
         isLoading={statsLoading}
-        branchType={branchType}
+        branchType={branchTypeApi}
       />
 
       {/* Today's Lessons */}
@@ -277,7 +278,7 @@ export default function BranchAdminDashboard() {
             )}
             
             {/* Conditional: Classes/Groups */}
-            {branchType === "school" ? (
+            {branchTypeRaw === "school" ? (
               isWidgetVisible("classes") && (
                 <Button className="h-auto py-6 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700">
                   <div className="flex flex-col items-center space-y-2">

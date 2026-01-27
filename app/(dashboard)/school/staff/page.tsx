@@ -173,7 +173,6 @@ export default function StaffPage() {
   const { data: categoriesData } = useQuery({
     queryKey: ["finance-categories", branchId, "expense"],
     queryFn: () => financeApi.getCategories({ 
-      branch_id: branchId,
       type: "expense",
       is_active: true 
     }),
@@ -1397,9 +1396,6 @@ export default function StaffPage() {
                         expenseCategories.map((category) => (
                           <SelectItem key={category.id} value={category.id}>
                             {category.name}
-                            {category.is_global && (
-                              <span className="text-xs text-gray-500 ml-1">(Global)</span>
-                            )}
                           </SelectItem>
                         ))
                       )}
@@ -1428,7 +1424,6 @@ export default function StaffPage() {
                     <SelectItem value="cash">{paymentMethodLabels.cash}</SelectItem>
                     <SelectItem value="bank_transfer">{paymentMethodLabels.bank_transfer}</SelectItem>
                     <SelectItem value="card">{paymentMethodLabels.card}</SelectItem>
-                    <SelectItem value="mobile_payment">{paymentMethodLabels.mobile_payment || "Mobil to'lov"}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

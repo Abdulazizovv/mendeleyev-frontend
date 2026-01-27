@@ -405,8 +405,8 @@ export default function TransactionsPage() {
         onOpenChange={setIsExportModalOpen}
         exportType="transactions"
         defaultFilters={{
-          transaction_type: typeFilter !== "all" ? typeFilter : undefined,
-          status: statusFilter !== "all" ? statusFilter : undefined,
+          transaction_type: typeFilter !== "all" ? typeFilter as import('@/types/finance').TransactionType : undefined,
+          status: statusFilter !== "all" ? statusFilter as import('@/types/finance').TransactionStatus : undefined,
           cash_register: cashRegisterFilter !== "all" ? cashRegisterFilter : undefined,
           search: searchQuery || undefined,
         }}

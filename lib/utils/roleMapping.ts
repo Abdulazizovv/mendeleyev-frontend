@@ -17,7 +17,7 @@ import type { UserRole, BranchType } from "@/types/auth";
  */
 export function roleToPath(role: UserRole, branchType?: BranchType): string {
   if (role === "branch_admin" && branchType) {
-    return branchType === "training_center" ? "training-center" : "school";
+    return branchType === "center" ? "training-center" : "school";
   }
 
   const mapping: Record<UserRole, string> = {

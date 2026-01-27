@@ -8,6 +8,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLessonInstances, useCompleteLesson, useCancelLesson } from '@/lib/features/schedule/hooks';
+import { useAuthStore } from '@/lib/stores/auth';
 import { LessonList } from '@/lib/features/schedule/components/LessonList';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -27,13 +28,15 @@ export default function TeacherLessonsPage() {
   const today = new Date().toISOString().split('T')[0];
   const futureDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-  const { data: lessonsResponse, isLoading } = useLessonInstances({
+  const { currentBranch } = useAuthStore();
+  const branchId = currentBranch?.branch_id || "";
+  const { data: lessonsResponse, isLoading } = useLessonInstances(branchId, {
     date_from: today,
     date_to: futureDate,
   });
 
-  const completeLesson = useCompleteLesson();
-  const cancelLesson = useCancelLesson();
+  const completeLesson = useCompleteLesson(branchId);
+  const cancelLesson = useCancelLesson(branchId);
 
   const handleLessonClick = (lesson: LessonInstance) => {
     router.push(`/teacher/lessons/${lesson.id}`);

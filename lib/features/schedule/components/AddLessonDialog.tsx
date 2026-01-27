@@ -27,6 +27,7 @@ import { formatDateUz } from '../constants/translations';
 import { formatDateForAPI } from '../utils/time';
 import type { AddLessonData, ScheduleAvailabilityResponse } from '@/types/academic';
 
+export type { AddLessonData };
 interface AddLessonDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;

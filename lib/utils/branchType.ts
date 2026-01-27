@@ -22,7 +22,7 @@ export interface NavigationItem {
  * Updated to use new routing: /school and /training-center
  */
 export const getNavigationItems = (branchType: BranchType): NavigationItem[] => {
-  const baseRoute = branchType === "training_center" ? "/training-center" : "/school";
+  const baseRoute = branchType === "center" ? "/training-center" : "/school";
   
   const commonItems: NavigationItem[] = [
     {

@@ -63,11 +63,22 @@ export function DeleteSlotDialog({
             <div className="space-y-1 text-foreground">
               <div>
                 <span className="font-semibold">Sinf-Fan:</span>{' '}
-                {slot?.class_subject?.class_name} - {slot?.class_subject?.subject_name}
+                {slot?.class_name} - {slot?.subject_name}
               </div>
               <div>
                 <span className="font-semibold">Kun:</span>{' '}
-                {slot?.day_of_week ? DAYS_OF_WEEK[slot.day_of_week] : '-'}
+                {(() => {
+                  const days: Record<string, string> = {
+                    monday: 'Dushanba',
+                    tuesday: 'Seshanba',
+                    wednesday: 'Chorshanba',
+                    thursday: 'Payshanba',
+                    friday: 'Juma',
+                    saturday: 'Shanba',
+                    sunday: 'Yakshanba',
+                  };
+                  return slot?.day_of_week && days[slot.day_of_week] ? days[slot.day_of_week] : '-';
+                })()}
               </div>
               <div>
                 <span className="font-semibold">Vaqt:</span> {slot?.start_time} - {slot?.end_time}

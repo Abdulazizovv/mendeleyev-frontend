@@ -15,11 +15,11 @@ import { Badge } from '@/components/ui/badge';
 import { Download, TrendingUp, Award } from 'lucide-react';
 
 export default function StudentGradesPage() {
-  const { user } = useAuthStore();
+  const { user, currentBranch } = useAuthStore();
   const [selectedQuarter, setSelectedQuarter] = useState(1);
 
-  const studentId = user?.student_profile?.id;
-  const studentName = user?.full_name;
+  const studentId = user?.id;
+  const studentName = user ? `${user.first_name} ${user.last_name}` : "";
 
   const { data: reportCard, isLoading } = useStudentReportCard(
     studentId!,

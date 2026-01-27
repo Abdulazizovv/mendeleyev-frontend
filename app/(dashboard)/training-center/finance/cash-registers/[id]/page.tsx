@@ -9,36 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
 import { financeApi } from "@/lib/api";
-
-interface CashRegister {
-  id: number;
-  name: string;
-  description: string | null;
-  location: string | null;
-  balance: number;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-interface Transaction {
-  id: number;
-  type: "income" | "expense";
-  amount: number;
-  description: string;
-  reference_number: string | null;
-  transaction_date: string;
-  status: "pending" | "completed" | "cancelled";
-  category: {
-    id: number;
-    name: string;
-  };
-  payment_method: {
-    id: number;
-    name: string;
-  };
-  created_at: string;
-}
+import type { CashRegister, Transaction } from "@/types/finance";
 
 interface MonthlyData {
   month: string;
@@ -82,9 +53,9 @@ export default function CashRegisterDetailPage() {
         dataByMonth[month] = { income: 0, expense: 0 };
       }
       
-      if (transaction.type === "income") {
+      if (transaction.transaction_type === "income") {
         dataByMonth[month].income += parseFloat(transaction.amount.toString());
-      } else {
+      } else if (transaction.transaction_type === "expense") {
         dataByMonth[month].expense += parseFloat(transaction.amount.toString());
       }
     });
@@ -101,11 +72,11 @@ export default function CashRegisterDetailPage() {
     if (!transactionsData?.results) return { totalIncome: 0, totalExpense: 0 };
     
     const income = transactionsData.results
-      .filter((t: Transaction) => t.type === "income")
+      .filter((t: Transaction) => t.transaction_type === "income")
       .reduce((sum: number, t: Transaction) => sum + parseFloat(t.amount.toString()), 0);
     
     const expense = transactionsData.results
-      .filter((t: Transaction) => t.type === "expense")
+      .filter((t: Transaction) => t.transaction_type === "expense")
       .reduce((sum: number, t: Transaction) => sum + parseFloat(t.amount.toString()), 0);
     
     return { totalIncome: income, totalExpense: expense };
@@ -366,7 +337,7 @@ export default function CashRegisterDetailPage() {
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
             </div>
-          ) : transactionsData?.results?.length > 0 ? (
+          ) : Array.isArray(transactionsData?.results) && transactionsData.results.length > 0 ? (
             <div className="space-y-3">
               {transactionsData.results.slice(0, 5).map((transaction: Transaction) => (
                 <div
@@ -376,9 +347,9 @@ export default function CashRegisterDetailPage() {
                 >
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     <div className={`p-2 rounded-lg ${
-                      transaction.type === "income" ? "bg-green-100" : "bg-red-100"
+                      transaction.transaction_type === "income" ? "bg-green-100" : "bg-red-100"
                     }`}>
-                      {transaction.type === "income" ? (
+                      {transaction.transaction_type === "income" ? (
                         <TrendingUp className="w-4 h-4 text-green-600" />
                       ) : (
                         <TrendingDown className="w-4 h-4 text-red-600" />
@@ -386,7 +357,7 @@ export default function CashRegisterDetailPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-900 truncate">
-                        {transaction.category?.name || transaction.description || "Tranzaksiya"}
+                        {transaction.category_name || transaction.description || "Tranzaksiya"}
                       </p>
                       <p className="text-xs text-gray-500">
                         {new Date(transaction.transaction_date).toLocaleDateString("uz-UZ", {
@@ -404,9 +375,9 @@ export default function CashRegisterDetailPage() {
                   </div>
                   <div className="text-right ml-3">
                     <p className={`text-sm font-bold ${
-                      transaction.type === "income" ? "text-green-600" : "text-red-600"
+                      transaction.transaction_type === "income" ? "text-green-600" : "text-red-600"
                     }`}>
-                      {transaction.type === "income" ? "+" : "-"}
+                      {transaction.transaction_type === "income" ? "+" : "-"}
                       {formatCurrency(transaction.amount)}
                     </p>
                     <Badge
@@ -419,8 +390,7 @@ export default function CashRegisterDetailPage() {
                       }
                       className="text-xs mt-1"
                     >
-                      {transaction.status === "completed" ? "Bajarildi" : 
-                       transaction.status === "pending" ? "Kutilmoqda" : "Bekor"}
+                      {transaction.status_display}
                     </Badge>
                   </div>
                 </div>

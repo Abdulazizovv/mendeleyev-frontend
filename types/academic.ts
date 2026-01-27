@@ -1,3 +1,14 @@
+// AddLessonData: dars qo'shish uchun forma ma'lumotlari
+export interface AddLessonData {
+  class_subject: string;
+  date: string;
+  lesson_number: number;
+  start_time: string;
+  end_time: string;
+  room?: string;
+  homework?: string;
+  teacher_notes?: string;
+}
 /**
  * Academic System TypeScript Type Definitions
  * Covers: Schedule, Lessons, Attendance, Grades, Homework

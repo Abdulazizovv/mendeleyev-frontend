@@ -61,8 +61,17 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
     const grouped = new Map<number, TimetableSlot[]>();
     
     DAYS.forEach((day) => {
+      const dayNameMap: Record<number, string> = {
+        1: 'monday',
+        2: 'tuesday',
+        3: 'wednesday',
+        4: 'thursday',
+        5: 'friday',
+        6: 'saturday',
+        7: 'sunday',
+      };
       const daySlots = slots
-        .filter((slot) => slot.day_of_week === day.value)
+        .filter((slot) => slot.day_of_week === dayNameMap[day.value])
         .sort((a, b) => a.start_time.localeCompare(b.start_time));
       grouped.set(day.value, daySlots);
     });

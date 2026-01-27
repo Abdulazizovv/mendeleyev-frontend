@@ -7,7 +7,6 @@
 export { WeeklyTimetableGrid } from './components/WeeklyTimetableGrid';
 export { LessonCard } from './components/LessonCard';
 export { CurrentTimeIndicator } from './components/CurrentTimeIndicator';
-export { LessonModal } from './components/LessonModal';
 export { TimetableGrid } from './components/TimetableGrid';
 export { LessonList } from './components/LessonList';
 

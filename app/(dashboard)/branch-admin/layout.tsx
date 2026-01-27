@@ -20,7 +20,7 @@ export default function BranchAdminRedirectLayout({
   useEffect(() => {
     if (!isLoading && currentBranch) {
       const branchType = currentBranch.branch_type as BranchType;
-      const newPath = branchType === "training_center" ? "/training-center" : "/school";
+      const newPath = branchType === "center" ? "/training-center" : "/school";
       
       // Get current path and replace branch-admin with new path
       const currentPath = window.location.pathname;

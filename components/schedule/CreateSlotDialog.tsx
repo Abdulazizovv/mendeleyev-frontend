@@ -81,7 +81,7 @@ export function CreateSlotDialog({
           <div className="space-y-2">
             <Label htmlFor="class_subject_id">Sinf va fan *</Label>
             <Select
-              onValueChange={(value) => setValue('class_subject_id', value)}
+              onValueChange={(value) => setValue('class_subject', value)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Sinf va fanni tanlang" />
@@ -94,8 +94,8 @@ export function CreateSlotDialog({
                 ))}
               </SelectContent>
             </Select>
-            {errors.class_subject_id && (
-              <p className="text-sm text-destructive">{errors.class_subject_id.message}</p>
+            {errors.class_subject && (
+              <p className="text-sm text-destructive">{errors.class_subject.message}</p>
             )}
           </div>
 
@@ -103,7 +103,10 @@ export function CreateSlotDialog({
             <div className="space-y-2">
               <Label htmlFor="day_of_week">Hafta kuni *</Label>
               <Select
-                onValueChange={(value) => setValue('day_of_week', parseInt(value))}
+                onValueChange={(value) => {
+                  const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+                  setValue('day_of_week', dayNames[parseInt(value, 10) - 1] as any);
+                }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Kunni tanlang" />

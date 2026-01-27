@@ -63,7 +63,7 @@ export function EditSlotDialog({
   useEffect(() => {
     if (slot) {
       reset({
-        class_subject_id: slot.class_subject?.id,
+        class_subject: slot.class_subject,
         day_of_week: slot.day_of_week,
         lesson_number: slot.lesson_number,
         start_time: slot.start_time,
@@ -96,10 +96,10 @@ export function EditSlotDialog({
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="class_subject_id">Sinf va fan *</Label>
+            <Label htmlFor="class_subject">Sinf va fan *</Label>
             <Select
-              defaultValue={slot?.class_subject?.id}
-              onValueChange={(value) => setValue('class_subject_id', value)}
+              defaultValue={slot?.class_subject}
+              onValueChange={(value) => setValue('class_subject', value)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Sinf va fanni tanlang" />
@@ -112,8 +112,8 @@ export function EditSlotDialog({
                 ))}
               </SelectContent>
             </Select>
-            {errors.class_subject_id && (
-              <p className="text-sm text-destructive">{errors.class_subject_id.message}</p>
+            {errors.class_subject && (
+              <p className="text-sm text-destructive">{errors.class_subject.message}</p>
             )}
           </div>
 
@@ -121,8 +121,16 @@ export function EditSlotDialog({
             <div className="space-y-2">
               <Label htmlFor="day_of_week">Hafta kuni *</Label>
               <Select
-                defaultValue={slot?.day_of_week.toString()}
-                onValueChange={(value) => setValue('day_of_week', parseInt(value))}
+                defaultValue={(() => {
+                  const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+                  if (!slot?.day_of_week) return undefined;
+                  const idx = dayNames.indexOf(slot.day_of_week);
+                  return idx !== -1 ? (idx + 1).toString() : undefined;
+                })()}
+                onValueChange={(value) => {
+                  const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+                  setValue('day_of_week', dayNames[parseInt(value, 10) - 1] as any);
+                }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Kunni tanlang" />

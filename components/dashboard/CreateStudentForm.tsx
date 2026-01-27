@@ -180,7 +180,7 @@ export function CreateStudentForm({
         })),
       };
 
-      await schoolApi.createStudent(currentBranch.branch_id, requestData);
+      await schoolApi.createStudent(requestData);
       toast.success("O'quvchi muvaffaqiyatli yaratildi!");
       form.reset();
       setCurrentStep(1);
