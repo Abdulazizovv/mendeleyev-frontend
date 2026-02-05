@@ -3,6 +3,17 @@ import { authApi } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import type { LoginRequest, BranchSwitchRequest } from "@/types";
+import { 
+  getCache, 
+  setCache, 
+  clearCache,
+  clearAllCaches, 
+  isCacheValid,
+  CACHE_KEYS, 
+  CACHE_EXPIRY,
+  getCacheInfo
+} from "@/lib/utils/cache";
+import type { MeResponse } from "@/types";
 
 export const useAuth = () => {
   const router = useRouter();
@@ -56,6 +67,10 @@ export const useAuth = () => {
           if (response.br) {
             // Find the current branch from memberships if available
             const meData = await authApi.getMe();
+            
+            // Save to cache
+            setCache(CACHE_KEYS.USER_DATA, meData, CACHE_EXPIRY.USER_PROFILE);
+            
             setMeData(meData);
           }
 
@@ -76,6 +91,8 @@ export const useAuth = () => {
    * Logout function
    */
   const logout = useCallback(() => {
+    // Clear all caches
+    clearAllCaches();
     storeLogout();
     router.push("/login");
   }, [storeLogout, router]);
@@ -97,8 +114,13 @@ export const useAuth = () => {
         const response = await authApi.switchBranch(data);
         setTokens(response.access, response.refresh);
 
-        // Fetch updated user data
+        // Clear cache and fetch updated user data
+        clearCache(CACHE_KEYS.USER_DATA);
         const meData = await authApi.getMe();
+        
+        // Save to cache
+        setCache(CACHE_KEYS.USER_DATA, meData, CACHE_EXPIRY.USER_PROFILE);
+        
         setMeData(meData);
 
         return { success: true };
@@ -111,15 +133,35 @@ export const useAuth = () => {
   );
 
   /**
-   * Load user data
+   * Load user data with smart caching
    */
-  const loadUser = useCallback(async () => {
+  const loadUser = useCallback(async (forceRefresh = false) => {
     try {
       setLoading(true);
+      
+      // Check if cache is valid and not forcing refresh
+      if (!forceRefresh && isCacheValid(CACHE_KEYS.USER_DATA)) {
+        const cachedData = getCache<MeResponse>(CACHE_KEYS.USER_DATA);
+        if (cachedData) {
+          // Use cached data
+          setMeData(cachedData);
+          setLoading(false);
+          return;
+        }
+      }
+      
+      // Cache expired or force refresh - fetch from API
       const data = await authApi.getMe();
+      
+      // Save to cache
+      setCache(CACHE_KEYS.USER_DATA, data, CACHE_EXPIRY.USER_PROFILE);
+      
+      // Update store
       setMeData(data);
     } catch (error) {
       console.error("Load user error:", error);
+      // Clear cache on error
+      clearCache(CACHE_KEYS.USER_DATA);
       storeLogout();
     } finally {
       setLoading(false);
@@ -152,6 +194,21 @@ export const useAuth = () => {
     return hasRole(["super_admin", "branch_admin"]);
   }, [hasRole]);
 
+  /**
+   * Force refresh user data (clear cache and fetch from API)
+   */
+  const refreshUserData = useCallback(async () => {
+    clearCache(CACHE_KEYS.USER_DATA);
+    await loadUser(true);
+  }, [loadUser]);
+
+  /**
+   * Get cache information for debugging
+   */
+  const getCacheStatus = useCallback(() => {
+    return getCacheInfo(CACHE_KEYS.USER_DATA);
+  }, []);
+
   return {
     // State
     user,
@@ -165,10 +222,12 @@ export const useAuth = () => {
     logout,
     switchBranch,
     loadUser,
+    refreshUserData,
 
     // Helpers
     hasRole,
     isSuperAdmin,
     isBranchAdmin,
+    getCacheStatus,
   };
 };

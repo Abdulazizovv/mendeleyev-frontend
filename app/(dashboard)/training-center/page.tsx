@@ -20,17 +20,19 @@ import {
   Shield,
   Loader2,
   ChevronRight,
+  RefreshCw,
 } from "lucide-react";
-import { formatCurrency } from "@/lib/translations";
+import { formatCurrency, translateRole } from "@/lib/translations";
 import { toast } from "sonner";
 import { getDashboardWidgets, getStudentTerminology } from "@/lib/utils/branchType";
 import type { BranchType } from "@/types/auth";
 
 export default function BranchAdminDashboard() {
-  const { user, currentBranch } = useAuth();
+  const { user, currentBranch, refreshUserData, getCacheStatus } = useAuth();
   const [memberships, setMemberships] = React.useState<MembershipDetail[]>([]);
   const [roles, setRoles] = React.useState<Role[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [refreshing, setRefreshing] = React.useState(false);
 
   // Get branch type and terminology
   const branchTypeRaw = (currentBranch?.branch_type || "school") as BranchType;
@@ -101,6 +103,20 @@ export default function BranchAdminDashboard() {
     };
   }, [memberships, roles]);
 
+  // Handle manual refresh
+  const handleRefresh = async () => {
+    try {
+      setRefreshing(true);
+      await refreshUserData();
+      toast.success("Ma'lumotlar yangilandi");
+    } catch (error) {
+      console.error("Refresh error:", error);
+      toast.error("Ma'lumotlarni yangilashda xatolik");
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   if (loading && statsLoading && lessonsLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -132,10 +148,22 @@ export default function BranchAdminDashboard() {
               {currentBranch?.branch_name} filiali boshqaruvi
             </p>
             <p className="text-sm text-purple-100 mt-2">
-              {currentBranch?.effective_role || currentBranch?.role}
+              {translateRole(currentBranch?.effective_role || currentBranch?.role)}
             </p>
           </div>
-          <Building2 className="w-16 h-16 text-purple-200 opacity-50" />
+          <div className="flex flex-col items-end gap-2">
+            <Building2 className="w-16 h-16 text-purple-200 opacity-50" />
+            <Button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              variant="secondary"
+              size="sm"
+              className="bg-white/10 hover:bg-white/20 text-white border-white/20"
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+              {refreshing ? "Yangilanmoqda..." : "Yangilash"}
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -152,164 +180,7 @@ export default function BranchAdminDashboard() {
         isLoading={lessonsLoading}
       />
 
-      {/* Staff and Roles Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Staff */}
-        <Card className="border-0 shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-lg font-semibold">Xodimlar</CardTitle>
-            <Users className="w-5 h-5 text-gray-400" />
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {!Array.isArray(memberships) || memberships.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <Users className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                <p>Xodimlar ro'yxati bo'sh</p>
-              </div>
-            ) : (
-              <>
-                {memberships
-                  .filter((m) => m.role !== "student")
-                  .slice(0, 5)
-                  .map((member) => (
-                    <div
-                      key={member.id}
-                      className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-purple-300 hover:shadow-md transition-all cursor-pointer"
-                    >
-                      <div className="flex items-center space-x-4">
-                        <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-lg flex items-center justify-center">
-                          <Users className="w-6 h-6 text-white" />
-                        </div>
-                        <div>
-                          <h4 className="font-semibold text-gray-900">{member.user_name}</h4>
-                          <p className="text-sm text-gray-500">
-                            {member.effective_role} • {member.user_phone}
-                          </p>
-                          {member.monthly_salary && (
-                            <p className="text-xs text-green-600 font-medium mt-1">
-                              Maosh: {formatCurrency(member.monthly_salary)}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-semibold text-gray-900">
-                          {formatCurrency(member.balance)}
-                        </p>
-                        <p className="text-xs text-gray-500">Balans</p>
-                      </div>
-                    </div>
-                  ))}
-                <Button variant="outline" className="w-full">
-                  <Users className="w-4 h-4 mr-2" />
-                  Barcha xodimlarni ko'rish ({stats.totalStaff})
-                </Button>
-              </>
-            )}
-          </CardContent>
-        </Card>
 
-        {/* Roles */}
-        <Card className="border-0 shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-lg font-semibold">Rollar</CardTitle>
-            <Shield className="w-5 h-5 text-gray-400" />
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {!Array.isArray(roles) || roles.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <Shield className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                <p>Rollar ro'yxati bo'sh</p>
-              </div>
-            ) : (
-              <>
-                {roles.slice(0, 5).map((role) => (
-                  <div
-                    key={role.id}
-                    className="flex items-center justify-between p-4 bg-gradient-to-r from-orange-50 to-amber-50 rounded-lg hover:shadow-md transition-shadow cursor-pointer"
-                  >
-                    <div className="flex items-center space-x-4">
-                      <div className="w-12 h-12 bg-gradient-to-br from-orange-600 to-amber-600 rounded-lg flex items-center justify-center">
-                        <Shield className="w-6 h-6 text-white" />
-                      </div>
-                      <div>
-                        <h4 className="font-semibold text-gray-900">{role.name}</h4>
-                        <p className="text-sm text-gray-500">
-                          {role.description || "Tavsif yo'q"}
-                        </p>
-                      </div>
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-gray-400" />
-                  </div>
-                ))}
-                <Button variant="outline" className="w-full">
-                  <Shield className="w-4 h-4 mr-2" />
-                  Barcha rollarni ko'rish ({stats.totalRoles})
-                </Button>
-              </>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Quick Actions */}
-      <Card className="border-0 shadow-lg">
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold">Tez amallar</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Add Staff */}
-            <Button className="h-auto py-6 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
-              <div className="flex flex-col items-center space-y-2">
-                <UserPlus className="w-6 h-6" />
-                <span>Xodim qo'shish</span>
-              </div>
-            </Button>
-            
-            {/* Add Student */}
-            {isWidgetVisible("students") && (
-              <Button className="h-auto py-6 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700">
-                <div className="flex flex-col items-center space-y-2">
-                  <GraduationCap className="w-6 h-6" />
-                  <span>{studentTerm.singular} qo'shish</span>
-                </div>
-              </Button>
-            )}
-            
-            {/* Conditional: Classes/Groups */}
-            {branchTypeRaw === "school" ? (
-              isWidgetVisible("classes") && (
-                <Button className="h-auto py-6 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700">
-                  <div className="flex flex-col items-center space-y-2">
-                    <BookOpen className="w-6 h-6" />
-                    <span>Sinf qo'shish</span>
-                  </div>
-                </Button>
-              )
-            ) : (
-              isWidgetVisible("groups") && (
-                <Button className="h-auto py-6 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700">
-                  <div className="flex flex-col items-center space-y-2">
-                    <Users className="w-6 h-6" />
-                    <span>Guruh qo'shish</span>
-                  </div>
-                </Button>
-              )
-            )}
-            
-            {/* Finance */}
-            {isWidgetVisible("finance") && (
-              <Button className="h-auto py-6 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700">
-                <div className="flex flex-col items-center space-y-2">
-                  <DollarSign className="w-6 h-6" />
-                  <span>To'lov qilish</span>
-                </div>
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }

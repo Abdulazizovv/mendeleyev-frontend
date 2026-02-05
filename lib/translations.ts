@@ -27,6 +27,8 @@ export const ROLE_TRANSLATIONS: Record<string, string> = {
   'accountant': 'Buxgalter',
   'manager': 'Menejer',
   'director': 'Direktor',
+  'branch_admin': 'Filial admini',
+  'branch admin': 'Filial admini',
 };
 
 // Status translations

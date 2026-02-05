@@ -17,7 +17,7 @@ import {
   ClipboardList,
   Loader2,
 } from "lucide-react";
-import { formatCurrency } from "@/lib/translations";
+import { formatCurrency, translateRole } from "@/lib/translations";
 import type { TeacherClass, TeacherSubject } from "@/types";
 import { toast } from "sonner";
 
@@ -139,7 +139,7 @@ export default function TeacherDashboard() {
               Xush kelibsiz, {user?.first_name}!
             </h1>
             <p className="text-blue-100 text-lg">
-              {currentBranch?.title || currentBranch?.effective_role}
+              {currentBranch?.title || translateRole(currentBranch?.effective_role || currentBranch?.role)}
             </p>
             {currentBranch?.salary && (
               <p className="text-sm text-blue-100 mt-2">
