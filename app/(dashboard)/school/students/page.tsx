@@ -39,6 +39,7 @@ import {
   Calendar,
   BookOpen,
   Download,
+  Upload,
   RefreshCcw,
   ArrowUpDown,
   ArrowUp,
@@ -346,6 +347,13 @@ export default function StudentsManagement() {
           >
             <RefreshCcw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Yangilash
+          </Button>
+          <Button 
+            variant="outline"
+            onClick={() => router.push('/school/students/import')}
+          >
+            <Upload className="w-4 h-4 mr-2" />
+            Import qilish
           </Button>
           <Button 
             className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"

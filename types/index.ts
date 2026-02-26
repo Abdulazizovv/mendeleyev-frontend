@@ -58,4 +58,10 @@ export type {
 	CreateRoomRequest,
 	CreateStudentRequest,
 	CreateStudentRelativeRequest,
+	StudentImportResult,
+	ImportStudentError,
+	ImportedStudent,
+	StudentImportRequest,
+	StudentImportTaskResponse,
+	StudentImportStatusResponse,
 } from "./school";

@@ -901,3 +901,47 @@ export interface CreateStudentRequest {
   class_id?: string;
   relatives?: CreateStudentRelativeRequest[];
 }
+
+// Student Import Types
+export interface ImportStudentError {
+  row: number;
+  error: string;
+  student?: string;
+}
+
+export interface ImportedStudent {
+  id?: string;
+  row?: number;
+  name: string;
+  phone: string;
+  status: "created" | "ready" | "skipped" | "failed";
+}
+
+export interface StudentImportResult {
+  total: number;
+  success: number;
+  failed: number;
+  skipped: number;
+  errors: ImportStudentError[];
+  students: ImportedStudent[];
+}
+
+export interface StudentImportRequest {
+  file: File;
+  branch_id: string;
+  dry_run?: boolean;
+}
+
+export interface StudentImportTaskResponse {
+  task_id: string;
+  status: string;
+  message: string;
+}
+
+export interface StudentImportStatusResponse {
+  task_id: string;
+  status: 'PENDING' | 'STARTED' | 'SUCCESS' | 'FAILURE';
+  message?: string;
+  result?: StudentImportResult;
+  error?: string;
+}

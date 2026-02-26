@@ -29,6 +29,9 @@ import type {
   CreateStudentRelativeRequest,
   DashboardStatistics,
   TodaysLesson,
+  StudentImportResult,
+  StudentImportTaskResponse,
+  StudentImportStatusResponse,
 } from "@/types";
 import type { BranchMembership } from "@/types";
 import type { MembershipDetail } from "./branch";
@@ -856,6 +859,51 @@ export const schoolApi = {
           page_size: 100,
         },
       }
+    );
+    return response.data;
+  },
+
+  // ==================== STUDENT IMPORT ====================
+  
+  /**
+   * O'quvchilarni Excel fayl orqali import qilish (async task boshlash)
+   * @param file - Excel fayl (.xlsx yoki .xls, max 10MB)
+   * @param branchId - Filial ID
+   * @param dryRun - Faqat validatsiya (true) yoki haqiqiy import (false)
+   * @returns Task ID va status
+   */
+  importStudents: async (
+    file: File,
+    branchId: string,
+    dryRun: boolean = false
+  ): Promise<StudentImportTaskResponse> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('branch_id', branchId);
+    formData.append('dry_run', dryRun.toString());
+
+    const response = await apiClient.post<StudentImportTaskResponse>(
+      '/school/students/import/',
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+    return response.data;
+  },
+
+  /**
+   * Import task statusini tekshirish
+   * @param taskId - Task ID
+   * @returns Task status va natija (agar tayyor bo'lsa)
+   */
+  checkImportStatus: async (
+    taskId: string
+  ): Promise<StudentImportStatusResponse> => {
+    const response = await apiClient.get<StudentImportStatusResponse>(
+      `/school/students/import-status/${taskId}/`
     );
     return response.data;
   },
