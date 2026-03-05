@@ -117,7 +117,7 @@ export default function StaffTransactionsPage() {
         <div>
           <Button
             variant="ghost"
-            onClick={() => router.push(`/branch-admin/staff/${staffId}`)}
+            onClick={() => router.push(`/training-center/staff/${staffId}`)}
             className="mb-2 -ml-2"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />

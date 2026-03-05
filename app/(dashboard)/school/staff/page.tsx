@@ -814,10 +814,10 @@ export default function StaffPage() {
                 <TableBody>
                   {staff.map((member) => (
                     <TableRow 
-                      key={member.id} 
-                      className="cursor-pointer hover:bg-gray-50"
-                      onClick={() => window.location.href = `/branch-admin/staff/${member.id}`}
-                    >
+	                      key={member.id} 
+	                      className="cursor-pointer hover:bg-gray-50"
+	                      onClick={() => window.location.href = `/school/staff/${member.id}`}
+	                    >
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-full flex items-center justify-center flex-shrink-0">

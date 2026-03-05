@@ -5,20 +5,21 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { staffApi, financeApi } from "@/lib/api";
 import {
-  StaffMemberDetail,
-  UpdateStaffRequest,
-  AddBalanceRequest,
-  ChangeBalanceRequest,
-  AddSalaryAccrualRequest,
-  PaySalaryNewRequest,
-  MonthlySummaryResponse,
-  BalanceTransaction,
-  EMPLOYMENT_TYPE_LABELS,
-  transactionTypeLabels,
-  paymentMethodLabels,
+	StaffMemberDetail,
+	UpdateStaffRequest,
+	ChangeBalanceRequest,
+	AddSalaryAccrualRequest,
+	PaySalaryNewRequest,
+	MonthlySummaryResponse,
+	CalculateSalaryResponse,
+	BalanceTransaction,
+	EMPLOYMENT_TYPE_LABELS,
+	transactionTypeLabels,
+	paymentMethodLabels,
+	salaryPaymentTypeLabels,
 } from "@/types/staff";
-import type { CashRegister } from "@/types/finance";
-import type { EmploymentType, TransactionType, PaymentMethod } from "@/types/staff";
+import type { CashRegister, CreateTransactionRequest, FinanceCategory } from "@/types/finance";
+import type { EmploymentType, TransactionType, PaymentMethod, SalaryPaymentType } from "@/types/staff";
 import { formatCurrency, formatRelativeDateTime, uzbekMonths } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,6 +35,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import {
   Select,
   SelectContent,
@@ -69,9 +71,12 @@ import { toast } from "sonner";
 
 export default function StaffDetailPage() {
   const params = useParams();
-  const router = useRouter();
-  const queryClient = useQueryClient();
-  const staffId = params.id as string;
+	const router = useRouter();
+	const queryClient = useQueryClient();
+	const staffId = params.id as string;
+	const todayIso = React.useMemo(() => new Date().toISOString().split("T")[0], []);
+	const currentYear = React.useMemo(() => new Date().getFullYear(), []);
+	const currentMonth = React.useMemo(() => new Date().getMonth() + 1, []);
 
   // Dialog States
   const [editDialog, setEditDialog] = React.useState(false);
@@ -105,13 +110,18 @@ export default function StaffDetailPage() {
     reference: "",
   });
 
-  const [paySalaryForm, setPaySalaryForm] = React.useState({
-    amount: 0,
-    payment_date: new Date().toISOString().split("T")[0],
-    payment_method: "bank_transfer" as PaymentMethod,
-    notes: "",
-    reference_number: "",
-  });
+		const [paySalaryForm, setPaySalaryForm] = React.useState({
+			amount: 0,
+			payment_date: todayIso,
+			payment_method: "bank_transfer" as PaymentMethod,
+			payment_type: "salary" as SalaryPaymentType,
+			cash_register_id: "",
+			notes: "",
+			reference_number: "",
+		});
+		const [payAmountTouched, setPayAmountTouched] = React.useState(false);
+		const [pendingCashOut, setPendingCashOut] = React.useState<CreateTransactionRequest | null>(null);
+		const [cashOutError, setCashOutError] = React.useState<string | null>(null);
 
   // Reset form functions
   const resetEditForm = () => setEditForm({});
@@ -124,14 +134,16 @@ export default function StaffDetailPage() {
     payment_method: "cash",
     reference: "",
   });
-  const resetSalaryAccrualForm = () => setSalaryAccrualForm({ amount: 0, description: "", reference: "" });
-  const resetPaySalaryForm = () => setPaySalaryForm({
-    amount: 0,
-    payment_date: new Date().toISOString().split("T")[0],
-    payment_method: "bank_transfer",
-    notes: "",
-    reference_number: "",
-  });
+	const resetSalaryAccrualForm = () => setSalaryAccrualForm({ amount: 0, description: "", reference: "" });
+		const resetPaySalaryForm = () => setPaySalaryForm({
+			amount: 0,
+			payment_date: todayIso,
+			payment_method: "bank_transfer",
+			payment_type: "salary",
+			cash_register_id: "",
+			notes: "",
+			reference_number: "",
+		});
 
   // Queries
   const {
@@ -145,19 +157,56 @@ export default function StaffDetailPage() {
   });
 
   // Get cash registers for the branch
-  const { data: cashRegistersData } = useQuery({
-    queryKey: ["cash-registers", staff?.branch],
-    queryFn: () => financeApi.getCashRegisters({ branch_id: staff?.branch }),
-    enabled: !!staff?.branch,
-  });
+	const { data: cashRegistersData } = useQuery({
+		queryKey: ["cash-registers", staff?.branch],
+		queryFn: () => financeApi.getCashRegisters({ branch_id: staff?.branch }),
+		enabled: !!staff?.branch,
+	});
 
-  const cashRegisters = cashRegistersData?.results || [];
+	const cashRegisters = cashRegistersData?.results || [];
+	const selectedCashRegister = React.useMemo(
+		() => cashRegisters.find((r: CashRegister) => r.id === paySalaryForm.cash_register_id),
+		[cashRegisters, paySalaryForm.cash_register_id]
+	);
 
-  const { data: monthlySummary, refetch: refetchMonthlySummary } = useQuery<MonthlySummaryResponse>({
-    queryKey: ["monthly-summary", staffId, selectedYear, selectedMonth],
-    queryFn: () => staffApi.getMonthlySummary(staffId, { year: selectedYear, month: selectedMonth }),
-    enabled: false,
-  });
+	const { data: monthlySummary, refetch: refetchMonthlySummary } = useQuery<MonthlySummaryResponse>({
+		queryKey: ["monthly-summary", staffId, selectedYear, selectedMonth],
+		queryFn: () => staffApi.getMonthlySummary(staffId, { year: selectedYear, month: selectedMonth }),
+		enabled: false,
+	});
+
+	const { data: payMonthSummary } = useQuery<MonthlySummaryResponse>({
+		queryKey: ["monthly-summary", "pay", staffId, selectedYear, selectedMonth],
+		queryFn: () => staffApi.getMonthlySummary(staffId, { year: selectedYear, month: selectedMonth }),
+		enabled: paySalaryDialog && !!staffId,
+	});
+
+	const { data: calculatedSalary } = useQuery<CalculateSalaryResponse>({
+		queryKey: ["calculate-salary", staffId, selectedYear, selectedMonth],
+		queryFn: () => staffApi.calculateSalary(staffId, { year: selectedYear, month: selectedMonth }),
+		enabled: paySalaryDialog && !!staffId,
+	});
+
+	const { data: salaryCategories } = useQuery({
+		queryKey: ["finance-categories", "salary", staff?.branch],
+		queryFn: async () => {
+			const byCode = await financeApi.getCategories({
+				type: "expense",
+				is_active: true,
+				search: "salary",
+			});
+			if (byCode?.results?.length) return byCode;
+			return financeApi.getCategories({
+				type: "expense",
+				is_active: true,
+				search: "maosh",
+			});
+		},
+		enabled: paySalaryDialog && !!staff?.branch,
+	});
+
+	const salaryCategory: FinanceCategory | undefined =
+		salaryCategories?.results?.find((c) => c.code === "salary") || salaryCategories?.results?.[0];
 
   // Mutations
   const updateStaffMutation = useMutation({
@@ -177,7 +226,7 @@ export default function StaffDetailPage() {
     mutationFn: () => staffApi.deleteStaff(staffId),
     onSuccess: () => {
       toast.success("Xodim muvaffaqiyatli o'chirildi");
-      router.push("/branch-admin/staff");
+			router.push("/training-center/staff");
     },
     onError: () => {
       toast.error("Xodimni o'chirishda xatolik");
@@ -219,18 +268,76 @@ export default function StaffDetailPage() {
     },
   });
 
-  const paySalaryNewMutation = useMutation({
-    mutationFn: (data: PaySalaryNewRequest) => staffApi.paySalaryNew(staffId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["staff", staffId] });
-      setPaySalaryDialog(false);
-      resetPaySalaryForm();
-      toast.success("Maosh muvaffaqiyatli to'landi");
-    },
-    onError: (error: any) => {
-      toast.error(error?.response?.data?.error || "Maosh to'lashda xatolik");
-    },
-  });
+	const createSalaryCashOutMutation = useMutation({
+		mutationFn: (data: CreateTransactionRequest) => financeApi.createTransaction(data),
+	});
+
+	const paySalaryNewMutation = useMutation({
+		mutationFn: (data: PaySalaryNewRequest) => staffApi.paySalaryNew(staffId, data),
+		onSuccess: (_staffResponse, request) => {
+			queryClient.invalidateQueries({ queryKey: ["staff", staffId] });
+
+			if (!staff?.branch || !paySalaryForm.cash_register_id) {
+				toast.error("Maosh to'landi, lekin kassa tanlanmagani uchun chiqim yozilmadi");
+				return;
+			}
+
+			const cashOutPayload: CreateTransactionRequest = {
+				branch: staff.branch,
+				cash_register: paySalaryForm.cash_register_id,
+				transaction_type: "salary",
+				category: salaryCategory?.id,
+				amount: paySalaryForm.amount,
+				payment_method: paySalaryForm.payment_method,
+				description: `${salaryPaymentTypeLabels[paySalaryForm.payment_type]} • ${staff.full_name} • ${uzbekMonths[selectedMonth - 1]} ${selectedYear}`,
+				reference_number: paySalaryForm.reference_number || undefined,
+				employee_membership: staffId,
+				transaction_date: `${paySalaryForm.payment_date}T00:00:00Z`,
+				metadata: {
+					staff_membership_id: staffId,
+					month: request.month,
+					payment_type: paySalaryForm.payment_type,
+					staff_name: staff.full_name,
+				},
+			};
+
+			setPendingCashOut(cashOutPayload);
+			setCashOutError(null);
+
+			createSalaryCashOutMutation.mutate(cashOutPayload, {
+				onSuccess: () => {
+					queryClient.invalidateQueries({ queryKey: ["cash-registers"] });
+					setPendingCashOut(null);
+					setPaySalaryDialog(false);
+					resetPaySalaryForm();
+					toast.success("Maosh to'landi va kassadan pul chiqarildi");
+				},
+				onError: (error: any) => {
+					const data = error?.response?.data;
+					const msg =
+						data?.error ||
+						data?.category?.[0] ||
+						data?.cash_register?.[0] ||
+						data?.amount?.[0] ||
+						"Kassadan pul chiqarishda xatolik";
+					setCashOutError(msg);
+					toast.error("Maosh to'landi, lekin kassa chiqimi yozilmadi");
+				},
+			});
+		},
+		onError: (error: any) => {
+			setPendingCashOut(null);
+			setCashOutError(null);
+			const data = error?.response?.data;
+			const msg =
+				data?.error ||
+				data?.month?.[0] ||
+				data?.amount?.[0] ||
+				data?.payment_date?.[0] ||
+				"Maosh to'lashda xatolik";
+			toast.error(msg);
+		},
+	});
 
   // Handlers
   const openEditDialog = () => {
@@ -258,15 +365,13 @@ export default function StaffDetailPage() {
     setSalaryAccrualDialog(true);
   };
 
-  const openPaySalaryDialog = () => {
-    if (staff && staff.balance > 0) {
-      setPaySalaryForm({
-        ...paySalaryForm,
-        amount: Math.min(staff.balance, staff.monthly_salary || 0),
-      });
-    }
-    setPaySalaryDialog(true);
-  };
+	const openPaySalaryDialog = () => {
+		setPayAmountTouched(false);
+		setPendingCashOut(null);
+		setCashOutError(null);
+		resetPaySalaryForm();
+		setPaySalaryDialog(true);
+	};
 
   const openMonthlySummaryDialog = () => {
     setMonthlySummaryDialog(true);
@@ -321,23 +426,92 @@ export default function StaffDetailPage() {
     addSalaryAccrualMutation.mutate(salaryAccrualForm);
   };
 
-  const handlePaySalarySubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (paySalaryForm.amount <= 0) {
-      toast.error("Miqdor 0 dan katta bo'lishi kerak");
-      return;
-    }
-    if (staff && paySalaryForm.amount > staff.balance) {
-      toast.error("Balansdan ortiq to'lov qilish mumkin emas");
-      return;
-    }
+	const handlePaySalarySubmit = (e: React.FormEvent) => {
+		e.preventDefault();
+		if (pendingCashOut) {
+			toast.error("Kassa chiqimi yakunlanmagan. Avval qayta urinib ko'ring yoki oynani yoping.");
+			return;
+		}
+		if (paySalaryForm.amount <= 0) {
+			toast.error("Miqdor 0 dan katta bo'lishi kerak");
+			return;
+		}
+		if (staff && paySalaryForm.amount > staff.balance) {
+			toast.error("Balansdan ortiq to'lov qilish mumkin emas");
+			return;
+		}
+		if (!paySalaryForm.cash_register_id) {
+			toast.error("Kassa tanlash majburiy");
+			return;
+		}
 
-    const month = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`;
-    paySalaryNewMutation.mutate({
-      ...paySalaryForm,
-      month,
-    });
-  };
+		if (selectedYear > currentYear || (selectedYear === currentYear && selectedMonth > currentMonth)) {
+			toast.error("Kelajak oyi uchun to'lov qilish mumkin emas");
+			return;
+		}
+
+		const month = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`;
+		paySalaryNewMutation.mutate({
+			amount: paySalaryForm.amount,
+			payment_date: paySalaryForm.payment_date,
+			payment_method: paySalaryForm.payment_method,
+			payment_type: paySalaryForm.payment_type,
+			notes: paySalaryForm.notes,
+			reference_number: paySalaryForm.reference_number,
+			month,
+		});
+	};
+
+		React.useEffect(() => {
+			if (!paySalaryDialog || !staff || payAmountTouched) return;
+			const outstanding = payMonthSummary
+				? Math.max(payMonthSummary.total_accrued - payMonthSummary.total_paid, 0)
+				: 0;
+		const calculated =
+			calculatedSalary?.success && typeof calculatedSalary.total_amount === "number"
+				? calculatedSalary.total_amount
+				: 0;
+		const base =
+			outstanding > 0 ? outstanding : calculated > 0 ? calculated : staff.monthly_salary || 0;
+		const suggested = Math.min(Math.max(base, 0), Math.max(staff.balance, 0));
+		setPaySalaryForm((prev) => ({ ...prev, amount: suggested }));
+	}, [
+		paySalaryDialog,
+		staff,
+		payAmountTouched,
+		payMonthSummary?.total_accrued,
+		payMonthSummary?.total_paid,
+		calculatedSalary?.success,
+			calculatedSalary?.total_amount,
+		]);
+
+		React.useEffect(() => {
+			if (!paySalaryDialog) {
+				setPendingCashOut(null);
+				setCashOutError(null);
+				return;
+			}
+			if (!paySalaryForm.cash_register_id && cashRegisters.length === 1) {
+				setPaySalaryForm((prev) => ({ ...prev, cash_register_id: cashRegisters[0]?.id || "" }));
+			}
+			if (!paySalaryForm.reference_number) {
+				const suffix =
+					typeof globalThis.crypto?.randomUUID === "function"
+						? globalThis.crypto.randomUUID().slice(0, 8)
+						: String(Date.now()).slice(-8);
+				setPaySalaryForm((prev) => ({
+					...prev,
+					reference_number: `SAL-${selectedYear}${String(selectedMonth).padStart(2, "0")}-${suffix}`,
+				}));
+			}
+		}, [
+			paySalaryDialog,
+			cashRegisters.length,
+			paySalaryForm.cash_register_id,
+			paySalaryForm.reference_number,
+			selectedYear,
+			selectedMonth,
+		]);
 
   // Loading and Error States
   if (isLoading) {
@@ -359,9 +533,9 @@ export default function StaffDetailPage() {
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <p className="text-red-600 text-lg mb-4">Xodim topilmadi</p>
-            <Button onClick={() => router.push("/branch-admin/staff")}>
-              Orqaga qaytish
-            </Button>
+						<Button onClick={() => router.push("/training-center/staff")}>
+							Orqaga qaytish
+						</Button>
           </div>
         </div>
       </div>
@@ -376,9 +550,9 @@ export default function StaffDetailPage() {
           <Button
             variant="outline"
             size="icon"
-            onClick={() => router.push("/branch-admin/staff")}
-            className="shrink-0"
-          >
+				onClick={() => router.push("/training-center/staff")}
+				className="shrink-0"
+			>
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>
@@ -392,10 +566,10 @@ export default function StaffDetailPage() {
         <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
-            onClick={() => router.push(`/branch-admin/staff/${staffId}/transactions`)}
-            className="gap-2"
-            size="sm"
-          >
+				onClick={() => router.push(`/training-center/staff/${staffId}/transactions`)}
+				className="gap-2"
+				size="sm"
+			>
             <FileText className="w-4 h-4" />
             <span className="hidden sm:inline">Tranzaksiyalar</span>
           </Button>
@@ -585,10 +759,10 @@ export default function StaffDetailPage() {
                 <CardTitle>Oxirgi tranzaksiyalar</CardTitle>
                 <Button
                   variant="link"
-                  onClick={() => router.push(`/branch-admin/staff/${staffId}/transactions`)}
-                >
-                  Barchasini ko&apos;rish
-                </Button>
+									onClick={() => router.push(`/training-center/staff/${staffId}/transactions`)}
+								>
+									Barchasini ko&apos;rish
+								</Button>
               </div>
             </CardHeader>
             <CardContent>
@@ -1018,7 +1192,7 @@ export default function StaffDetailPage() {
           <DialogHeader>
             <DialogTitle>Maosh To&apos;lash</DialogTitle>
             <DialogDescription>
-              Xodim balansidan maosh to&apos;lovi
+              Xodim balansidan maosh to&apos;lovi va kassadan chiqim yozuvi
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handlePaySalarySubmit}>
@@ -1044,25 +1218,35 @@ export default function StaffDetailPage() {
                   To&apos;lov oyi <span className="text-red-500">*</span>
                 </Label>
                 <div className="grid grid-cols-2 gap-2">
-                  <Select
-                    value={String(selectedMonth)}
-                    onValueChange={(value) => setSelectedMonth(parseInt(value))}
-                  >
+					<Select
+						value={String(selectedMonth)}
+						onValueChange={(value) => {
+							setPayAmountTouched(false);
+							setSelectedMonth(parseInt(value));
+						}}
+					>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => (
-                        <SelectItem key={month} value={String(month)}>
-                          {uzbekMonths[month - 1]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select
-                    value={String(selectedYear)}
-                    onValueChange={(value) => setSelectedYear(parseInt(value))}
-                  >
+											{Array.from({ length: 12 }, (_, i) => i + 1).map((month) => {
+												const isFutureMonth =
+													selectedYear === currentYear && month > currentMonth;
+												return (
+													<SelectItem key={month} value={String(month)} disabled={isFutureMonth}>
+														{uzbekMonths[month - 1]}
+													</SelectItem>
+												);
+											})}
+										</SelectContent>
+									</Select>
+					<Select
+						value={String(selectedYear)}
+						onValueChange={(value) => {
+							setPayAmountTouched(false);
+							setSelectedYear(parseInt(value));
+						}}
+					>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -1074,29 +1258,89 @@ export default function StaffDetailPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
-              </div>
+				</div>
+			</div>
 
-              {/* Amount */}
-              <div className="space-y-2">
-                <Label htmlFor="pay_amount">
-                  To&apos;lov miqdori (so&apos;m) <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="pay_amount"
-                  type="number"
-                  value={paySalaryForm.amount}
-                  onChange={(e) =>
-                    setPaySalaryForm({ ...paySalaryForm, amount: parseInt(e.target.value) || 0 })
-                  }
-                  max={staff.balance > 0 ? staff.balance : 0}
-                  step="100000"
-                  required
-                />
-                <p className="text-xs text-gray-500">
-                  Maksimal: {formatCurrency(staff.balance > 0 ? staff.balance : 0)}
-                </p>
-              </div>
+			{/* Payment Type */}
+			<div className="space-y-2">
+				<Label htmlFor="pay_type">To&apos;lov turi</Label>
+				<Select
+					value={paySalaryForm.payment_type}
+					onValueChange={(value) =>
+						setPaySalaryForm({ ...paySalaryForm, payment_type: value as SalaryPaymentType })
+					}
+				>
+					<SelectTrigger id="pay_type">
+						<SelectValue />
+					</SelectTrigger>
+					<SelectContent>
+						{Object.entries(salaryPaymentTypeLabels).map(([key, label]) => (
+							<SelectItem key={key} value={key}>
+								{label}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+			</div>
+
+				{/* Amount */}
+				<div className="space-y-2">
+					<Label htmlFor="pay_amount">
+						To&apos;lov miqdori <span className="text-red-500">*</span>
+					</Label>
+					<CurrencyInput
+						id="pay_amount"
+						value={paySalaryForm.amount}
+						onValueChange={(amount) => {
+							setPayAmountTouched(true);
+							setPaySalaryForm({ ...paySalaryForm, amount });
+						}}
+						max={staff.balance > 0 ? staff.balance : 0}
+						required
+						placeholder="0"
+					/>
+					<div className="flex justify-between text-xs text-muted-foreground">
+						<span>Maksimal: {formatCurrency(staff.balance > 0 ? staff.balance : 0)}</span>
+						<span>Tanlandi: {formatCurrency(paySalaryForm.amount)}</span>
+					</div>
+				</div>
+
+				{/* Cash Register (required for cash-out) */}
+				<div className="space-y-2">
+					<Label htmlFor="pay_cash_register">
+						Kassa <span className="text-red-500">*</span>
+					</Label>
+					{cashRegisters.length > 0 ? (
+						<Select
+							value={paySalaryForm.cash_register_id || "none"}
+							onValueChange={(value) =>
+								setPaySalaryForm({ ...paySalaryForm, cash_register_id: value === "none" ? "" : value })
+							}
+						>
+							<SelectTrigger id="pay_cash_register">
+								<SelectValue placeholder="Kassani tanlang" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="none">Tanlanmagan</SelectItem>
+								{cashRegisters.map((register: CashRegister) => (
+									<SelectItem key={register.id} value={register.id}>
+										{register.name} ({formatCurrency(register.balance)})
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					) : (
+						<p className="text-sm text-red-600">
+							Filialda faol kassa topilmadi. Avval kassa yarating.
+						</p>
+					)}
+					{selectedCashRegister && (
+						<p className="text-xs text-muted-foreground">
+							Kassadan chiqim: {formatCurrency(paySalaryForm.amount)} • Qoladi:{" "}
+							{formatCurrency(selectedCashRegister.balance - paySalaryForm.amount)}
+						</p>
+					)}
+				</div>
 
               {/* Payment Date */}
               <div className="space-y-2">
@@ -1110,9 +1354,9 @@ export default function StaffDetailPage() {
                   onChange={(e) =>
                     setPaySalaryForm({ ...paySalaryForm, payment_date: e.target.value })
                   }
-                  max={new Date().toISOString().split("T")[0]}
-                  required
-                />
+									max={todayIso}
+									required
+								/>
               </div>
 
               {/* Payment Method */}
@@ -1126,16 +1370,18 @@ export default function StaffDetailPage() {
                     setPaySalaryForm({ ...paySalaryForm, payment_method: value as PaymentMethod })
                   }
                 >
-                  <SelectTrigger id="pay_method">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="cash">{paymentMethodLabels.cash}</SelectItem>
-                    <SelectItem value="bank_transfer">{paymentMethodLabels.bank_transfer}</SelectItem>
-                    <SelectItem value="card">{paymentMethodLabels.card}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+	                  <SelectTrigger id="pay_method">
+	                    <SelectValue />
+	                  </SelectTrigger>
+	                  <SelectContent>
+	                    {Object.entries(paymentMethodLabels).map(([key, label]) => (
+	                      <SelectItem key={key} value={key}>
+	                        {label}
+	                      </SelectItem>
+	                    ))}
+	                  </SelectContent>
+	                </Select>
+	              </div>
 
               {/* Reference Number */}
               <div className="space-y-2">
@@ -1158,25 +1404,72 @@ export default function StaffDetailPage() {
                   value={paySalaryForm.notes}
                   onChange={(e) => setPaySalaryForm({ ...paySalaryForm, notes: e.target.value })}
                   rows={2}
-                  placeholder="Dekabr oyi to'lovi"
-                />
-              </div>
-            </div>
+	                  placeholder="Dekabr oyi to'lovi"
+	                />
+	              </div>
+	            </div>
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setPaySalaryDialog(false)}>
-                Bekor qilish
-              </Button>
-              <Button
-                type="submit"
-                disabled={paySalaryNewMutation.isPending || staff.balance <= 0}
-              >
-                {paySalaryNewMutation.isPending && (
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                )}
-                To&apos;lash
-              </Button>
-            </DialogFooter>
+	            {cashOutError && (
+	              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+	                <p className="font-medium">Kassa chiqimi yozilmadi</p>
+	                <p className="mt-1">{cashOutError}</p>
+	              </div>
+	            )}
+	
+	            <DialogFooter>
+	              <Button type="button" variant="outline" onClick={() => setPaySalaryDialog(false)}>
+	                Bekor qilish
+	              </Button>
+	              {pendingCashOut && cashOutError ? (
+	                <Button
+	                  type="button"
+	                  onClick={() =>
+	                    pendingCashOut &&
+	                    createSalaryCashOutMutation.mutate(pendingCashOut, {
+	                      onSuccess: () => {
+	                        queryClient.invalidateQueries({ queryKey: ["cash-registers"] });
+	                        setPendingCashOut(null);
+	                        setPaySalaryDialog(false);
+	                        resetPaySalaryForm();
+	                        toast.success("Kassa chiqimi yozildi");
+	                      },
+	                      onError: (error: any) => {
+	                        const data = error?.response?.data;
+	                        const msg =
+	                          data?.error ||
+	                          data?.category?.[0] ||
+	                          data?.cash_register?.[0] ||
+	                          data?.amount?.[0] ||
+	                          "Kassadan pul chiqarishda xatolik";
+	                        setCashOutError(msg);
+	                      },
+	                    })
+	                  }
+	                  disabled={createSalaryCashOutMutation.isPending}
+	                >
+	                  {createSalaryCashOutMutation.isPending && (
+	                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+	                  )}
+	                  Kassa chiqimini qayta yozish
+	                </Button>
+	              ) : (
+	                <Button
+	                  type="submit"
+	                  disabled={
+	                    paySalaryNewMutation.isPending ||
+	                    createSalaryCashOutMutation.isPending ||
+	                    staff.balance <= 0 ||
+	                    cashRegisters.length === 0 ||
+	                    !paySalaryForm.cash_register_id
+	                  }
+	                >
+	                  {paySalaryNewMutation.isPending && (
+	                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+	                  )}
+	                  To&apos;lash
+	                </Button>
+	              )}
+	            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>

@@ -30,8 +30,8 @@ import { CurrentTimeDisplay } from '@/lib/features/schedule/components/CurrentTi
 import { LessonDetailModal } from '@/lib/features/schedule/components/LessonDetailModal';
 import { DeleteLessonDialog } from '@/lib/features/schedule/components/DeleteLessonDialog';
 import { AddLessonDialog, type AddLessonData } from '@/lib/features/schedule/components/AddLessonDialog';
-import { GenerateLessonsDialog, type GenerateLessonsData } from '@/lib/features/schedule/components/GenerateLessonsDialog';
-import { useLessonInstances } from '@/lib/features/schedule/hooks';
+	import { GenerateLessonsDialog, type GenerateLessonsData } from '@/lib/features/schedule/components/GenerateLessonsDialog';
+	import { useCompleteLesson, useCreateLessonInstance, useDeleteLessonInstance, useGenerateLessons, useLessonInstances } from '@/lib/features/schedule/hooks';
 import {
   getWeekStart,
   getPreviousWeek,
@@ -42,7 +42,7 @@ import { addDays, format } from 'date-fns';
 import { uz } from 'date-fns/locale';
 import type { LessonInstance, TimetableTemplate, CurrentTimetableResponse } from '@/types/academic';
 import { toast } from 'sonner';
-import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
+	import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import api from '@/lib/api/client';
 import { branchApi, schoolApi } from '@/lib/api';
 import { SCHEDULE_TRANSLATIONS, formatDateUz, TIME_SLOTS } from '@/lib/features/schedule/constants/translations';
@@ -186,86 +186,10 @@ export default function BranchAdminSchedulePage() {
     setAddLessonDialogOpen(true);
   };
 
-  // Create lesson mutation
-  const createLessonMutation = useMutation({
-    mutationFn: async (data: AddLessonData) => {
-      const response = await api.post(`/school/branches/${branchId}/lessons/`, data);
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['lesson-instances', branchId] });
-      setAddLessonDialogOpen(false);
-      setAddLessonContext(null);
-      toast.success(SCHEDULE_TRANSLATIONS.toasts.lessonAdded);
-    },
-    onError: (error: any) => {
-      const message = error.response?.data?.detail || SCHEDULE_TRANSLATIONS.toasts.error;
-      toast.error(message);
-    },
-  });
-
-  // Delete lesson mutation
-  const deleteLessonMutation = useMutation({
-    mutationFn: async (lessonId: number) => {
-      await api.delete(`/school/lessons/${lessonId}/`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['lesson-instances', branchId] });
-      setDeleteDialogOpen(false);
-      setLessonToDelete(null);
-      setDetailModalOpen(false);
-      toast.success(SCHEDULE_TRANSLATIONS.toasts.lessonDeleted);
-    },
-    onError: (error: any) => {
-      const message = error.response?.data?.detail || SCHEDULE_TRANSLATIONS.toasts.error;
-      toast.error(message);
-    },
-  });
-
-  // Complete lesson mutation
-  const completeLessonMutation = useMutation({
-    mutationFn: async (lessonId: number) => {
-      const response = await api.patch(`/school/lessons/${lessonId}/`, {
-        status: 'completed',
-      });
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['lesson-instances', branchId] });
-      setDetailModalOpen(false);
-      setSelectedLesson(null);
-      toast.success(SCHEDULE_TRANSLATIONS.toasts.lessonCompleted);
-    },
-    onError: (error: any) => {
-      const message = error.response?.data?.detail || SCHEDULE_TRANSLATIONS.toasts.error;
-      toast.error(message);
-    },
-  });
-
-  // Generate lessons mutation
-  const generateLessonsMutation = useMutation({
-    mutationFn: async (data: GenerateLessonsData) => {
-      if (!branchId) {
-        throw new Error('Branch ID not found');
-      }
-      const response = await api.post(`/school/branches/${branchId}/lessons/generate/`, data);
-      return response.data;
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['lesson-instances', branchId] });
-      setGenerationResult({
-        created: data.created_count || 0,
-        skipped: data.skipped_count || 0,
-        updated: data.updated_count || 0,
-      });
-      toast.success(SCHEDULE_TRANSLATIONS.toasts.lessonsGenerated);
-    },
-    onError: (error: any) => {
-      const message = error.response?.data?.detail || SCHEDULE_TRANSLATIONS.toasts.error;
-      toast.error(message);
-      setGenerateDialogOpen(false);
-    },
-  });
+	  const createLessonMutation = useCreateLessonInstance(branchId || '');
+	  const deleteLessonMutation = useDeleteLessonInstance(branchId || '');
+	  const completeLessonMutation = useCompleteLesson(branchId || '');
+	  const generateLessonsMutation = useGenerateLessons(branchId || '');
 
   // Create template mutation
   const createTemplateMutation = useMutation({
@@ -284,32 +208,52 @@ export default function BranchAdminSchedulePage() {
     },
   });
 
-  // Handler functions
-  const handleSubmitAddLesson = (data: AddLessonData) => {
-    createLessonMutation.mutate(data);
-  };
+	  // Handler functions
+	  const handleSubmitAddLesson = (data: AddLessonData) => {
+	    createLessonMutation.mutate(data as any, {
+	      onSuccess: () => {
+	        setAddLessonDialogOpen(false);
+	        setAddLessonContext(null);
+	      },
+	    });
+	  };
 
-  const handleConfirmDelete = () => {
-    if (lessonToDelete) {
-      // Convert string ID to number if needed
-      const lessonId = typeof lessonToDelete.id === 'string' 
-        ? parseInt(lessonToDelete.id, 10) 
-        : lessonToDelete.id;
-      deleteLessonMutation.mutate(lessonId);
-    }
-  };
+	  const handleConfirmDelete = () => {
+	    if (lessonToDelete) {
+	      deleteLessonMutation.mutate(String(lessonToDelete.id), {
+	        onSuccess: () => {
+	          setDeleteDialogOpen(false);
+	          setLessonToDelete(null);
+	          setDetailModalOpen(false);
+	        },
+	      });
+	    }
+	  };
 
-  const handleCompleteLesson = (lesson: LessonInstance) => {
-    // Convert string ID to number if needed
-    const lessonId = typeof lesson.id === 'string' 
-      ? parseInt(lesson.id, 10) 
-      : lesson.id;
-    completeLessonMutation.mutate(lessonId);
-  };
+	  const handleCompleteLesson = (lesson: LessonInstance) => {
+	    completeLessonMutation.mutate(
+	      { id: String(lesson.id), data: {} },
+	      {
+	        onSuccess: () => {
+	          setDetailModalOpen(false);
+	          setSelectedLesson(null);
+	        },
+	      }
+	    );
+	  };
 
-  const handleSubmitGenerate = (data: GenerateLessonsData) => {
-    generateLessonsMutation.mutate(data);
-  };
+	  const handleSubmitGenerate = (data: GenerateLessonsData) => {
+	    generateLessonsMutation.mutate(data as any, {
+	      onSuccess: (resp: any) => {
+	        setGenerationResult({
+	          created: resp?.created_count || resp?.generated_count || resp?.lessons?.length || 0,
+	          skipped: resp?.skipped_count || 0,
+	          updated: resp?.updated_count || 0,
+	        });
+	      },
+	      onError: () => setGenerateDialogOpen(false),
+	    });
+	  };
 
   const handleCloseGenerateDialog = () => {
     setGenerateDialogOpen(false);

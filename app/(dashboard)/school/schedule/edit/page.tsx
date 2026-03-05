@@ -439,7 +439,7 @@ export default function TimetableEditPage() {
         </Alert>
         <div className="mt-4">
           <Button asChild>
-            <Link href="/branch-admin/schedule">Dars jadvaliga qaytish</Link>
+            <Link href="/school/schedule">Dars jadvaliga qaytish</Link>
           </Button>
         </div>
       </div>
@@ -452,7 +452,7 @@ export default function TimetableEditPage() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" asChild>
-            <Link href="/branch-admin/schedule">
+            <Link href="/school/schedule">
               <ArrowLeft className="h-5 w-5" />
             </Link>
           </Button>
@@ -465,7 +465,7 @@ export default function TimetableEditPage() {
           </div>
         </div>
         <Button asChild>
-          <Link href="/branch-admin/schedule">Tayyor</Link>
+          <Link href="/school/schedule">Tayyor</Link>
         </Button>
       </div>
 

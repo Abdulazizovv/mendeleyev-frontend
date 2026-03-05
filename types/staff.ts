@@ -13,9 +13,12 @@ export type BalanceStatus = "positive" | "negative" | "zero";
 
 export type TransactionType = "salary" | "bonus" | "deduction" | "advance" | "fine" | "refund" | "salary_accrual" | "adjustment" | "other";
 
-export type PaymentMethod = "cash" | "bank_transfer" | "card";
+// Note: backend supports additional methods in salary/balance flows (see docs/api/staff-salary-api.md)
+export type PaymentMethod = "cash" | "bank_transfer" | "card" | "mobile_payment" | "other";
 
 export type PaymentStatus = "pending" | "completed" | "failed";
+
+export type SalaryPaymentType = "advance" | "salary" | "bonus_payment" | "other";
 
 // ==================== Core Types ====================
 
@@ -307,6 +310,7 @@ export interface PaySalaryNewRequest {
   amount: number; // Integer, so'm (positive)
   payment_date: string; // YYYY-MM-DD (cannot be future)
   payment_method: PaymentMethod; // cash, bank_transfer, card, other
+  payment_type?: SalaryPaymentType; // default: salary
   month: string; // YYYY-MM-01 (first day of month)
   notes?: string;
   reference_number?: string;
@@ -431,6 +435,15 @@ export const paymentMethodLabels: Record<PaymentMethod, string> = {
   cash: "Naqd",
   bank_transfer: "Bank o'tkazma",
   card: "Karta",
+  mobile_payment: "Mobil to'lov",
+  other: "Boshqa",
+};
+
+export const salaryPaymentTypeLabels: Record<SalaryPaymentType, string> = {
+  advance: "Avans",
+  salary: "Oylik",
+  bonus_payment: "Bonus to'lovi",
+  other: "Boshqa",
 };
 
 export const paymentStatusLabels: Record<PaymentStatus, string> = {

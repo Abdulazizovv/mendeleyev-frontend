@@ -256,17 +256,24 @@ export const staffApi = {
 
   /**
    * Add salary accrual (hisoblash)
-   * POST /api/v1/branches/staff/{id}/add-salary/
-   * 
-   * Adds salary to staff balance
+   * POST /api/v1/branches/staff/{id}/change-balance/
+   *
+   * Note: legacy `/add-salary/` was removed in backend; salary accrual is done via change-balance with
+   * `transaction_type=salary_accrual`.
    */
   addSalaryAccrual: async (
     id: string,
     data: AddSalaryAccrualRequest
-  ): Promise<StaffMemberDetail> => {
-    const response = await apiClient.post<StaffMemberDetail>(
-      `branches/staff/${id}/add-salary/`,
-      data
+  ): Promise<ChangeBalanceResponse> => {
+    const response = await apiClient.post<ChangeBalanceResponse>(
+      `branches/staff/${id}/change-balance/`,
+      {
+        transaction_type: "salary_accrual",
+        amount: data.amount,
+        description: data.description,
+        reference: data.reference,
+        create_cash_transaction: false,
+      }
     );
     return response.data;
   },
