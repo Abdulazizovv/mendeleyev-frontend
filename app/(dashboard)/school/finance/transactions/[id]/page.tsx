@@ -80,7 +80,7 @@ export default function TransactionDetailPage() {
         <div className="text-center">
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Tranzaksiya topilmadi</h2>
           <p className="text-gray-600 mb-4">Bunday tranzaksiya mavjud emas</p>
-          <Button onClick={() => router.push("/branch-admin/finance/transactions")}>
+          <Button onClick={() => router.push("/school/finance/transactions")}>
             Orqaga qaytish
           </Button>
         </div>
@@ -96,7 +96,7 @@ export default function TransactionDetailPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => router.push("/branch-admin/finance/transactions")}
+            onClick={() => router.push("/school/finance/transactions")}
             className="shrink-0"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -194,7 +194,7 @@ export default function TransactionDetailPage() {
                 <div className="flex-1">
                   <p className="text-xs sm:text-sm text-gray-500">Kassa</p>
                   <button
-                    onClick={() => router.push(`/branch-admin/finance/cash-registers/${transaction.cash_register.id}`)}
+                    onClick={() => router.push(`/school/finance/cash-registers/${transaction.cash_register.id}`)}
                     className="text-sm sm:text-base font-medium text-blue-600 hover:underline mt-1 text-left"
                   >
                     {transaction.cash_register.name}

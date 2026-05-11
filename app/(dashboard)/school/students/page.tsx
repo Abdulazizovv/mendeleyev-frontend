@@ -313,7 +313,7 @@ export default function StudentsManagement() {
   // Navigate to student detail page
   const handleStudentClick = React.useCallback(
     (studentId: string) => {
-      router.push(`/branch-admin/students/${studentId}`);
+      router.push(`/school/students/${studentId}`);
     },
     [router]
   );
@@ -357,7 +357,7 @@ export default function StudentsManagement() {
           </Button>
           <Button 
             className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-            onClick={() => router.push('/branch-admin/students/create')}
+            onClick={() => router.push('/school/students/create')}
           >
             <UserPlus className="w-4 h-4 mr-2" />
             Yangi {studentTerm.singular.toLowerCase()}

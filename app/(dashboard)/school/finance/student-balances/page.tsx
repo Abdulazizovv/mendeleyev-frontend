@@ -105,7 +105,7 @@ export default function StudentBalancesPage() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => router.push("/branch-admin/finance")}
+            onClick={() => router.push("/school/finance")}
             className="shrink-0"
           >
             <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -354,7 +354,7 @@ export default function StudentBalancesPage() {
                           size="sm"
                           variant="ghost"
                           onClick={() =>
-                            router.push(`/branch-admin/finance/student-balances/${balance.id}`)
+                            router.push(`/school/finance/student-balances/${balance.id}`)
                           }
                         >
                           Ko&apos;rish

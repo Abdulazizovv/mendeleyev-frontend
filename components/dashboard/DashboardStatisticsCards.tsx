@@ -169,7 +169,7 @@ export function DashboardStatisticsCards({
               <div>
                 <p className="font-semibold text-orange-900">Qarz ma'lumoti</p>
                 <p className="text-sm text-orange-800 mt-1">
-                  {statistics.students.with_debt} ta {studentTerm.toLowerCase()} {formatCurrency(statistics.students.total_debt_amount)} miqdorda qarz qilgan
+                  {statistics.students.with_debt} ta {studentTerm.toLowerCase()} jami {formatCurrency(statistics.students.total_debt_amount)} qarz qilgan
                 </p>
               </div>
             </div>

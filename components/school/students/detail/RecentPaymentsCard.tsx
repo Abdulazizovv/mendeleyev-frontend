@@ -82,7 +82,7 @@ export function RecentPaymentsCard({
                     </div>
                     <div>
                       <p className="font-bold text-lg text-green-700">
-                        +{formatCurrency(payment.amount)} so&apos;m
+                        +{formatCurrency(payment.amount)}
                       </p>
                       <p className="text-sm text-gray-600 flex items-center gap-1">
                         <Calendar className="w-3 h-3" />

@@ -137,7 +137,7 @@ export default function CreateStudentPage() {
     onSuccess: (data) => {
       toast.success("O'quvchi muvaffaqiyatli yaratildi!");
       queryClient.invalidateQueries({ queryKey: ["students"] });
-      router.push(`/branch-admin/students/${data.id}`);
+      router.push(`/school/students/${data.id}`);
     },
     onError: (error: any) => {
       toast.error(error?.response?.data?.message || "Xatolik yuz berdi");
@@ -225,7 +225,7 @@ export default function CreateStudentPage() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => router.push("/branch-admin/students")}
+            onClick={() => router.push("/school/students")}
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>

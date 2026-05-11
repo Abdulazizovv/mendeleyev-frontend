@@ -50,7 +50,7 @@ export default function PaymentDetailPage() {
           <DollarSign className="w-12 h-12 text-gray-300 mx-auto mb-4" />
           <p className="text-gray-500">To&apos;lov topilmadi</p>
           <Button
-            onClick={() => router.push("/branch-admin/finance/payments")}
+            onClick={() => router.push("/school/finance/payments")}
             className="mt-4"
           >
             Orqaga
@@ -88,7 +88,7 @@ export default function PaymentDetailPage() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => router.push("/branch-admin/finance/payments")}
+            onClick={() => router.push("/school/finance/payments")}
             className="shrink-0"
           >
             <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -107,7 +107,7 @@ export default function PaymentDetailPage() {
           <Button
             variant="outline"
             className="gap-2"
-            onClick={() => router.push(`/branch-admin/finance/transactions/${payment.transaction}`)}
+            onClick={() => router.push(`/school/finance/transactions/${payment.transaction}`)}
           >
             <Receipt className="w-4 h-4" />
             Tranzaksiyani Ko&apos;rish
@@ -307,7 +307,7 @@ export default function PaymentDetailPage() {
                     size="sm"
                     variant="ghost"
                     onClick={() =>
-                      router.push(`/branch-admin/finance/transactions/${payment.transaction}`)
+                      router.push(`/school/finance/transactions/${payment.transaction}`)
                     }
                   >
                     Ko&apos;rish

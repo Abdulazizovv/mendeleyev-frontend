@@ -902,6 +902,275 @@ export interface CreateStudentRequest {
   relatives?: CreateStudentRelativeRequest[];
 }
 
+// ==================== GRADES TYPES ====================
+
+export interface AssessmentType {
+  id: string;
+  branch: string;
+  name: string;
+  code: string;
+  description?: string;
+  default_max_score: number;
+  default_weight: number;
+  color: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Assessment {
+  id: string;
+  class_subject: string;
+  class_subject_name?: string;
+  class_name?: string;
+  subject_name?: string;
+  assessment_type: string;
+  assessment_type_name?: string;
+  assessment_type_color?: string;
+  lesson?: string;
+  quarter: string;
+  quarter_name?: string;
+  title: string;
+  description?: string;
+  date: string;
+  max_score: number;
+  weight: number;
+  is_locked: boolean;
+  locked_at?: string;
+  notes?: string;
+  grades_count?: number;
+  average_score?: number;
+  completion_rate?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Grade {
+  id: string;
+  assessment: string;
+  assessment_title?: string;
+  student: string;
+  student_name?: string;
+  score: number;
+  calculated_score?: number;
+  final_score?: number;
+  override_reason?: string;
+  notes?: string;
+  graded_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QuarterGrade {
+  id: string;
+  student: string;
+  student_name?: string;
+  class_subject: string;
+  class_subject_name?: string;
+  subject_name?: string;
+  quarter: string;
+  quarter_name?: string;
+  calculated_grade: number;
+  final_grade?: number;
+  override_reason?: string;
+  is_locked: boolean;
+  locked_at?: string;
+  last_calculated: string;
+}
+
+export interface CreateAssessmentTypeRequest {
+  name: string;
+  code: string;
+  description?: string;
+  default_max_score?: number;
+  default_weight?: number;
+  color?: string;
+}
+
+export interface CreateAssessmentRequest {
+  class_subject: string;
+  assessment_type: string;
+  lesson?: string;
+  quarter: string;
+  title: string;
+  description?: string;
+  date: string;
+  max_score: number;
+  weight?: number;
+  notes?: string;
+}
+
+export interface CreateGradeRequest {
+  assessment: string;
+  student: string;
+  score: number;
+  notes?: string;
+}
+
+export interface BulkGradeItem {
+  student: string;
+  score: number;
+  notes?: string;
+}
+
+export interface BulkGradeCreateRequest {
+  assessment: string;
+  grades: BulkGradeItem[];
+}
+
+export interface StudentGradeStatistics {
+  student_id: string;
+  student_name: string;
+  total_grades: number;
+  average_score: number;
+  quarter_grades: QuarterGrade[];
+}
+
+// ==================== ATTENDANCE TYPES ====================
+
+export type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused' | 'sick';
+
+export interface StudentAttendanceRecord {
+  id: string;
+  attendance: string;
+  student: string;
+  student_name?: string;
+  status: AttendanceStatus;
+  notes?: string;
+  marked_at: string;
+  created_at: string;
+}
+
+export interface LessonAttendance {
+  id: string;
+  class_subject: string;
+  class_subject_name?: string;
+  class_name?: string;
+  subject_name?: string;
+  lesson?: string;
+  date: string;
+  lesson_number?: number;
+  is_locked: boolean;
+  locked_at?: string;
+  locked_by?: string;
+  records: StudentAttendanceRecord[];
+  total_count?: number;
+  present_count?: number;
+  absent_count?: number;
+  late_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BulkAttendanceRecord {
+  student_id: string;
+  status: AttendanceStatus;
+  notes?: string;
+}
+
+export interface BulkAttendanceMarkRequest {
+  attendance_id?: string;
+  class_subject_id?: string;
+  date?: string;
+  lesson_number?: number;
+  lesson_id?: string;
+  notes?: string;
+  records: BulkAttendanceRecord[];
+}
+
+export interface StudentAttendanceStats {
+  student_id: string;
+  student_name: string;
+  total_lessons: number;
+  present_count: number;
+  absent_count: number;
+  late_count: number;
+  excused_count: number;
+  attendance_rate: number;
+}
+
+export interface ClassAttendanceStats {
+  class_subject_id: string;
+  class_name: string;
+  subject_name: string;
+  total_lessons: number;
+  average_attendance_rate: number;
+  students: StudentAttendanceStats[];
+}
+
+// ==================== HOMEWORK TYPES ====================
+
+export type HomeworkStatus = 'active' | 'closed' | 'archived';
+export type SubmissionStatus = 'not_submitted' | 'submitted' | 'late' | 'graded' | 'returned';
+
+export interface HomeworkAttachment {
+  name: string;
+  url: string;
+  size?: number;
+  type?: string;
+}
+
+export interface Homework {
+  id: string;
+  class_subject: string;
+  class_subject_name?: string;
+  class_name?: string;
+  subject_name?: string;
+  lesson?: string;
+  assessment?: string;
+  title: string;
+  description: string;
+  assigned_date: string;
+  due_date: string;
+  allow_late_submission: boolean;
+  max_score?: number;
+  status: HomeworkStatus;
+  attachments: HomeworkAttachment[];
+  notes?: string;
+  submission_count?: number;
+  graded_count?: number;
+  completion_rate?: number;
+  is_overdue?: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HomeworkSubmission {
+  id: string;
+  homework: string;
+  homework_title?: string;
+  student: string;
+  student_name?: string;
+  submission_text?: string;
+  submitted_at?: string;
+  status: SubmissionStatus;
+  is_late: boolean;
+  score?: number;
+  teacher_feedback?: string;
+  graded_at?: string;
+  attachments: HomeworkAttachment[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateHomeworkRequest {
+  class_subject: string;
+  lesson?: string;
+  assessment?: string;
+  title: string;
+  description: string;
+  assigned_date: string;
+  due_date: string;
+  allow_late_submission?: boolean;
+  max_score?: number;
+  notes?: string;
+}
+
+export interface GradeSubmissionRequest {
+  score: number;
+  teacher_feedback?: string;
+}
+
 // Student Import Types
 export interface ImportStudentError {
   row: number;

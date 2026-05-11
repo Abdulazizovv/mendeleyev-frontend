@@ -82,7 +82,7 @@ export default function StudentBalanceDetailPage() {
           <Wallet className="w-12 h-12 text-gray-300 mx-auto mb-4" />
           <p className="text-gray-500">Balans topilmadi</p>
           <Button
-            onClick={() => router.push("/branch-admin/finance/student-balances")}
+            onClick={() => router.push("/school/finance/student-balances")}
             className="mt-4"
           >
             Orqaga
@@ -112,7 +112,7 @@ export default function StudentBalanceDetailPage() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => router.push("/branch-admin/finance/student-balances")}
+            onClick={() => router.push("/school/finance/student-balances")}
             className="shrink-0"
           >
             <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -130,7 +130,7 @@ export default function StudentBalanceDetailPage() {
         <div className="flex flex-wrap gap-2">
           <Button
             onClick={() =>
-              router.push(`/branch-admin/finance/payments/create?student=${balance.student_profile}`)
+              router.push(`/school/finance/payments/create?student=${balance.student_profile}`)
             }
             className="gap-2"
           >
@@ -220,7 +220,7 @@ export default function StudentBalanceDetailPage() {
               variant="ghost"
               size="sm"
               onClick={() =>
-                router.push(`/branch-admin/finance/payments?student=${balance.student_profile}`)
+                router.push(`/school/finance/payments?student=${balance.student_profile}`)
               }
             >
               Barchasini Ko&apos;rish
@@ -274,7 +274,7 @@ export default function StudentBalanceDetailPage() {
                           size="sm"
                           variant="ghost"
                           onClick={() =>
-                            router.push(`/branch-admin/finance/payments/${payment.id}`)
+                            router.push(`/school/finance/payments/${payment.id}`)
                           }
                         >
                           Ko&apos;rish
@@ -301,7 +301,7 @@ export default function StudentBalanceDetailPage() {
               variant="ghost"
               size="sm"
               onClick={() =>
-                router.push(`/branch-admin/finance/transactions?student=${balance.student_profile}`)
+                router.push(`/school/finance/transactions?student=${balance.student_profile}`)
               }
             >
               Barchasini Ko&apos;rish
@@ -381,7 +381,7 @@ export default function StudentBalanceDetailPage() {
                           size="sm"
                           variant="ghost"
                           onClick={() =>
-                            router.push(`/branch-admin/finance/transactions/${transaction.id}`)
+                            router.push(`/school/finance/transactions/${transaction.id}`)
                           }
                         >
                           Ko&apos;rish

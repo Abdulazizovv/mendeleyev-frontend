@@ -57,7 +57,7 @@ export default function FinancePage() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => router.push("/branch-admin")}
+            onClick={() => router.push("/school")}
             className="shrink-0"
           >
             <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -75,7 +75,7 @@ export default function FinancePage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => router.push("/branch-admin/finance/transactions")}
+            onClick={() => router.push("/school/finance/transactions")}
             className="gap-2"
           >
             <Receipt className="w-3 h-3 sm:w-4 sm:h-4" />
@@ -83,7 +83,7 @@ export default function FinancePage() {
           </Button>
           <Button
             size="sm"
-            onClick={() => router.push("/branch-admin/finance/payments")}
+            onClick={() => router.push("/school/finance/payments")}
             className="gap-2"
           >
             <CreditCard className="w-3 h-3 sm:w-4 sm:h-4" />
@@ -247,7 +247,7 @@ export default function FinancePage() {
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-7 gap-2 sm:gap-3">
         <Card
           className="cursor-pointer hover:shadow-lg transition-all hover:-translate-y-1 bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200"
-          onClick={() => router.push("/branch-admin/finance/cash-registers")}
+          onClick={() => router.push("/school/finance/cash-registers")}
         >
           <CardContent className="p-3 sm:p-4">
             <div className="flex flex-col items-center gap-2 text-center">
@@ -266,7 +266,7 @@ export default function FinancePage() {
 
         <Card
           className="cursor-pointer hover:shadow-lg transition-all hover:-translate-y-1 bg-gradient-to-br from-green-50 to-emerald-50 border-green-200"
-          onClick={() => router.push("/branch-admin/finance/transactions")}
+          onClick={() => router.push("/school/finance/transactions")}
         >
           <CardContent className="p-3 sm:p-4">
             <div className="flex flex-col items-center gap-2 text-center">
@@ -285,7 +285,7 @@ export default function FinancePage() {
 
         <Card
           className="cursor-pointer hover:shadow-lg transition-all hover:-translate-y-1 bg-gradient-to-br from-indigo-50 to-blue-50 border-indigo-200"
-          onClick={() => router.push("/branch-admin/finance/payments")}
+          onClick={() => router.push("/school/finance/payments")}
         >
           <CardContent className="p-3 sm:p-4">
             <div className="flex flex-col items-center gap-2 text-center">
@@ -306,7 +306,7 @@ export default function FinancePage() {
 
         <Card
           className="cursor-pointer hover:shadow-lg transition-all hover:-translate-y-1 bg-gradient-to-br from-teal-50 to-cyan-50 border-teal-200"
-          onClick={() => router.push("/branch-admin/finance/student-balances")}
+          onClick={() => router.push("/school/finance/student-balances")}
         >
           <CardContent className="p-3 sm:p-4">
             <div className="flex flex-col items-center gap-2 text-center">
@@ -325,7 +325,7 @@ export default function FinancePage() {
 
         <Card
           className="cursor-pointer hover:shadow-lg transition-all hover:-translate-y-1 bg-gradient-to-br from-purple-50 to-pink-50 border-purple-200"
-          onClick={() => router.push("/branch-admin/finance/categories")}
+          onClick={() => router.push("/school/finance/categories")}
         >
           <CardContent className="p-3 sm:p-4">
             <div className="flex flex-col items-center gap-2 text-center">
@@ -344,7 +344,7 @@ export default function FinancePage() {
 
         <Card
           className="cursor-pointer hover:shadow-lg transition-all hover:-translate-y-1 bg-gradient-to-br from-pink-50 to-rose-50 border-pink-200"
-          onClick={() => router.push("/branch-admin/finance/subscription-plans")}
+          onClick={() => router.push("/school/finance/subscription-plans")}
         >
           <CardContent className="p-3 sm:p-4">
             <div className="flex flex-col items-center gap-2 text-center">
@@ -363,7 +363,7 @@ export default function FinancePage() {
 
         <Card
           className="cursor-pointer hover:shadow-lg transition-all hover:-translate-y-1 bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200"
-          onClick={() => router.push("/branch-admin/finance/discounts")}
+          onClick={() => router.push("/school/finance/discounts")}
         >
           <CardContent className="p-3 sm:p-4">
             <div className="flex flex-col items-center gap-2 text-center">
@@ -393,7 +393,7 @@ export default function FinancePage() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => router.push("/branch-admin/finance/cash-registers")}
+              onClick={() => router.push("/school/finance/cash-registers")}
               className="text-xs sm:text-sm"
             >
               Barchasi
@@ -408,7 +408,7 @@ export default function FinancePage() {
                 </p>
                 <Button
                   onClick={() =>
-                    router.push("/branch-admin/finance/cash-registers")
+                    router.push("/school/finance/cash-registers")
                   }
                   size="sm"
                 >
@@ -422,7 +422,7 @@ export default function FinancePage() {
                     key={register.id}
                     className="flex items-center justify-between p-2 sm:p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
                     onClick={() =>
-                      router.push(`/branch-admin/finance/cash-registers/${register.id}`)
+                      router.push(`/school/finance/cash-registers/${register.id}`)
                     }
                   >
                     <div className="flex items-center gap-2 min-w-0 flex-1">

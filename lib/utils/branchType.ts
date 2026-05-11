@@ -56,6 +56,21 @@ export const getNavigationItems = (branchType: BranchType): NavigationItem[] => 
         description: "Dars jadvalini boshqarish",
       },
       {
+        name: "Davomat",
+        href: `${baseRoute}/attendance`,
+        description: "O'quvchilar davomatini boshqarish",
+      },
+      {
+        name: "Baholar",
+        href: `${baseRoute}/grades`,
+        description: "Baholar va nazorat ishlarini boshqarish",
+      },
+      {
+        name: "Uy Vazifalari",
+        href: `${baseRoute}/homework`,
+        description: "Uy vazifalarini boshqarish",
+      },
+      {
         name: "Xodimlar",
         href: `${baseRoute}/staff`,
         description: "Xodimlarni boshqarish",

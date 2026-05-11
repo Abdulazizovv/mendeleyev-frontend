@@ -166,7 +166,7 @@ export default function CashRegistersPage() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => router.push("/branch-admin/finance")}
+            onClick={() => router.push("/school/finance")}
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>

@@ -49,7 +49,7 @@ export function StudentBalanceCard({
               {balance?.balance !== undefined ? (
                 <>
                   {balance.balance > 0 && "+"}
-                  {formatCurrency(balance.balance)} so&apos;m
+                  {formatCurrency(balance.balance)}
                 </>
               ) : (
                 "0 so'm"

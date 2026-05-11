@@ -32,6 +32,23 @@ import type {
   StudentImportResult,
   StudentImportTaskResponse,
   StudentImportStatusResponse,
+  AssessmentType,
+  Assessment,
+  Grade,
+  QuarterGrade,
+  CreateAssessmentTypeRequest,
+  CreateAssessmentRequest,
+  CreateGradeRequest,
+  BulkGradeCreateRequest,
+  StudentGradeStatistics,
+  LessonAttendance,
+  BulkAttendanceMarkRequest,
+  StudentAttendanceStats,
+  ClassAttendanceStats,
+  Homework,
+  HomeworkSubmission,
+  CreateHomeworkRequest,
+  GradeSubmissionRequest,
 } from "@/types";
 import type { BranchMembership } from "@/types";
 import type { MembershipDetail } from "./branch";
@@ -420,16 +437,16 @@ export const schoolApi = {
   // ==================== CLASS SUBJECTS ====================
 
   /**
-   * Sinf fanlarini olish
+   * Sinf fanlarini olish (class_id bo'yicha)
    */
   getClassSubjects: async (
     classId: string,
-    params?: { 
+    params?: {
       page?: number;
       page_size?: number;
       search?: string;
       ordering?: string;
-      is_active?: boolean; 
+      is_active?: boolean;
     }
   ): Promise<ClassSubject[]> => {
     const response = await apiClient.get<ClassSubject[] | PaginatedResponse<ClassSubject>>(
@@ -437,6 +454,25 @@ export const schoolApi = {
       { params }
     );
     return unwrapResults(response.data);
+  },
+
+  /**
+   * Filial bo'yicha barcha sinf fanlarini olish
+   */
+  getBranchClassSubjects: async (
+    branchId: string,
+    params?: {
+      page?: number;
+      page_size?: number;
+      search?: string;
+      is_active?: boolean;
+    }
+  ): Promise<PaginatedResponse<ClassSubject>> => {
+    const response = await apiClient.get<PaginatedResponse<ClassSubject>>(
+      `/school/branches/${branchId}/class-subjects/`,
+      { params: { page_size: 100, ...params } }
+    );
+    return response.data;
   },
 
   /**
@@ -904,6 +940,349 @@ export const schoolApi = {
   ): Promise<StudentImportStatusResponse> => {
     const response = await apiClient.get<StudentImportStatusResponse>(
       `/school/students/import-status/${taskId}/`
+    );
+    return response.data;
+  },
+
+  // ==================== ASSESSMENT TYPES ====================
+
+  getAssessmentTypes: async (
+    branchId: string,
+    params?: { is_active?: boolean; search?: string }
+  ): Promise<AssessmentType[]> => {
+    const response = await apiClient.get<PaginatedResponse<AssessmentType>>(
+      `/school/branches/${branchId}/assessment-types/`,
+      { params: { page_size: 100, ...params } }
+    );
+    return unwrapResults(response.data);
+  },
+
+  createAssessmentType: async (
+    branchId: string,
+    data: CreateAssessmentTypeRequest
+  ): Promise<AssessmentType> => {
+    const response = await apiClient.post<AssessmentType>(
+      `/school/branches/${branchId}/assessment-types/`,
+      data
+    );
+    return response.data;
+  },
+
+  updateAssessmentType: async (
+    branchId: string,
+    typeId: string,
+    data: Partial<CreateAssessmentTypeRequest>
+  ): Promise<AssessmentType> => {
+    const response = await apiClient.patch<AssessmentType>(
+      `/school/branches/${branchId}/assessment-types/${typeId}/`,
+      data
+    );
+    return response.data;
+  },
+
+  deleteAssessmentType: async (branchId: string, typeId: string): Promise<void> => {
+    await apiClient.delete(`/school/branches/${branchId}/assessment-types/${typeId}/`);
+  },
+
+  // ==================== ASSESSMENTS ====================
+
+  getAssessments: async (
+    branchId: string,
+    params?: {
+      class_subject?: string;
+      assessment_type?: string;
+      quarter?: string;
+      date?: string;
+      is_locked?: boolean;
+      page?: number;
+      page_size?: number;
+    }
+  ): Promise<PaginatedResponse<Assessment>> => {
+    const response = await apiClient.get<PaginatedResponse<Assessment>>(
+      `/school/branches/${branchId}/assessments/`,
+      { params: { page_size: 50, ...params } }
+    );
+    return response.data;
+  },
+
+  createAssessment: async (
+    branchId: string,
+    data: CreateAssessmentRequest
+  ): Promise<Assessment> => {
+    const response = await apiClient.post<Assessment>(
+      `/school/branches/${branchId}/assessments/`,
+      data
+    );
+    return response.data;
+  },
+
+  updateAssessment: async (
+    branchId: string,
+    assessmentId: string,
+    data: Partial<CreateAssessmentRequest>
+  ): Promise<Assessment> => {
+    const response = await apiClient.patch<Assessment>(
+      `/school/branches/${branchId}/assessments/${assessmentId}/`,
+      data
+    );
+    return response.data;
+  },
+
+  deleteAssessment: async (branchId: string, assessmentId: string): Promise<void> => {
+    await apiClient.delete(`/school/branches/${branchId}/assessments/${assessmentId}/`);
+  },
+
+  // ==================== GRADES ====================
+
+  getGrades: async (
+    branchId: string,
+    params?: {
+      assessment?: string;
+      student?: string;
+      page?: number;
+      page_size?: number;
+    }
+  ): Promise<PaginatedResponse<Grade>> => {
+    const response = await apiClient.get<PaginatedResponse<Grade>>(
+      `/school/branches/${branchId}/grades/`,
+      { params: { page_size: 200, ...params } }
+    );
+    return response.data;
+  },
+
+  createGrade: async (branchId: string, data: CreateGradeRequest): Promise<Grade> => {
+    const response = await apiClient.post<Grade>(
+      `/school/branches/${branchId}/grades/`,
+      data
+    );
+    return response.data;
+  },
+
+  updateGrade: async (
+    branchId: string,
+    gradeId: string,
+    data: Partial<CreateGradeRequest>
+  ): Promise<Grade> => {
+    const response = await apiClient.patch<Grade>(
+      `/school/branches/${branchId}/grades/${gradeId}/`,
+      data
+    );
+    return response.data;
+  },
+
+  bulkCreateGrades: async (
+    branchId: string,
+    data: BulkGradeCreateRequest
+  ): Promise<Grade[]> => {
+    const response = await apiClient.post<Grade[]>(
+      `/school/branches/${branchId}/grades/bulk-create/`,
+      data
+    );
+    return response.data;
+  },
+
+  getQuarterGrades: async (
+    branchId: string,
+    params?: {
+      student?: string;
+      class_subject?: string;
+      quarter?: string;
+      is_locked?: boolean;
+      page_size?: number;
+    }
+  ): Promise<PaginatedResponse<QuarterGrade>> => {
+    const response = await apiClient.get<PaginatedResponse<QuarterGrade>>(
+      `/school/branches/${branchId}/quarter-grades/`,
+      { params: { page_size: 200, ...params } }
+    );
+    return response.data;
+  },
+
+  calculateQuarterGrades: async (
+    branchId: string,
+    classSubjectId: string,
+    quarterId: string
+  ): Promise<{ message: string; calculated_count: number }> => {
+    const response = await apiClient.post(
+      `/school/branches/${branchId}/quarter-grades/calculate/`,
+      { class_subject_id: classSubjectId, quarter_id: quarterId }
+    );
+    return response.data;
+  },
+
+  getStudentGradeStatistics: async (
+    branchId: string,
+    studentId: string,
+    params?: { class_subject_id?: string; quarter_id?: string }
+  ): Promise<StudentGradeStatistics> => {
+    const response = await apiClient.get<StudentGradeStatistics>(
+      `/school/branches/${branchId}/grades/statistics/student/`,
+      { params: { student_id: studentId, ...params } }
+    );
+    return response.data;
+  },
+
+  lockUnlockGrades: async (
+    branchId: string,
+    ids: string[],
+    action: 'lock' | 'unlock',
+    type: 'assessment' | 'quarter_grade'
+  ): Promise<{ message: string; affected_count: number }> => {
+    const response = await apiClient.post(
+      `/school/branches/${branchId}/grades/lock-unlock/`,
+      { ids, action, type }
+    );
+    return response.data;
+  },
+
+  // ==================== ATTENDANCE ====================
+
+  getAttendances: async (
+    branchId: string,
+    params?: {
+      class_subject?: string;
+      date?: string;
+      lesson_number?: number;
+      is_locked?: boolean;
+      page?: number;
+      page_size?: number;
+    }
+  ): Promise<PaginatedResponse<LessonAttendance>> => {
+    const response = await apiClient.get<PaginatedResponse<LessonAttendance>>(
+      `/school/branches/${branchId}/attendance/`,
+      { params: { page_size: 100, ...params } }
+    );
+    return response.data;
+  },
+
+  getAttendanceDetail: async (
+    branchId: string,
+    attendanceId: string
+  ): Promise<LessonAttendance> => {
+    const response = await apiClient.get<LessonAttendance>(
+      `/school/branches/${branchId}/attendance/${attendanceId}/`
+    );
+    return response.data;
+  },
+
+  bulkMarkAttendance: async (
+    branchId: string,
+    data: BulkAttendanceMarkRequest
+  ): Promise<LessonAttendance> => {
+    const response = await apiClient.post<LessonAttendance>(
+      `/school/branches/${branchId}/attendance/bulk-mark/`,
+      data
+    );
+    return response.data;
+  },
+
+  lockUnlockAttendance: async (
+    branchId: string,
+    attendanceIds: string[],
+    action: 'lock' | 'unlock'
+  ): Promise<{ message: string; affected_count: number }> => {
+    const response = await apiClient.post(
+      `/school/branches/${branchId}/attendance/lock-unlock/`,
+      { attendance_ids: attendanceIds, action }
+    );
+    return response.data;
+  },
+
+  getStudentAttendanceStats: async (
+    branchId: string,
+    studentId: string,
+    params?: { start_date?: string; end_date?: string; class_subject_id?: string }
+  ): Promise<StudentAttendanceStats> => {
+    const response = await apiClient.get<StudentAttendanceStats>(
+      `/school/branches/${branchId}/attendance/statistics/student/`,
+      { params: { student_id: studentId, ...params } }
+    );
+    return response.data;
+  },
+
+  getClassAttendanceStats: async (
+    branchId: string,
+    classSubjectId: string,
+    params?: { start_date?: string; end_date?: string }
+  ): Promise<ClassAttendanceStats> => {
+    const response = await apiClient.get<ClassAttendanceStats>(
+      `/school/branches/${branchId}/attendance/statistics/class/`,
+      { params: { class_subject_id: classSubjectId, ...params } }
+    );
+    return response.data;
+  },
+
+  // ==================== HOMEWORK ====================
+  // Homework ViewSet uses /school/homework/ (branch filtered by JWT token context)
+
+  getHomeworks: async (
+    _branchId: string,
+    params?: {
+      class_subject?: string;
+      status?: string;
+      due_date_from?: string;
+      due_date_to?: string;
+      page?: number;
+      page_size?: number;
+    }
+  ): Promise<PaginatedResponse<Homework>> => {
+    const response = await apiClient.get<PaginatedResponse<Homework>>(
+      `/school/homework/`,
+      { params: { page_size: 50, ...params } }
+    );
+    return response.data;
+  },
+
+  getHomeworkDetail: async (_branchId: string, homeworkId: string): Promise<Homework> => {
+    const response = await apiClient.get<Homework>(`/school/homework/${homeworkId}/`);
+    return response.data;
+  },
+
+  createHomework: async (
+    _branchId: string,
+    data: CreateHomeworkRequest
+  ): Promise<Homework> => {
+    const response = await apiClient.post<Homework>(`/school/homework/`, data);
+    return response.data;
+  },
+
+  updateHomework: async (
+    _branchId: string,
+    homeworkId: string,
+    data: Partial<CreateHomeworkRequest>
+  ): Promise<Homework> => {
+    const response = await apiClient.patch<Homework>(
+      `/school/homework/${homeworkId}/`,
+      data
+    );
+    return response.data;
+  },
+
+  deleteHomework: async (_branchId: string, homeworkId: string): Promise<void> => {
+    await apiClient.delete(`/school/homework/${homeworkId}/`);
+  },
+
+  getHomeworkSubmissions: async (
+    _branchId: string,
+    homeworkId: string,
+    params?: { status?: string }
+  ): Promise<HomeworkSubmission[]> => {
+    const response = await apiClient.get<HomeworkSubmission[]>(
+      `/school/homework/${homeworkId}/submissions/`,
+      { params }
+    );
+    return response.data;
+  },
+
+  gradeSubmission: async (
+    _branchId: string,
+    _homeworkId: string,
+    submissionId: string,
+    data: GradeSubmissionRequest
+  ): Promise<HomeworkSubmission> => {
+    const response = await apiClient.post<HomeworkSubmission>(
+      `/school/submissions/${submissionId}/grade/`,
+      data
     );
     return response.data;
   },

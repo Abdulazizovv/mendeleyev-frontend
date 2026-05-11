@@ -579,7 +579,7 @@ export default function ClassesPage() {
 								<Separator />
 								
 								<div className="flex items-center gap-2 pt-1">
-									<Link href={`/branch-admin/classes/${cls.id}`} className="flex-1">
+									<Link href={`/school/classes/${cls.id}`} className="flex-1">
 										<Button variant="outline" size="sm" className="w-full">
 											<Eye className="w-4 h-4 mr-2" />
 											Ko'rish

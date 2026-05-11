@@ -1,35 +1,36 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { roleToPath } from "@/lib/utils/roleMapping";
 import { getNavigationItems as getBranchNavigationItems } from "@/lib/utils/branchType";
 import type { BranchType } from "@/types/auth";
 import { useQueryClient } from "@tanstack/react-query";
-import { 
-  LayoutDashboard, 
-  Users, 
-  BookOpen, 
-  Calendar, 
-  Settings, 
+import {
+  LayoutDashboard,
+  Users,
+  BookOpen,
+  Calendar,
+  Settings,
   LogOut,
   GraduationCap,
   ClipboardList,
   DollarSign,
   Menu,
   X,
-  ChevronDown,
   Building2,
   Shield,
-  ArrowLeft,
-  Home,
   FolderTree,
   FileText,
   Award,
-  CheckSquare
+  CheckSquare,
+  ChevronDown,
+  ChevronRight,
+  ChevronsUpDown,
+  Check,
+  Bell,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -41,19 +42,153 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { translateRole } from "@/lib/translations";
 import Link from "next/link";
+import { toast } from "sonner";
+import type { BranchMembership } from "@/types/auth";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
+}
+
+// Nav item type
+interface NavItem {
+  name: string;
+  href: string;
+  icon: React.ElementType;
+}
+
+const iconMap: Record<string, React.ElementType> = {
+  "/students": GraduationCap,
+  "/classes": ClipboardList,
+  "/subjects": BookOpen,
+  "/teachers": Users,
+  "/finance/categories": FolderTree,
+  "/finance": DollarSign,
+  "/groups": Users,
+  "/courses": BookOpen,
+  "/staff": Users,
+  "/rooms": Building2,
+  "/roles": Shield,
+  "/attendance": ClipboardList,
+  "/grades": Award,
+  "/homework": FileText,
+  "/schedule": Calendar,
+  "/academic-years": BookOpen,
+};
+
+function getIconForRoute(href: string): React.ElementType {
+  for (const [key, icon] of Object.entries(iconMap)) {
+    if (href.includes(key)) return icon;
+  }
+  return LayoutDashboard;
+}
+
+function getInitials(firstName?: string, lastName?: string): string {
+  return ((firstName?.charAt(0) || "") + (lastName?.charAt(0) || "")).toUpperCase() || "U";
+}
+
+function getBranchTypeLabel(branchType: string): string {
+  return branchType === "school" ? "Maktab" : "O'quv Markazi";
+}
+
+// Branch Switcher Component
+function BranchSwitcher({
+  currentBranch,
+  memberships,
+  onSwitch,
+}: {
+  currentBranch: BranchMembership;
+  memberships: BranchMembership[];
+  onSwitch: (branchId: string) => Promise<unknown>;
+}) {
+  const [switching, setSwitching] = useState(false);
+
+  const handleSwitch = async (branchId: string) => {
+    if (branchId === currentBranch.branch_id || switching) return;
+    const target = memberships.find((m) => m.branch_id === branchId);
+    if (!target) return;
+    try {
+      setSwitching(true);
+      await onSwitch(branchId);
+      toast.success("Filial muvaffaqiyatli o'zgartirildi");
+      // Compute the correct dashboard path for the new branch
+      const rolePath = roleToPath(target.role, target.branch_type as BranchType);
+      window.location.href = `/${rolePath}`;
+    } catch {
+      toast.error("Filialni o'zgartirishda xatolik");
+    } finally {
+      setSwitching(false);
+    }
+  };
+
+  if (memberships.length <= 1) {
+    return (
+      <div className="px-3 py-3 mx-2 mb-1 bg-gray-50 rounded-xl border border-gray-200">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center shrink-0">
+            <Building2 className="w-4 h-4 text-blue-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-gray-900 truncate">{currentBranch.branch_name}</p>
+            <p className="text-[10px] text-gray-500">{getBranchTypeLabel(currentBranch.branch_type)}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="w-full mx-2 px-3 py-3 bg-gray-50 hover:bg-blue-50 rounded-xl border border-gray-200 hover:border-blue-200 transition-colors text-left flex items-center gap-2.5 group"
+          disabled={switching}
+          style={{ width: "calc(100% - 16px)" }}
+        >
+          <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center shrink-0">
+            <Building2 className="w-4 h-4 text-blue-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-gray-900 truncate">{currentBranch.branch_name}</p>
+            <p className="text-[10px] text-gray-500">{getBranchTypeLabel(currentBranch.branch_type)}</p>
+          </div>
+          <ChevronsUpDown className="w-3.5 h-3.5 text-gray-400 group-hover:text-blue-500 shrink-0" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="top" align="start" className="w-60 mb-1">
+        <DropdownMenuLabel className="text-xs text-gray-500">Filial tanlash</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {memberships.map((m) => (
+          <DropdownMenuItem
+            key={m.branch_id}
+            onClick={() => handleSwitch(m.branch_id)}
+            className="flex items-center gap-2.5 cursor-pointer py-2.5"
+          >
+            <div className="w-7 h-7 bg-blue-100 rounded-md flex items-center justify-center shrink-0">
+              <Building2 className="w-3.5 h-3.5 text-blue-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">{m.branch_name}</p>
+              <p className="text-xs text-gray-500">
+                {getBranchTypeLabel(m.branch_type)} · {translateRole(m.role)}
+              </p>
+            </div>
+            {m.branch_id === currentBranch.branch_id && (
+              <Check className="w-4 h-4 text-blue-600 shrink-0" />
+            )}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const router = useRouter();
   const pathname = usePathname();
   const queryClient = useQueryClient();
-  const { user, currentBranch, logout, isLoading, loadUser } = useAuth();
+  const { user, currentBranch, memberships, logout, isLoading, loadUser, switchBranch } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Invalidate all queries when pathname changes (user navigates)
   useEffect(() => {
     queryClient.invalidateQueries();
   }, [pathname, queryClient]);
@@ -64,7 +199,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     }
   }, [user, isLoading, router]);
 
-  // Load user data on mount
   useEffect(() => {
     if (user && !isLoading) {
       loadUser();
@@ -72,15 +206,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Role-based redirect
   useEffect(() => {
     if (!isLoading && user && currentBranch) {
       const currentPath = window.location.pathname;
       const role = currentBranch.role;
       const branchType = currentBranch.branch_type as BranchType;
       const rolePath = roleToPath(role, branchType);
-      
-      // If user is on wrong dashboard, redirect to their role's dashboard
       if (!currentPath.startsWith(`/${rolePath}`) && !currentPath.startsWith("/dashboard")) {
         router.push(`/${rolePath}`);
       }
@@ -88,41 +219,26 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   }, [user, currentBranch, isLoading, router]);
 
   const handleLogout = useCallback(async () => {
-    await logout();
+    logout();
     router.push("/login");
   }, [logout, router]);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-600 font-medium">Yuklanmoqda...</p>
-        </div>
-      </div>
-    );
-  }
+  const role = currentBranch?.role ?? "branch_admin";
+  const branchType = (currentBranch?.branch_type ?? "school") as BranchType;
+  const rolePath = currentBranch ? roleToPath(role, branchType) : "";
 
-  if (!user || !currentBranch) {
-    return null;
-  }
+  const navigationItems: NavItem[] = useMemo(() => {
+    if (!currentBranch) return [];
 
-  const role = currentBranch.role;
-  const branchType = currentBranch.branch_type as BranchType;
-  const rolePath = roleToPath(role, branchType);
-
-  // Navigation items based on role and branch type
-  const getNavigationItems = () => {
-    const baseItems = [
+    const baseItems: NavItem[] = [
       { name: "Asosiy", href: `/${rolePath}`, icon: LayoutDashboard },
     ];
 
     if (role === "branch_admin") {
-      // Use branch type-specific navigation
       const branchItems = getBranchNavigationItems(branchType);
       return [
         ...baseItems,
-        ...branchItems.map(item => ({
+        ...branchItems.map((item) => ({
           name: item.name,
           href: item.href,
           icon: getIconForRoute(item.href),
@@ -130,7 +246,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         { name: "Sozlamalar", href: `/${rolePath}/settings`, icon: Settings },
       ];
     }
-
     if (role === "teacher") {
       return [
         ...baseItems,
@@ -142,7 +257,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         { name: "Uyga vazifalar", href: `/${rolePath}/homework`, icon: FileText },
       ];
     }
-
     if (role === "student") {
       return [
         ...baseItems,
@@ -154,155 +268,186 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         { name: "To'lovlar", href: `/${rolePath}/payments`, icon: DollarSign },
       ];
     }
-
     return baseItems;
-  };
+  }, [role, branchType, rolePath, currentBranch]);
 
-  // Helper to get icon for route
-  const getIconForRoute = (href: string) => {
-    if (href.includes("/students")) return GraduationCap;
-    if (href.includes("/classes")) return ClipboardList;
-    if (href.includes("/subjects")) return BookOpen;
-    if (href.includes("/teachers")) return Users;
-    if (href.includes("/finance/categories")) return FolderTree;
-    if (href.includes("/finance")) return DollarSign;
-    if (href.includes("/groups")) return Users;
-    if (href.includes("/courses")) return BookOpen;
-    if (href.includes("/staff")) return Users;
-    if (href.includes("/rooms")) return Building2;
-    if (href.includes("/roles")) return Shield;
-    return LayoutDashboard;
-  };
+  // Get current page name for header
+  const currentPageName = useMemo(() => {
+    const matched = navigationItems.find(
+      (item) =>
+        pathname === item.href ||
+        (item.href !== `/${rolePath}` && pathname.startsWith(item.href))
+    );
+    return matched?.name ?? "Dashboard";
+  }, [navigationItems, pathname, rolePath]);
 
-  const navigationItems = getNavigationItems();
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-blue-50 via-indigo-50 to-purple-50">
+        <div className="text-center">
+          <div className="w-12 h-12 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-gray-500 text-sm">Yuklanmoqda...</p>
+        </div>
+      </div>
+    );
+  }
 
-  const getInitials = (firstName?: string, lastName?: string) => {
-    const first = firstName?.charAt(0) || "";
-    const last = lastName?.charAt(0) || "";
-    return (first + last).toUpperCase() || "U";
-  };
+  if (!user || !currentBranch) return null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50">
-      {/* Mobile Sidebar Overlay */}
+    <div className="min-h-screen bg-gray-100">
+      {/* Mobile overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/40 z-40 lg:hidden backdrop-blur-sm"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
-      {/* Sidebar */}
+      {/* ── Sidebar ── */}
       <aside
-        className={`fixed top-0 left-0 z-50 h-full w-64 bg-white border-r border-gray-200 transition-transform duration-300 ease-in-out lg:translate-x-0 ${
+        className={`fixed top-0 left-0 z-50 h-full w-64 bg-white border-r border-gray-200 flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="flex flex-col h-full">
-          {/* Logo */}
-          <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
-                <GraduationCap className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">Mendeleyev</h1>
-                <p className="text-xs text-gray-500">{translateRole(role)}</p>
-              </div>
+        {/* Logo */}
+        <div className="flex items-center justify-between px-4 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-linear-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-sm">
+              <GraduationCap className="w-5 h-5 text-white" />
             </div>
-            <button
-              onClick={() => setSidebarOpen(false)}
-              className="lg:hidden text-gray-500 hover:text-gray-700"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <div>
+              <p className="text-base font-bold text-gray-900 leading-tight">Mendeleyev</p>
+              <p className="text-[10px] text-gray-400 leading-tight">{translateRole(role)}</p>
+            </div>
           </div>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="lg:hidden p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
 
-          {/* Navigation */}
-          <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
-            {navigationItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="flex items-center px-4 py-3 text-sm font-medium text-gray-700 rounded-lg hover:bg-blue-50 hover:text-blue-700 transition-colors group"
-                onClick={() => setSidebarOpen(false)}
-              >
-                <item.icon className="w-5 h-5 mr-3 text-gray-400 group-hover:text-blue-600" />
-                {item.name}
-              </Link>
-            ))}
-          </nav>
-
-          {/* Branch Info */}
-          <div className="px-4 py-4 border-t border-gray-200">
-            <div className="flex items-center space-x-3 px-4 py-3 bg-gray-50 rounded-lg">
-              <Building2 className="w-5 h-5 text-gray-400" />
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-gray-500">Filial</p>
-                <p className="text-sm font-medium text-gray-900 truncate">
-                  {currentBranch.branch_name}
-                </p>
-                <p className="text-xs text-gray-400 truncate">
-                  {branchType === "school" ? "Maktab" : "O'quv Markazi"}
-                </p>
-              </div>
+        {/* User Profile */}
+        <div className="px-3 pt-3 pb-2">
+          <div className="flex items-center gap-2.5 px-2 py-2 rounded-xl bg-linear-to-r from-blue-50 to-indigo-50 border border-blue-100">
+            <Avatar className="w-9 h-9 shrink-0">
+              <AvatarImage src={user.avatar || undefined} />
+              <AvatarFallback className="bg-linear-to-br from-blue-500 to-indigo-600 text-white text-xs font-semibold">
+                {getInitials(user.first_name, user.last_name)}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-900 truncate leading-tight">
+                {user.first_name} {user.last_name}
+              </p>
+              <p className="text-[10px] text-gray-500 truncate">{user.phone_number}</p>
             </div>
           </div>
         </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 px-3 py-2 overflow-y-auto space-y-0.5">
+          {navigationItems.map((item) => {
+            const isActive =
+              pathname === item.href ||
+              (item.href !== `/${rolePath}` && pathname.startsWith(item.href));
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setSidebarOpen(false)}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                  isActive
+                    ? "bg-blue-600 text-white shadow-sm shadow-blue-200"
+                    : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                }`}
+              >
+                <item.icon className={`w-4.5 h-4.5 shrink-0 ${isActive ? "text-white" : "text-gray-400"}`} style={{ width: 18, height: 18 }} />
+                <span className="truncate">{item.name}</span>
+                {isActive && <ChevronRight className="w-3.5 h-3.5 ml-auto text-blue-200" />}
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* Branch Switcher */}
+        <div className="pt-1 pb-2 border-t border-gray-100">
+          <p className="px-5 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+            Joriy filial
+          </p>
+          <BranchSwitcher
+            currentBranch={currentBranch}
+            memberships={memberships ?? []}
+            onSwitch={switchBranch}
+          />
+        </div>
+
+        {/* Logout */}
+        <div className="px-3 pb-3 border-t border-gray-100 pt-2">
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+          >
+            <LogOut className="w-4.5 h-4.5 shrink-0" style={{ width: 18, height: 18 }} />
+            <span>Chiqish</span>
+          </button>
+        </div>
       </aside>
 
-      {/* Main Content */}
-      <div className="lg:pl-64">
+      {/* ── Main ── */}
+      <div className="lg:pl-64 flex flex-col min-h-screen">
         {/* Top Header */}
-        <header className="sticky top-0 z-30 bg-white border-b border-gray-200 backdrop-blur-sm bg-white/80">
-          <div className="flex items-center justify-between px-6 py-4">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setSidebarOpen(true)}
-                className="lg:hidden p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <Menu className="w-6 h-6" />
-              </button>
-
-              <button
-                onClick={() => router.back()}
-                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-                title="Orqaga"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-
-              <div className="hidden lg:block">
-                <h2 className="text-2xl font-bold text-gray-900">
-                  Dashboard
-                </h2>
-              </div>
+        <header className="sticky top-0 z-30 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="lg:hidden p-2 rounded-lg text-gray-500 hover:bg-gray-100"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            {/* Breadcrumb */}
+            <div className="flex items-center gap-1.5 text-sm">
+              <span className="text-gray-400 hidden sm:inline">{currentBranch.branch_name}</span>
+              <ChevronRight className="w-3.5 h-3.5 text-gray-300 hidden sm:block" />
+              <span className="font-semibold text-gray-800">{currentPageName}</span>
             </div>
+          </div>
 
-            {/* User Menu */}
+          <div className="flex items-center gap-2">
+            {/* Notification placeholder */}
+            <button className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 relative">
+              <Bell className="w-5 h-5" />
+            </button>
+
+            {/* User dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="flex items-center space-x-3 h-auto py-2 px-3">
-                  <Avatar className="w-9 h-9">
+                <button className="flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-gray-100 transition-colors">
+                  <Avatar className="w-8 h-8">
                     <AvatarImage src={user.avatar || undefined} />
-                    <AvatarFallback className="bg-gradient-to-br from-blue-600 to-indigo-600 text-white">
+                    <AvatarFallback className="bg-linear-to-br from-blue-500 to-indigo-600 text-white text-xs">
                       {getInitials(user.first_name, user.last_name)}
                     </AvatarFallback>
                   </Avatar>
                   <div className="hidden md:block text-left">
-                    <p className="text-sm font-medium text-gray-900">
+                    <p className="text-sm font-medium text-gray-900 leading-tight">
                       {user.first_name} {user.last_name}
                     </p>
-                    <p className="text-xs text-gray-500">{user.phone_number}</p>
+                    <p className="text-xs text-gray-400">{translateRole(role)}</p>
                   </div>
-                  <ChevronDown className="w-4 h-4 text-gray-400" />
-                </Button>
+                  <ChevronDown className="w-3.5 h-3.5 text-gray-400 hidden md:block" />
+                </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>Mening akkauntim</DropdownMenuLabel>
+              <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuLabel className="font-normal">
+                  <p className="font-semibold text-gray-900">{user.first_name} {user.last_name}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{user.phone_number}</p>
+                </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link href={`/${rolePath}/profile`} className="cursor-pointer">
+                  <Link href={`/${rolePath}/settings`} className="cursor-pointer">
                     <Settings className="w-4 h-4 mr-2" />
                     Sozlamalar
                   </Link>
@@ -318,7 +463,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         </header>
 
         {/* Page Content */}
-        <main className="p-6">
+        <main className="flex-1 p-5">
           {children}
         </main>
       </div>

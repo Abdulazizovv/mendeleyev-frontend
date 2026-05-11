@@ -111,8 +111,8 @@ export default function PaymentsPage() {
     const newParams = new URLSearchParams(searchParams.toString());
     newParams.delete('student');
     const newUrl = newParams.toString() 
-      ? `/branch-admin/finance/payments?${newParams.toString()}`
-      : '/branch-admin/finance/payments';
+      ? `/school/finance/payments?${newParams.toString()}`
+      : '/school/finance/payments';
     router.push(newUrl);
   };
 
@@ -121,8 +121,8 @@ export default function PaymentsPage() {
     const newParams = new URLSearchParams(searchParams.toString());
     newParams.delete('search');
     const newUrl = newParams.toString() 
-      ? `/branch-admin/finance/payments?${newParams.toString()}`
-      : '/branch-admin/finance/payments';
+      ? `/school/finance/payments?${newParams.toString()}`
+      : '/school/finance/payments';
     router.push(newUrl);
   };
 
@@ -133,8 +133,8 @@ export default function PaymentsPage() {
     newParams.delete('start_date');
     newParams.delete('end_date');
     const newUrl = newParams.toString() 
-      ? `/branch-admin/finance/payments?${newParams.toString()}`
-      : '/branch-admin/finance/payments';
+      ? `/school/finance/payments?${newParams.toString()}`
+      : '/school/finance/payments';
     router.push(newUrl);
   };
 
@@ -143,7 +143,7 @@ export default function PaymentsPage() {
     setStartDate("");
     setEndDate("");
     setStudentFilter("");
-    router.push('/branch-admin/finance/payments');
+    router.push('/school/finance/payments');
   };
 
   const hasActiveFilters = searchQuery || startDate || endDate || studentFilter;
@@ -156,7 +156,7 @@ export default function PaymentsPage() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => router.push("/branch-admin/finance")}
+            onClick={() => router.push("/school/finance")}
             className="shrink-0"
           >
             <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -181,7 +181,7 @@ export default function PaymentsPage() {
             Excel
           </Button>
           <Button
-            onClick={() => router.push("/branch-admin/finance/payments/create")}
+            onClick={() => router.push("/school/finance/payments/create")}
             className="gap-2"
           >
             <DollarSign className="w-4 h-4" />
@@ -412,7 +412,7 @@ export default function PaymentsPage() {
                     <TableRow
                       key={payment.id}
                       className="cursor-pointer hover:bg-gray-50 transition-colors"
-                      onClick={() => router.push(`/branch-admin/finance/payments/${payment.id}`)}
+                      onClick={() => router.push(`/school/finance/payments/${payment.id}`)}
                     >
                       <TableCell>
                         <div className="flex items-center gap-3">

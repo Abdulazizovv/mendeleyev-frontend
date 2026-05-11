@@ -195,7 +195,7 @@ export default function EditStudentPage() {
       toast.success("O'quvchi muvaffaqiyatli yangilandi");
       queryClient.invalidateQueries({ queryKey: ["student", studentId] });
       queryClient.invalidateQueries({ queryKey: ["students"] });
-      router.push(`/branch-admin/students/${studentId}`);
+      router.push(`/school/students/${studentId}`);
     },
     onError: (error: any) => {
       toast.error(
@@ -452,7 +452,7 @@ export default function EditStudentPage() {
       queryClient.invalidateQueries({ queryKey: ["student", studentId] });
       queryClient.invalidateQueries({ queryKey: ["students"] });
       queryClient.invalidateQueries({ queryKey: ["classes"] });
-      router.push(`/branch-admin/students/${studentId}`);
+      router.push(`/school/students/${studentId}`);
     },
     onError: (error: any) => {
       toast.error(
@@ -561,7 +561,7 @@ export default function EditStudentPage() {
       <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
         <AlertCircle className="w-16 h-16 text-red-500 mb-4" />
         <h2 className="text-2xl font-bold text-gray-900 mb-2">O'quvchi topilmadi</h2>
-        <Button onClick={() => router.push("/branch-admin/students")}>
+        <Button onClick={() => router.push("/school/students")}>
           <ArrowLeft className="w-4 h-4 mr-2" />
           Orqaga
         </Button>
@@ -579,7 +579,7 @@ export default function EditStudentPage() {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => router.push(`/branch-admin/students/${studentId}`)}
+                onClick={() => router.push(`/school/students/${studentId}`)}
                 className="hover:bg-gray-100 flex-shrink-0"
               >
                 <ArrowLeft className="w-5 h-5" />
@@ -1485,7 +1485,7 @@ export default function EditStudentPage() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => router.push(`/branch-admin/students/${studentId}`)}
+                onClick={() => router.push(`/school/students/${studentId}`)}
                 disabled={updateStudentMutation.isPending}
                 className="w-full sm:w-auto sm:min-w-[120px]"
               >

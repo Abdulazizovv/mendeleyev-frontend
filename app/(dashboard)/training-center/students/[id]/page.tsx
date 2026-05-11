@@ -28,7 +28,7 @@ export default function StudentDetailPage() {
   const studentId = params.id as string;
 
   // Fetch student data
-  const { data: student, isLoading } = useQuery({
+  const { data: student, isLoading, refetch: refetchStudent } = useQuery({
     queryKey: ["student", studentId],
     queryFn: () => schoolApi.getStudent(branchId!, studentId),
     enabled: !!branchId,
@@ -243,6 +243,7 @@ export default function StudentDetailPage() {
               paymentDue={student.payment_due}
               studentId={studentId}
               formatCurrency={formatCurrency}
+              onChargeSuccess={refetchStudent}
             />
 
             {/* Quick Actions */}

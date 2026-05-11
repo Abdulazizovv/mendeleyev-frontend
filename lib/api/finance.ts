@@ -454,6 +454,17 @@ export const financeApi = {
     await apiClient.delete(`/school/finance/student-subscriptions/${id}/`);
   },
 
+  chargeStudentSubscription: async (
+    id: string,
+    force = true
+  ): Promise<{ result: { ok: boolean; charged: boolean; amount: number; reason: string; message: string } }> => {
+    const response = await apiClient.post(
+      `/school/finance/student-subscriptions/${id}/charge/`,
+      { force }
+    );
+    return response.data;
+  },
+
   // ==================== STATISTICS ====================
 
   /**

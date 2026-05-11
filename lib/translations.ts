@@ -99,44 +99,100 @@ export function translateDay(day: string | undefined | null): string {
   return DAY_TRANSLATIONS[day.toLowerCase()] || day;
 }
 
+const UZ_MONTHS_SHORT = [
+  'yan', 'fev', 'mar', 'apr', 'may', 'iyun',
+  'iyul', 'avg', 'sen', 'okt', 'noy', 'dek',
+];
+
+const UZ_MONTHS_LONG = [
+  'Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'Iyun',
+  'Iyul', 'Avgust', 'Sentabr', 'Oktabr', 'Noyabr', 'Dekabr',
+];
+
 /**
- * Format currency with Uzbek format
+ * Format currency with Uzbek format — spaces as thousands separator.
+ * Example: 1 200 000 so'm  |  -500 000 so'm
  */
 export function formatCurrency(amount: number | null | undefined): string {
-  if (amount === null || amount === undefined) return '0 so\'m';
-  return `${amount.toLocaleString('uz-UZ')} so'm`;
+  if (amount === null || amount === undefined) return "0 so'm";
+  const rounded = Math.round(amount);
+  const abs = Math.abs(rounded);
+  // Use space as thousands separator (Uzbek standard)
+  const formatted = abs.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  return (rounded < 0 ? '−' : '') + formatted + " so'm";
 }
 
 /**
- * Format date in Uzbek style
+ * Format date → DD.MM.YYYY
  */
 export function formatDate(date: string | Date | null | undefined): string {
   if (!date) return '';
-  
   const d = typeof date === 'string' ? new Date(date) : date;
-  
-  // Format: DD.MM.YYYY
-  const day = String(d.getDate()).padStart(2, '0');
+  if (isNaN(d.getTime())) return '';
+  const day   = String(d.getDate()).padStart(2, '0');
   const month = String(d.getMonth() + 1).padStart(2, '0');
-  const year = d.getFullYear();
-  
-  return `${day}.${month}.${year}`;
+  return `${day}.${month}.${d.getFullYear()}`;
 }
 
 /**
- * Format datetime in Uzbek style
+ * Format date → "12 may 2026"  (Uzbek short month)
+ */
+export function formatDateUz(date: string | Date | null | undefined): string {
+  if (!date) return '';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  if (isNaN(d.getTime())) return '';
+  return `${d.getDate()} ${UZ_MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+/**
+ * Format date → "12 Yanvar 2026"  (Uzbek long month)
+ */
+export function formatDateLong(date: string | Date | null | undefined): string {
+  if (!date) return '';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  if (isNaN(d.getTime())) return '';
+  return `${d.getDate()} ${UZ_MONTHS_LONG[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+/**
+ * Format datetime → DD.MM.YYYY HH:MM
  */
 export function formatDateTime(date: string | Date | null | undefined): string {
   if (!date) return '';
-  
   const d = typeof date === 'string' ? new Date(date) : date;
-  
-  // Format: DD.MM.YYYY HH:MM
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const year = d.getFullYear();
-  const hours = String(d.getHours()).padStart(2, '0');
-  const minutes = String(d.getMinutes()).padStart(2, '0');
-  
-  return `${day}.${month}.${year} ${hours}:${minutes}`;
+  if (isNaN(d.getTime())) return '';
+  const day  = String(d.getDate()).padStart(2, '0');
+  const mon  = String(d.getMonth() + 1).padStart(2, '0');
+  const h    = String(d.getHours()).padStart(2, '0');
+  const m    = String(d.getMinutes()).padStart(2, '0');
+  return `${day}.${mon}.${d.getFullYear()} ${h}:${m}`;
+}
+
+/**
+ * Format datetime → "12 may, 14:30"
+ */
+export function formatDateTimeShort(date: string | Date | null | undefined): string {
+  if (!date) return '';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  if (isNaN(d.getTime())) return '';
+  const h = String(d.getHours()).padStart(2, '0');
+  const m = String(d.getMinutes()).padStart(2, '0');
+  return `${d.getDate()} ${UZ_MONTHS_SHORT[d.getMonth()]}, ${h}:${m}`;
+}
+
+/**
+ * Relative time label — "bugun", "kecha", "3 kun oldin", etc.
+ */
+export function formatRelativeDate(date: string | Date | null | undefined): string {
+  if (!date) return '';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  if (isNaN(d.getTime())) return '';
+  const today = new Date();
+  const diffMs = today.getTime() - d.getTime();
+  const diffDays = Math.floor(diffMs / 86_400_000);
+  if (diffDays === 0) return 'Bugun';
+  if (diffDays === 1) return 'Kecha';
+  if (diffDays < 7)  return `${diffDays} kun oldin`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)} hafta oldin`;
+  return formatDateUz(d);
 }

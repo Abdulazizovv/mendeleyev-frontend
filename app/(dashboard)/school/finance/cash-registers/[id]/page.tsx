@@ -99,7 +99,7 @@ export default function CashRegisterDetailPage() {
         <div className="text-center">
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Kassa topilmadi</h2>
           <p className="text-gray-600 mb-4">Bunday kassa mavjud emas</p>
-          <Button onClick={() => router.push("/branch-admin/finance")}>
+          <Button onClick={() => router.push("/school/finance")}>
             Orqaga qaytish
           </Button>
         </div>
@@ -115,7 +115,7 @@ export default function CashRegisterDetailPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => router.push("/branch-admin/finance")}
+            onClick={() => router.push("/school/finance")}
             className="shrink-0"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -327,7 +327,7 @@ export default function CashRegisterDetailPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => router.push(`/branch-admin/finance/transactions?cash_register=${registerId}`)}
+            onClick={() => router.push(`/school/finance/transactions?cash_register=${registerId}`)}
           >
             Barchasi
           </Button>
@@ -342,7 +342,7 @@ export default function CashRegisterDetailPage() {
               {transactionsData.results.slice(0, 5).map((transaction: Transaction) => (
                 <div
                   key={transaction.id}
-                  onClick={() => router.push(`/branch-admin/finance/transactions/${transaction.id}`)}
+                  onClick={() => router.push(`/school/finance/transactions/${transaction.id}`)}
                   className="flex items-center justify-between p-3 rounded-lg border hover:bg-gray-50 cursor-pointer transition-colors"
                 >
                   <div className="flex items-center gap-3 flex-1 min-w-0">

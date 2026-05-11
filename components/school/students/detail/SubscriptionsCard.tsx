@@ -54,7 +54,7 @@ export function SubscriptionsCard({
               <div className="flex justify-between text-gray-600">
                 <span>Narxi:</span>
                 <span className="font-medium text-purple-700">
-                  {formatCurrency(subscription.subscription_plan.price)} so&apos;m
+                  {formatCurrency(subscription.subscription_plan.price)}
                 </span>
               </div>
               <div className="flex justify-between text-gray-600">
@@ -72,7 +72,7 @@ export function SubscriptionsCard({
                   <span className="font-bold text-orange-700">
                     {subscription.discount.discount_type === 'percentage' 
                       ? `${subscription.discount.discount_value}%`
-                      : `${formatCurrency(subscription.discount.discount_value)} so'm`}
+                      : formatCurrency(subscription.discount.discount_value)}
                   </span>
                 </div>
               )}
@@ -96,7 +96,7 @@ export function SubscriptionsCard({
                 <div className="flex justify-between mt-2 pt-2 border-t">
                   <span className="text-red-600 font-medium">Qarz:</span>
                   <span className="font-bold text-red-700">
-                    {formatCurrency(subscription.total_debt)} so&apos;m
+                    {formatCurrency(subscription.total_debt)}
                   </span>
                 </div>
               )}
