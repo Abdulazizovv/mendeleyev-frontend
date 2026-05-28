@@ -40,14 +40,31 @@ import { toast } from "sonner";
 
 // ── helpers ────────────────────────────────────────────────────────────────────
 
+function formatPhoneDisplay(phone?: string | null): string {
+  if (!phone) return "—";
+  const d = phone.replace(/\D/g, "");
+  const suffix = d.startsWith("998") ? d.slice(3) : d.startsWith("8") ? d.slice(1) : d;
+  const parts = [suffix.slice(0, 2), suffix.slice(2, 5), suffix.slice(5, 7), suffix.slice(7, 9)].filter(Boolean);
+  return "+998 " + parts.join(" ");
+}
+
 const STATUS_MAP: Record<string, { label: string; cls: string }> = {
-  active:   { label: "Aktiv",        cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-  archived: { label: "Arxivlangan",  cls: "bg-gray-100 text-gray-600 border-gray-200" },
-  suspended:{ label: "To'xtatilgan", cls: "bg-red-100 text-red-700 border-red-200" },
+  active:      { label: "Aktiv",        cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+  archived:    { label: "Arxivlangan",  cls: "bg-gray-100 text-gray-600 border-gray-200" },
+  suspended:   { label: "To'xtatilgan", cls: "bg-red-100 text-red-700 border-red-200" },
+  graduated:   { label: "Bitirgan",     cls: "bg-blue-100 text-blue-700 border-blue-200" },
+  transferred: { label: "Ko'chirilgan", cls: "bg-orange-100 text-orange-700 border-orange-200" },
+};
+
+const GENDER_MAP: Record<string, string> = {
+  male:        "Erkak",
+  female:      "Ayol",
+  other:       "Boshqa",
+  unspecified: "Belgilanmagan",
 };
 
 function statusBadge(status: string) {
-  const s = STATUS_MAP[status] ?? STATUS_MAP.active;
+  const s = STATUS_MAP[status] ?? { label: status, cls: "bg-gray-100 text-gray-600 border-gray-200" };
   return <Badge className={`border ${s.cls} font-medium`}>{s.label}</Badge>;
 }
 
@@ -223,7 +240,7 @@ export default function StudentDetailPage() {
       {/* ── Hero ── */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
         {/* Color band with back button */}
-        <div className="h-20 bg-linear-to-r from-blue-600 to-indigo-600 relative">
+        <div className="h-24 bg-linear-to-r from-blue-600 to-indigo-600 relative">
           <button
             onClick={() => router.push("/school/students")}
             className="absolute top-3 left-4 flex items-center gap-1.5 text-white/80 hover:text-white text-sm transition-colors"
@@ -234,69 +251,53 @@ export default function StudentDetailPage() {
         </div>
 
         <div className="px-6 pb-5 -mt-10 relative z-10">
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-            {/* Avatar + name */}
-            <div className="flex items-end gap-4">
-              <Avatar className="w-20 h-20 border-4 border-white shadow-lg">
-                <AvatarImage src={student.avatar_url || undefined} />
-                <AvatarFallback className="bg-linear-to-br from-blue-500 to-indigo-600 text-white text-2xl font-bold">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-              <div className="pb-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-xl font-bold text-gray-900 leading-tight">{fullName}</h1>
-                  {statusBadge(student.status)}
-                </div>
-                {/* Meta row */}
-                <div className="flex flex-wrap items-center gap-3 mt-1.5 text-sm text-gray-500">
-                  {student.personal_number && (
-                    <span className="flex items-center gap-1">
-                      <Hash className="w-3.5 h-3.5" />{student.personal_number}
-                    </span>
-                  )}
-                  {student.phone_number && (
-                    <span className="flex items-center gap-1">
-                      <Phone className="w-3.5 h-3.5" />{student.phone_number}
-                    </span>
-                  )}
-                  {student.current_class && (
-                    <span className="flex items-center gap-1">
-                      <BookOpen className="w-3.5 h-3.5" />{student.current_class.name}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Action buttons */}
-            <div className="flex gap-2 pb-1">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setBalanceModalOpen(true)}
-                className="gap-1.5"
-              >
+          {/* Row 1: Avatar + action buttons */}
+          <div className="flex items-start justify-between">
+            <Avatar className="w-20 h-20 border-4 border-white shadow-lg">
+              <AvatarImage src={student.avatar_url || undefined} />
+              <AvatarFallback className="bg-linear-to-br from-blue-500 to-indigo-600 text-white text-2xl font-bold">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex gap-2 pt-12">
+              <Button variant="outline" size="sm" onClick={() => setBalanceModalOpen(true)} className="gap-1.5">
                 <PlusCircle className="w-4 h-4 text-emerald-600" />
                 Balans
               </Button>
-              <Button
-                size="sm"
-                className="bg-blue-600 hover:bg-blue-700 gap-1.5"
-                onClick={() => router.push(`/school/finance/payments/create?student=${studentId}`)}
-              >
+              <Button size="sm" className="bg-blue-600 hover:bg-blue-700 gap-1.5"
+                onClick={() => router.push(`/school/finance/payments/create?student=${studentId}`)}>
                 <CreditCard className="w-4 h-4" />
                 To&apos;lov
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => router.push(`/school/students/${studentId}/edit`)}
-                className="gap-1.5"
-              >
+              <Button variant="outline" size="sm" onClick={() => router.push(`/school/students/${studentId}/edit`)} className="gap-1.5">
                 <Edit className="w-4 h-4" />
                 Tahrirlash
               </Button>
+            </div>
+          </div>
+
+          {/* Row 2: Name + meta (clearly below band) */}
+          <div className="mt-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl font-bold text-gray-900 leading-tight">{fullName}</h1>
+              {statusBadge(student.status)}
+            </div>
+            <div className="flex flex-wrap items-center gap-3 mt-1.5 text-sm text-gray-500">
+              {student.personal_number && (
+                <span className="flex items-center gap-1">
+                  <Hash className="w-3.5 h-3.5" />{student.personal_number}
+                </span>
+              )}
+              {student.phone_number && (
+                <span className="flex items-center gap-1">
+                  <Phone className="w-3.5 h-3.5" />{formatPhoneDisplay(student.phone_number)}
+                </span>
+              )}
+              {student.current_class && (
+                <span className="flex items-center gap-1">
+                  <BookOpen className="w-3.5 h-3.5" />{student.current_class.name}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -473,11 +474,11 @@ export default function StudentDetailPage() {
             <CardContent className="pt-0">
               <div className="space-y-2.5">
                 {[
-                  { label: "Telefon", value: student.phone_number, icon: Phone },
+                  { label: "Telefon", value: student.phone_number ? formatPhoneDisplay(student.phone_number) : null, icon: Phone },
                   { label: "Sinf", value: student.current_class?.name, icon: BookOpen },
                   { label: "Shaxsiy raqam", value: student.personal_number, icon: Hash },
                   { label: "Tug'ilgan sana", value: (student as any).birth_date ? formatDateUz((student as any).birth_date) : null, icon: Calendar },
-                  { label: "Jinsi", value: student.gender === "male" ? "Erkak" : student.gender === "female" ? "Ayol" : null, icon: User },
+                  { label: "Jinsi", value: student.gender ? (GENDER_MAP[student.gender] ?? student.gender) : null, icon: User },
                 ].filter((r) => r.value).map(({ label, value, icon: Icon }) => (
                   <div key={label} className="flex items-center justify-between text-sm">
                     <div className="flex items-center gap-2 text-gray-500">

@@ -235,8 +235,7 @@ export function ModernTimetableGrid({
           id: lesson.class_id || `temp-${lesson.class_name}`,
           name: lesson.class_name,
           grade_level: gradeMatch ? parseInt(gradeMatch[1]) : 999,
-          section: '',
-        } as Class);
+        } as unknown as Class);
       }
     });
     

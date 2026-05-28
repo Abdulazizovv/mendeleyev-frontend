@@ -44,7 +44,6 @@ export interface Class {
   academic_year_name: string;
   name: string;
   grade_level: number;
-  section?: string;
   class_teacher?: string;
   class_teacher_name?: string;
   max_students: number;
@@ -227,7 +226,6 @@ export interface TeacherClass {
   academic_year_name: string;
   name: string;
   grade_level: number;
-  section?: string;
   max_students: number;
   current_students_count: number;
   subjects_count?: number;
@@ -286,7 +284,6 @@ export interface StudentClass {
   academic_year_name: string;
   name: string;
   grade_level: number;
-  section?: string;
   class_teacher?: string;
   class_teacher_name?: string;
   max_students: number;
@@ -534,7 +531,6 @@ export interface CreateClassRequest {
   academic_year: string;
   name: string;
   grade_level: number;
-  section?: string;
   class_teacher?: string;
   max_students: number;
   room?: string;

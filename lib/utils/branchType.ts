@@ -12,9 +12,10 @@ export const BRANCH_TYPE_LABELS: Record<BranchType, string> = {
 
 export interface NavigationItem {
   name: string;
-  href: string;
+  href?: string;
   icon?: string;
   description?: string;
+  children?: NavigationItem[];
 }
 
 /**
@@ -24,21 +25,28 @@ export interface NavigationItem {
 export const getNavigationItems = (branchType: BranchType): NavigationItem[] => {
   const baseRoute = branchType === "center" ? "/training-center" : "/school";
   
-  const commonItems: NavigationItem[] = [
-    {
-      name: "O'quvchilar",
-      href: `${baseRoute}/students`,
-      description: "O'quvchilarni boshqarish",
-    },
-  ];
-
   if (branchType === "school") {
     return [
-      ...commonItems,
       {
-        name: "Akademik Yillar",
-        href: `${baseRoute}/academic-years`,
-        description: "Akademik yillar va choraklarni boshqarish",
+        name: "O'quvchilar",
+        href: `${baseRoute}/students`,
+        children: [
+          {
+            name: "Barcha O'quvchilar",
+            href: `${baseRoute}/students`,
+            description: "Barcha o'quvchilar ro'yxati",
+          },
+          {
+            name: "Yangi O'quvchilar",
+            href: `${baseRoute}/students/new`,
+            description: "Oxirgi 30 kunda qo'shilgan o'quvchilar",
+          },
+          {
+            name: "Arxiv",
+            href: `${baseRoute}/students/archive`,
+            description: "Bitirgan va arxivlangan o'quvchilar",
+          },
+        ],
       },
       {
         name: "Sinflar",
@@ -56,34 +64,9 @@ export const getNavigationItems = (branchType: BranchType): NavigationItem[] => 
         description: "Dars jadvalini boshqarish",
       },
       {
-        name: "Davomat",
-        href: `${baseRoute}/attendance`,
-        description: "O'quvchilar davomatini boshqarish",
-      },
-      {
-        name: "Baholar",
-        href: `${baseRoute}/grades`,
-        description: "Baholar va nazorat ishlarini boshqarish",
-      },
-      {
-        name: "Uy Vazifalari",
-        href: `${baseRoute}/homework`,
-        description: "Uy vazifalarini boshqarish",
-      },
-      {
         name: "Xodimlar",
         href: `${baseRoute}/staff`,
         description: "Xodimlarni boshqarish",
-      },
-      {
-        name: "Xonalar va Binolar",
-        href: `${baseRoute}/rooms`,
-        description: "Xonalar va binolarni boshqarish",
-      },
-      {
-        name: "Rollar",
-        href: `${baseRoute}/roles`,
-        description: "Rollarni boshqarish",
       },
       {
         name: "Moliya",
@@ -94,7 +77,11 @@ export const getNavigationItems = (branchType: BranchType): NavigationItem[] => 
   } else {
     // training_center
     return [
-      ...commonItems,
+      {
+        name: "O'quvchilar",
+        href: `${baseRoute}/students`,
+        description: "Barcha o'quvchilar ro'yxati",
+      },
       {
         name: "Akademik Yillar",
         href: `${baseRoute}/academic-years`,

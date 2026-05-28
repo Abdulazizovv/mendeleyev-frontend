@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import Link from "next/link";
 import {
   Building2,
   Clock,
@@ -20,6 +21,13 @@ import {
   AlertCircle,
   CheckCircle2,
   RefreshCw,
+  BookOpen,
+  Home,
+  Users,
+  FileText,
+  ChevronRight,
+  ClipboardList,
+  GraduationCap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -194,12 +202,57 @@ export default function BranchSettingsPage() {
     );
   }
 
+  const adminModules = [
+    {
+      name: "Akademik Yillar",
+      description: "O'quv yillari va choraklarni boshqarish",
+      href: "/school/academic-years",
+      icon: Calendar,
+      color: "bg-blue-50 text-blue-600 border-blue-100",
+    },
+    {
+      name: "Uy Vazifalari",
+      description: "O'quvchilarga berilgan vazifalar",
+      href: "/school/homework",
+      icon: FileText,
+      color: "bg-purple-50 text-purple-600 border-purple-100",
+    },
+    {
+      name: "Xonalar va Binolar",
+      description: "Sinf xonalari va bino boshqaruvi",
+      href: "/school/rooms",
+      icon: Home,
+      color: "bg-green-50 text-green-600 border-green-100",
+    },
+    {
+      name: "Rollar",
+      description: "Foydalanuvchi ruxsatlarini boshqarish",
+      href: "/school/roles",
+      icon: Users,
+      color: "bg-orange-50 text-orange-600 border-orange-100",
+    },
+    {
+      name: "Davomat",
+      description: "O'quvchilar davomatini boshqarish",
+      href: "/school/attendance",
+      icon: ClipboardList,
+      color: "bg-teal-50 text-teal-600 border-teal-100",
+    },
+    {
+      name: "Baholar",
+      description: "Baholar va nazorat ishlarini boshqarish",
+      href: "/school/grades",
+      icon: GraduationCap,
+      color: "bg-indigo-50 text-indigo-600 border-indigo-100",
+    },
+  ];
+
   return (
     <div className="space-y-6 pb-8">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Filial Sozlamalari</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Sozlamalar</h1>
           <p className="text-gray-600 mt-1">
             {settings?.branch_name} — filial konfiguratsiyasi
           </p>
@@ -725,6 +778,32 @@ export default function BranchSettingsPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Admin Modules */}
+      <div className="space-y-3">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">Boshqaruv bo'limlari</h2>
+          <p className="text-sm text-gray-500">Tez-tez o'zgarmaydigan tizim sozlamalari</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {adminModules.map((mod) => (
+            <Link key={mod.href} href={mod.href}>
+              <Card className="hover:shadow-md transition-shadow cursor-pointer border-gray-200 hover:border-blue-200">
+                <CardContent className="flex items-center gap-4 p-4">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${mod.color}`}>
+                    <mod.icon className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-900 text-sm">{mod.name}</p>
+                    <p className="text-xs text-gray-500 truncate">{mod.description}</p>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      </div>
 
       {/* Currency Info (Read-only) */}
       <Card className="border-gray-200 bg-gray-50">

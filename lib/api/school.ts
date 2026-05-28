@@ -184,7 +184,6 @@ export const schoolApi = {
     params?: {
       academic_year_id?: string;
       grade_level?: number;
-      section?: string;
       is_active?: boolean;
       search?: string;
       ordering?: string;
@@ -209,7 +208,6 @@ export const schoolApi = {
     params?: {
       academic_year_id?: string;
       grade_level?: number;
-      section?: string;
       is_active?: boolean;
       search?: string;
       ordering?: string;
@@ -704,6 +702,8 @@ export const schoolApi = {
       status?: Student["status"];
       academic_year_id?: string;
       ordering?: string;
+      created_at__gte?: string;
+      created_at__lte?: string;
     }
   ): Promise<PaginatedResponse<Student>> => {
     const response = await apiClient.get<PaginatedResponse<Student>>(

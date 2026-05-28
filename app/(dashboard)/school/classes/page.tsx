@@ -38,7 +38,6 @@ function ClassForm({
 		academic_year: initial?.academic_year || (years[0]?.id ?? ""),
 		name: initial?.name || "",
 		grade_level: initial?.grade_level ?? 1,
-		section: initial?.section || "",
 		max_students: initial?.max_students ?? 30,
 		room: initial?.room || rooms[0]?.id,
 		is_active: initial?.is_active ?? true,
@@ -54,7 +53,6 @@ function ClassForm({
 					academic_year: String(form.academic_year || ""),
 					name: String(form.name || ""),
 					grade_level: Number(form.grade_level ?? 1),
-					section: form.section || undefined,
 					class_teacher: form.class_teacher || undefined,
 					max_students: Number(form.max_students ?? 30),
 					room: form.room || undefined,
@@ -114,7 +112,7 @@ function ClassForm({
 			<div className="space-y-4">
 				<div>
 					<h3 className="text-sm font-semibold text-foreground mb-3">Sinf tuzilmasi</h3>
-					<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 						<div className="space-y-2">
 							<Label htmlFor="grade_level" className="text-sm font-medium">
 								Sinf darajasi <span className="text-red-500">*</span>
@@ -131,21 +129,6 @@ function ClassForm({
 								required
 							/>
 							<p className="text-xs text-muted-foreground">1 dan 11 gacha (masalan: 5)</p>
-						</div>
-
-						<div className="space-y-2">
-							<Label htmlFor="section" className="text-sm font-medium">
-								Bo'lim (ixtiyoriy)
-							</Label>
-							<Input
-								id="section"
-								placeholder="A, B, C..."
-								className="h-10 uppercase"
-								value={form.section || ""}
-								onChange={(e) => setForm((s) => ({ ...s, section: e.target.value.toUpperCase() }))}
-								maxLength={3}
-							/>
-							<p className="text-xs text-muted-foreground">Harf yoki raqam (masalan: A, B)</p>
 						</div>
 
 						<div className="space-y-2">
@@ -346,7 +329,6 @@ export default function ClassesPage() {
 												academic_year: editing?.academic_year,
 												name: editing?.name,
 												grade_level: editing?.grade_level,
-												section: editing?.section,
 												max_students: editing?.max_students,
 												room: editing?.room,
 												is_active: editing?.is_active,
@@ -541,7 +523,7 @@ export default function ClassesPage() {
 								<div className="grid grid-cols-2 gap-3 text-sm">
 									<div>
 										<p className="text-muted-foreground text-xs">Daraja</p>
-										<p className="font-medium">{cls.grade_level}{cls.section ? `-${cls.section}` : ""}</p>
+										<p className="font-medium">{cls.grade_level}</p>
 									</div>
 									<div>
 										<p className="text-muted-foreground text-xs">Xona</p>

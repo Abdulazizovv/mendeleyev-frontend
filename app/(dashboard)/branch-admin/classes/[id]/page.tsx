@@ -184,12 +184,6 @@ export default function ClassDetailPage() {
 								<div className="text-xs text-muted-foreground uppercase tracking-wide">Sinf darajasi</div>
 								<div className="text-2xl font-bold text-blue-600">{cls.grade_level}</div>
 							</div>
-							{cls.section && (
-								<div className="space-y-1">
-									<div className="text-xs text-muted-foreground uppercase tracking-wide">Bo'lim</div>
-									<div className="text-2xl font-bold text-blue-600">{cls.section}</div>
-								</div>
-							)}
 							<div className="space-y-1">
 								<div className="text-xs text-muted-foreground uppercase tracking-wide">O'quvchilar soni</div>
 								<div className="text-2xl font-bold text-green-600">{cls.current_students_count || 0} / {cls.max_students || 0}</div>

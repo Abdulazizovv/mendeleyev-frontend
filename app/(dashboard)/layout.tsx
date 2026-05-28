@@ -52,11 +52,14 @@ interface DashboardLayoutProps {
 // Nav item type
 interface NavItem {
   name: string;
-  href: string;
+  href?: string;
   icon: React.ElementType;
+  children?: NavItem[];
 }
 
 const iconMap: Record<string, React.ElementType> = {
+  "/students/archive": Award,
+  "/students/new": Users,
   "/students": GraduationCap,
   "/classes": ClipboardList,
   "/subjects": BookOpen,
@@ -188,6 +191,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const queryClient = useQueryClient();
   const { user, currentBranch, memberships, logout, isLoading, loadUser, switchBranch } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     queryClient.invalidateQueries();
@@ -241,7 +245,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         ...branchItems.map((item) => ({
           name: item.name,
           href: item.href,
-          icon: getIconForRoute(item.href),
+          icon: getIconForRoute(item.href ?? item.name),
+          children: item.children?.map((child) => ({
+            name: child.name,
+            href: child.href,
+            icon: getIconForRoute(child.href ?? child.name),
+          })),
         })),
         { name: "Sozlamalar", href: `/${rolePath}/settings`, icon: Settings },
       ];
@@ -271,13 +280,44 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     return baseItems;
   }, [role, branchType, rolePath, currentBranch]);
 
-  // Get current page name for header
+  // Auto-expand groups that contain the active route
+  useEffect(() => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      navigationItems.forEach((item) => {
+        if (item.children?.some((child) => child.href && pathname.startsWith(child.href))) {
+          next.add(item.name);
+        }
+      });
+      return next;
+    });
+  }, [pathname, navigationItems]);
+
+  // Get current page name for header (checks children too)
   const currentPageName = useMemo(() => {
-    const matched = navigationItems.find(
-      (item) =>
-        pathname === item.href ||
-        (item.href !== `/${rolePath}` && pathname.startsWith(item.href))
-    );
+    // Flatten all items including children for matching
+    const allItems: NavItem[] = [];
+    navigationItems.forEach((item) => {
+      allItems.push(item);
+      item.children?.forEach((child) => allItems.push(child));
+    });
+
+    const matched = allItems.find((item) => {
+      const href = item.href;
+      if (!href) return false;
+      if (pathname === href) return true;
+      if (href === `/${rolePath}`) return false;
+      return (
+        pathname.startsWith(href) &&
+        !allItems.some(
+          (other) =>
+            other.href &&
+            other.href !== href &&
+            pathname.startsWith(other.href) &&
+            other.href.length > href.length
+        )
+      );
+    });
     return matched?.name ?? "Dashboard";
   }, [navigationItems, pathname, rolePath]);
 
@@ -350,9 +390,99 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         {/* Navigation */}
         <nav className="flex-1 px-3 py-2 overflow-y-auto space-y-0.5">
           {navigationItems.map((item) => {
+            const hasChildren = !!item.children?.length;
+
+            if (hasChildren) {
+              const isGroupActive = item.children!.some(
+                (child) => child.href && pathname.startsWith(child.href)
+              );
+              const isOpen = expandedGroups.has(item.name);
+
+              return (
+                <div key={item.name}>
+                  <button
+                    onClick={() =>
+                      setExpandedGroups((prev) => {
+                        const next = new Set(prev);
+                        next.has(item.name) ? next.delete(item.name) : next.add(item.name);
+                        return next;
+                      })
+                    }
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                      isGroupActive
+                        ? "text-blue-600 bg-blue-50"
+                        : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                    }`}
+                  >
+                    <item.icon
+                      className={`shrink-0 ${isGroupActive ? "text-blue-500" : "text-gray-400"}`}
+                      style={{ width: 18, height: 18 }}
+                    />
+                    <span className="truncate flex-1 text-left">{item.name}</span>
+                    <ChevronDown
+                      className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${
+                        isOpen ? "rotate-180" : ""
+                      } ${isGroupActive ? "text-blue-400" : "text-gray-300"}`}
+                    />
+                  </button>
+
+                  {isOpen && (
+                    <div className="mt-0.5 ml-3 pl-3 border-l-2 border-gray-100 space-y-0.5">
+                      {item.children!.map((child) => {
+                        if (!child.href) return null;
+                        const allChildHrefs = item.children!.map((c) => c.href).filter(Boolean) as string[];
+                        const isChildActive =
+                          pathname === child.href ||
+                          (
+                            pathname.startsWith(child.href) &&
+                            !allChildHrefs.some(
+                              (other) =>
+                                other !== child.href &&
+                                pathname.startsWith(other) &&
+                                other.length > child.href!.length
+                            )
+                          );
+                        return (
+                          <Link
+                            key={child.href}
+                            href={child.href}
+                            onClick={() => setSidebarOpen(false)}
+                            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                              isChildActive
+                                ? "bg-blue-600 text-white shadow-sm shadow-blue-200"
+                                : "text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                            }`}
+                          >
+                            <child.icon
+                              className={`shrink-0 ${isChildActive ? "text-white" : "text-gray-400"}`}
+                              style={{ width: 16, height: 16 }}
+                            />
+                            <span className="truncate">{child.name}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            // Regular (non-grouped) item
+            const itemHref = item.href!;
             const isActive =
-              pathname === item.href ||
-              (item.href !== `/${rolePath}` && pathname.startsWith(item.href));
+              itemHref === `/${rolePath}`
+                ? pathname === itemHref
+                : pathname === itemHref ||
+                  (pathname.startsWith(itemHref) &&
+                    !navigationItems.some(
+                      (other) =>
+                        other.href &&
+                        other.href !== itemHref &&
+                        pathname.startsWith(other.href) &&
+                        other.href.length > itemHref.length
+                    ));
+
+            if (!item.href) return null;
             return (
               <Link
                 key={item.href}
@@ -364,7 +494,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                     : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                 }`}
               >
-                <item.icon className={`w-4.5 h-4.5 shrink-0 ${isActive ? "text-white" : "text-gray-400"}`} style={{ width: 18, height: 18 }} />
+                <item.icon
+                  className={`shrink-0 ${isActive ? "text-white" : "text-gray-400"}`}
+                  style={{ width: 18, height: 18 }}
+                />
                 <span className="truncate">{item.name}</span>
                 {isActive && <ChevronRight className="w-3.5 h-3.5 ml-auto text-blue-200" />}
               </Link>
