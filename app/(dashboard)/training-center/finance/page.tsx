@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { financeApi } from "@/lib/api";
@@ -26,6 +26,16 @@ import {
   PieChart,
 } from "lucide-react";
 
+const UZ_MONTHS = [
+  "Yanvar","Fevral","Mart","Aprel","May","Iyun",
+  "Iyul","Avgust","Sentabr","Oktabr","Noyabr","Dekabr",
+];
+const NOW = new Date();
+const MONTH_START = new Date(NOW.getFullYear(), NOW.getMonth(), 1)
+  .toISOString()
+  .split("T")[0];
+const CURRENT_MONTH_LABEL = `${UZ_MONTHS[NOW.getMonth()]} ${NOW.getFullYear()}`;
+
 export default function FinancePage() {
   const router = useRouter();
   const { currentBranch } = useAuth();
@@ -33,8 +43,8 @@ export default function FinancePage() {
 
   // Fetch statistics
   const { data: statistics, isLoading } = useQuery({
-    queryKey: ["finance-statistics", branchId],
-    queryFn: () => financeApi.getStatistics({ branch_id: branchId }),
+    queryKey: ["finance-statistics", branchId, MONTH_START],
+    queryFn: () => financeApi.getStatistics({ branch_id: branchId, start_date: MONTH_START }),
     enabled: !!branchId,
   });
 
@@ -92,6 +102,12 @@ export default function FinancePage() {
         </div>
       </div>
 
+      {/* Statistics label */}
+      <div className="flex items-center gap-2">
+        <p className="text-sm font-semibold text-gray-700">{CURRENT_MONTH_LABEL} statistikasi</p>
+        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">Shu oy</span>
+      </div>
+
       {/* Statistics Cards */}
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -115,7 +131,7 @@ export default function FinancePage() {
                 <ArrowUpRight className="w-4 h-4 text-green-500" />
               </div>
               <p className="text-xs sm:text-sm font-medium text-gray-600 mb-1">
-                Jami Kirim
+                Kirim
               </p>
               <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">
                 {formatCurrency(summary?.total_income || 0)}
@@ -133,7 +149,7 @@ export default function FinancePage() {
                 <ArrowDownRight className="w-4 h-4 text-red-500" />
               </div>
               <p className="text-xs sm:text-sm font-medium text-gray-600 mb-1">
-                Jami Chiqim
+                Chiqim
               </p>
               <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">
                 {formatCurrency(summary?.total_expense || 0)}
@@ -169,7 +185,7 @@ export default function FinancePage() {
                 <CreditCard className="w-4 h-4 text-purple-500" />
               </div>
               <p className="text-xs sm:text-sm font-medium text-gray-600 mb-1">
-                Jami To&apos;lovlar
+                To&apos;lovlar
               </p>
               <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">
                 {formatCurrency(summary?.total_payments || 0)}
@@ -207,14 +223,7 @@ export default function FinancePage() {
                     const balance = stat.income - stat.expense;
                     // Parse month - API returns ISO format: "2025-12-01T00:00:00+05:00"
                     const monthDate = new Date(stat.month);
-                    
-                    // O'zbekcha oy nomlari
-                    const uzbekMonths = [
-                      "Yanvar", "Fevral", "Mart", "Aprel", "May", "Iyun",
-                      "Iyul", "Avgust", "Sentabr", "Oktabr", "Noyabr", "Dekabr"
-                    ];
-                    
-                    const monthName = uzbekMonths[monthDate.getMonth()];
+                    const monthName = UZ_MONTHS[monthDate.getMonth()];
                     const year = monthDate.getFullYear();
                     
                     return (

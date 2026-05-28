@@ -29,10 +29,16 @@ import {
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
-const uzbekMonths = [
+const UZ_MONTHS = [
   "Yanvar","Fevral","Mart","Aprel","May","Iyun",
   "Iyul","Avgust","Sentabr","Oktabr","Noyabr","Dekabr",
 ];
+
+const NOW = new Date();
+const MONTH_START = new Date(NOW.getFullYear(), NOW.getMonth(), 1)
+  .toISOString()
+  .split("T")[0];
+const CURRENT_MONTH_LABEL = `${UZ_MONTHS[NOW.getMonth()]} ${NOW.getFullYear()}`;
 
 export default function FinancePage() {
   const router = useRouter();
@@ -40,8 +46,8 @@ export default function FinancePage() {
   const branchId = currentBranch?.branch_id;
 
   const { data: statistics, isLoading } = useQuery({
-    queryKey: ["finance-statistics", branchId],
-    queryFn: () => financeApi.getStatistics({ branch_id: branchId }),
+    queryKey: ["finance-statistics", branchId, MONTH_START],
+    queryFn: () => financeApi.getStatistics({ branch_id: branchId, start_date: MONTH_START }),
     enabled: !!branchId,
   });
 
@@ -69,7 +75,7 @@ export default function FinancePage() {
 
   const statCards = [
     {
-      label: "Jami Kirim",
+      label: "Kirim",
       value: summary?.total_income || 0,
       icon: TrendingUp,
       arrow: ArrowUpRight,
@@ -79,7 +85,7 @@ export default function FinancePage() {
       arrowColor: "text-green-500",
     },
     {
-      label: "Jami Chiqim",
+      label: "Chiqim",
       value: summary?.total_expense || 0,
       icon: TrendingDown,
       arrow: ArrowDownRight,
@@ -99,7 +105,7 @@ export default function FinancePage() {
       arrowColor: "text-blue-500",
     },
     {
-      label: "Jami To'lovlar",
+      label: "To'lovlar",
       value: summary?.total_payments || 0,
       icon: DollarSign,
       arrow: CreditCard,
@@ -131,6 +137,10 @@ export default function FinancePage() {
       </div>
 
       {/* Stats Cards */}
+      <div className="flex items-center gap-2">
+        <p className="text-sm font-semibold text-gray-700">{CURRENT_MONTH_LABEL} statistikasi</p>
+        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">Shu oy</span>
+      </div>
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
@@ -193,7 +203,7 @@ export default function FinancePage() {
                       return (
                         <tr key={i} className="border-b last:border-0 hover:bg-gray-50">
                           <td className="py-3 px-4 font-medium">
-                            {uzbekMonths[d.getMonth()]} {d.getFullYear()}
+                            {UZ_MONTHS[d.getMonth()]} {d.getFullYear()}
                           </td>
                           <td className="text-right py-3 px-4 text-green-600 font-medium">
                             {formatCurrency(stat.income)}
