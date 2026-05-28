@@ -1,15 +1,22 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import Link from "next/link";
 import {
   Building2,
   Clock,
@@ -21,13 +28,10 @@ import {
   AlertCircle,
   CheckCircle2,
   RefreshCw,
-  BookOpen,
-  Home,
-  Users,
-  FileText,
-  ChevronRight,
-  ClipboardList,
-  GraduationCap,
+  Package,
+  BarChart3,
+  BadgePercent,
+  ArrowRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -49,24 +53,49 @@ const MONTHS = [
   { value: 12, label: "Dekabr" },
 ];
 
+const financeConfigItems = [
+  {
+    label: "Kassalar",
+    description: "Naqd va karta kassalarini boshqarish",
+    href: "/school/finance/cash-registers",
+    icon: Building2,
+    color: "bg-blue-50 text-blue-600 border-blue-100",
+  },
+  {
+    label: "Abonement tariflari",
+    description: "O'quvchilar uchun to'lov rejalari",
+    href: "/school/finance/subscription-plans",
+    icon: Package,
+    color: "bg-purple-50 text-purple-600 border-purple-100",
+  },
+  {
+    label: "Kategoriyalar",
+    description: "Kirim va chiqim kategoriyalari",
+    href: "/school/finance/categories",
+    icon: BarChart3,
+    color: "bg-teal-50 text-teal-600 border-teal-100",
+  },
+  {
+    label: "Chegirmalar",
+    description: "Foiz yoki miqdor chegirmalari",
+    href: "/school/finance/discounts",
+    icon: BadgePercent,
+    color: "bg-orange-50 text-orange-600 border-orange-100",
+  },
+];
+
+
 export default function BranchSettingsPage() {
   const { currentBranch } = useAuth();
   const queryClient = useQueryClient();
   const branchId = currentBranch?.branch_id;
 
-  // Fetch branch settings
-  const {
-    data: settings,
-    isLoading,
-    error,
-    refetch,
-  } = useQuery({
+  const { data: settings, isLoading, error, refetch } = useQuery({
     queryKey: ["branch-settings", branchId],
     queryFn: () => branchApi.getBranchSettings(branchId!),
     enabled: !!branchId,
   });
 
-  // Update mutation
   const updateMutation = useMutation({
     mutationFn: (data: UpdateBranchSettingsPayload) =>
       branchApi.updateBranchSettings(branchId!, data),
@@ -75,8 +104,7 @@ export default function BranchSettingsPage() {
       toast.success("Sozlamalar muvaffaqiyatli saqlandi");
     },
     onError: (error: any) => {
-      const message = error.response?.data?.detail || "Xatolik yuz berdi";
-      toast.error(message);
+      toast.error(error.response?.data?.detail || "Xatolik yuz berdi");
     },
   });
 
@@ -99,7 +127,7 @@ export default function BranchSettingsPage() {
     salary_calculation_day: 1,
   });
 
-  const [paymentSettings, setPaymentSettings] = React.useState({
+  const [financeSettings, setFinanceSettings] = React.useState({
     late_payment_penalty_percent: "0.00",
     early_payment_discount_percent: "0.00",
   });
@@ -109,54 +137,32 @@ export default function BranchSettingsPage() {
     work_hours_per_day: 8,
   });
 
-  // Update form states when data is loaded
   React.useEffect(() => {
-    if (settings) {
-      setScheduleSettings({
-        lesson_duration_minutes: settings.lesson_duration_minutes,
-        break_duration_minutes: settings.break_duration_minutes,
-        school_start_time: settings.school_start_time,
-        school_end_time: settings.school_end_time,
-      });
-      setAcademicSettings({
-        academic_year_start_month: settings.academic_year_start_month,
-        academic_year_end_month: settings.academic_year_end_month,
-      });
-      setSalarySettings({
-        salary_calculation_time: settings.salary_calculation_time,
-        auto_calculate_salary: settings.auto_calculate_salary,
-        salary_calculation_day: settings.salary_calculation_day,
-      });
-      setPaymentSettings({
-        late_payment_penalty_percent: settings.late_payment_penalty_percent,
-        early_payment_discount_percent: settings.early_payment_discount_percent,
-      });
-      setWorkSettings({
-        work_days_per_week: settings.work_days_per_week,
-        work_hours_per_day: settings.work_hours_per_day,
-      });
-    }
+    if (!settings) return;
+    setScheduleSettings({
+      lesson_duration_minutes: settings.lesson_duration_minutes,
+      break_duration_minutes: settings.break_duration_minutes,
+      school_start_time: settings.school_start_time,
+      school_end_time: settings.school_end_time,
+    });
+    setAcademicSettings({
+      academic_year_start_month: settings.academic_year_start_month,
+      academic_year_end_month: settings.academic_year_end_month,
+    });
+    setSalarySettings({
+      salary_calculation_time: settings.salary_calculation_time,
+      auto_calculate_salary: settings.auto_calculate_salary,
+      salary_calculation_day: settings.salary_calculation_day,
+    });
+    setFinanceSettings({
+      late_payment_penalty_percent: settings.late_payment_penalty_percent,
+      early_payment_discount_percent: settings.early_payment_discount_percent,
+    });
+    setWorkSettings({
+      work_days_per_week: settings.work_days_per_week,
+      work_hours_per_day: settings.work_hours_per_day,
+    });
   }, [settings]);
-
-  const handleSaveSchedule = () => {
-    updateMutation.mutate(scheduleSettings);
-  };
-
-  const handleSaveAcademic = () => {
-    updateMutation.mutate(academicSettings);
-  };
-
-  const handleSaveSalary = () => {
-    updateMutation.mutate(salarySettings);
-  };
-
-  const handleSavePayment = () => {
-    updateMutation.mutate(paymentSettings);
-  };
-
-  const handleSaveWork = () => {
-    updateMutation.mutate(workSettings);
-  };
 
   if (!branchId) {
     return (
@@ -187,12 +193,7 @@ export default function BranchSettingsPage() {
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
             Sozlamalarni yuklashda xatolik yuz berdi
-            <Button
-              onClick={() => refetch()}
-              variant="outline"
-              size="sm"
-              className="mt-4 w-full"
-            >
+            <Button onClick={() => refetch()} variant="outline" size="sm" className="mt-4 w-full">
               <RefreshCw className="w-4 h-4 mr-2" />
               Qayta urinish
             </Button>
@@ -202,100 +203,52 @@ export default function BranchSettingsPage() {
     );
   }
 
-  const adminModules = [
-    {
-      name: "Akademik Yillar",
-      description: "O'quv yillari va choraklarni boshqarish",
-      href: "/school/academic-years",
-      icon: Calendar,
-      color: "bg-blue-50 text-blue-600 border-blue-100",
-    },
-    {
-      name: "Uy Vazifalari",
-      description: "O'quvchilarga berilgan vazifalar",
-      href: "/school/homework",
-      icon: FileText,
-      color: "bg-purple-50 text-purple-600 border-purple-100",
-    },
-    {
-      name: "Xonalar va Binolar",
-      description: "Sinf xonalari va bino boshqaruvi",
-      href: "/school/rooms",
-      icon: Home,
-      color: "bg-green-50 text-green-600 border-green-100",
-    },
-    {
-      name: "Rollar",
-      description: "Foydalanuvchi ruxsatlarini boshqarish",
-      href: "/school/roles",
-      icon: Users,
-      color: "bg-orange-50 text-orange-600 border-orange-100",
-    },
-    {
-      name: "Davomat",
-      description: "O'quvchilar davomatini boshqarish",
-      href: "/school/attendance",
-      icon: ClipboardList,
-      color: "bg-teal-50 text-teal-600 border-teal-100",
-    },
-    {
-      name: "Baholar",
-      description: "Baholar va nazorat ishlarini boshqarish",
-      href: "/school/grades",
-      icon: GraduationCap,
-      color: "bg-indigo-50 text-indigo-600 border-indigo-100",
-    },
-  ];
-
   return (
     <div className="space-y-6 pb-8">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Sozlamalar</h1>
-          <p className="text-gray-600 mt-1">
-            {settings?.branch_name} — filial konfiguratsiyasi
-          </p>
+          <p className="text-gray-600 mt-1">{settings?.branch_name} — filial konfiguratsiyasi</p>
         </div>
         <div className="flex items-center gap-2 text-sm text-gray-500">
           <CheckCircle2 className="w-4 h-4 text-green-600" />
-          <span>Oxirgi yangilanish: {new Date(settings?.updated_at || "").toLocaleString("uz-UZ")}</span>
+          <span className="hidden sm:inline">
+            Yangilanish: {new Date(settings?.updated_at || "").toLocaleString("uz-UZ")}
+          </span>
         </div>
       </div>
 
-      {/* Settings Tabs */}
       <Tabs defaultValue="schedule" className="space-y-6">
         <TabsList className="grid w-full grid-cols-5 h-auto">
-          <TabsTrigger value="schedule" className="flex items-center gap-2 py-3">
-            <Clock className="w-4 h-4" />
+          <TabsTrigger value="schedule" className="flex items-center gap-1.5 py-2.5 text-xs sm:text-sm">
+            <Clock className="w-4 h-4 shrink-0" />
             <span className="hidden sm:inline">Dars Jadvali</span>
           </TabsTrigger>
-          <TabsTrigger value="academic" className="flex items-center gap-2 py-3">
-            <Calendar className="w-4 h-4" />
+          <TabsTrigger value="academic" className="flex items-center gap-1.5 py-2.5 text-xs sm:text-sm">
+            <Calendar className="w-4 h-4 shrink-0" />
             <span className="hidden sm:inline">Akademik</span>
           </TabsTrigger>
-          <TabsTrigger value="salary" className="flex items-center gap-2 py-3">
-            <DollarSign className="w-4 h-4" />
+          <TabsTrigger value="finance" className="flex items-center gap-1.5 py-2.5 text-xs sm:text-sm">
+            <DollarSign className="w-4 h-4 shrink-0" />
+            <span className="hidden sm:inline">Moliya</span>
+          </TabsTrigger>
+          <TabsTrigger value="salary" className="flex items-center gap-1.5 py-2.5 text-xs sm:text-sm">
+            <Briefcase className="w-4 h-4 shrink-0" />
             <span className="hidden sm:inline">Maosh</span>
           </TabsTrigger>
-          <TabsTrigger value="payment" className="flex items-center gap-2 py-3">
-            <Building2 className="w-4 h-4" />
-            <span className="hidden sm:inline">To'lovlar</span>
-          </TabsTrigger>
-          <TabsTrigger value="work" className="flex items-center gap-2 py-3">
-            <Briefcase className="w-4 h-4" />
+          <TabsTrigger value="work" className="flex items-center gap-1.5 py-2.5 text-xs sm:text-sm">
+            <Building2 className="w-4 h-4 shrink-0" />
             <span className="hidden sm:inline">Ish Vaqti</span>
           </TabsTrigger>
         </TabsList>
 
-        {/* Schedule Settings */}
+        {/* ── Schedule ── */}
         <TabsContent value="schedule" className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle>Dars Jadvali Sozlamalari</CardTitle>
-              <CardDescription>
-                Dars va tanaffus davomiyligini, maktab ish vaqtini sozlang
-              </CardDescription>
+              <CardDescription>Dars va tanaffus davomiyligini, maktab ish vaqtini sozlang</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -308,10 +261,7 @@ export default function BranchSettingsPage() {
                     max="90"
                     value={scheduleSettings.lesson_duration_minutes}
                     onChange={(e) =>
-                      setScheduleSettings({
-                        ...scheduleSettings,
-                        lesson_duration_minutes: parseInt(e.target.value),
-                      })
+                      setScheduleSettings({ ...scheduleSettings, lesson_duration_minutes: parseInt(e.target.value) })
                     }
                   />
                   <p className="text-xs text-gray-500">Standart: 45 daqiqa</p>
@@ -326,10 +276,7 @@ export default function BranchSettingsPage() {
                     max="30"
                     value={scheduleSettings.break_duration_minutes}
                     onChange={(e) =>
-                      setScheduleSettings({
-                        ...scheduleSettings,
-                        break_duration_minutes: parseInt(e.target.value),
-                      })
+                      setScheduleSettings({ ...scheduleSettings, break_duration_minutes: parseInt(e.target.value) })
                     }
                   />
                   <p className="text-xs text-gray-500">Standart: 10 daqiqa</p>
@@ -349,7 +296,6 @@ export default function BranchSettingsPage() {
                       })
                     }
                   />
-                  <p className="text-xs text-gray-500">HH:MM formatida</p>
                 </div>
 
                 <div className="space-y-2">
@@ -366,33 +312,26 @@ export default function BranchSettingsPage() {
                       })
                     }
                   />
-                  <p className="text-xs text-gray-500">HH:MM formatida</p>
                 </div>
               </div>
 
               <Alert>
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  Dars jadvali sozlamalari avtomatik ravishda barcha yangi dars jadvallariga qo'llaniladi
+                  Dars jadvali sozlamalari avtomatik ravishda barcha yangi dars jadvallariga qo&apos;llaniladi
                 </AlertDescription>
               </Alert>
 
               <div className="flex justify-end">
                 <Button
-                  onClick={handleSaveSchedule}
+                  onClick={() => updateMutation.mutate(scheduleSettings)}
                   disabled={updateMutation.isPending}
                   className="bg-blue-600 hover:bg-blue-700"
                 >
                   {updateMutation.isPending ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Saqlanmoqda...
-                    </>
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saqlanmoqda...</>
                   ) : (
-                    <>
-                      <Save className="w-4 h-4 mr-2" />
-                      Saqlash
-                    </>
+                    <><Save className="w-4 h-4 mr-2" />Saqlash</>
                   )}
                 </Button>
               </div>
@@ -400,85 +339,75 @@ export default function BranchSettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* Academic Settings */}
+        {/* ── Academic ── */}
         <TabsContent value="academic" className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle>Akademik Yil Sozlamalari</CardTitle>
-              <CardDescription>
-                O'quv yilining boshlanish va tugash oylarini belgilang
-              </CardDescription>
+              <CardDescription>O&apos;quv yilining boshlanish va tugash oylarini belgilang</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="yearStart">Akademik yil boshlanish oyi</Label>
-                  <select
-                    id="yearStart"
-                    className="w-full h-10 px-3 rounded-md border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    value={academicSettings.academic_year_start_month}
-                    onChange={(e) =>
-                      setAcademicSettings({
-                        ...academicSettings,
-                        academic_year_start_month: parseInt(e.target.value),
-                      })
+                  <Label>Akademik yil boshlanish oyi</Label>
+                  <Select
+                    value={String(academicSettings.academic_year_start_month)}
+                    onValueChange={(v) =>
+                      setAcademicSettings({ ...academicSettings, academic_year_start_month: parseInt(v) })
                     }
                   >
-                    {MONTHS.map((month) => (
-                      <option key={month.value} value={month.value}>
-                        {month.label}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MONTHS.map((m) => (
+                        <SelectItem key={m.value} value={String(m.value)}>
+                          {m.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <p className="text-xs text-gray-500">Standart: Sentabr</p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="yearEnd">Akademik yil tugash oyi</Label>
-                  <select
-                    id="yearEnd"
-                    className="w-full h-10 px-3 rounded-md border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    value={academicSettings.academic_year_end_month}
-                    onChange={(e) =>
-                      setAcademicSettings({
-                        ...academicSettings,
-                        academic_year_end_month: parseInt(e.target.value),
-                      })
+                  <Label>Akademik yil tugash oyi</Label>
+                  <Select
+                    value={String(academicSettings.academic_year_end_month)}
+                    onValueChange={(v) =>
+                      setAcademicSettings({ ...academicSettings, academic_year_end_month: parseInt(v) })
                     }
                   >
-                    {MONTHS.map((month) => (
-                      <option key={month.value} value={month.value}>
-                        {month.label}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MONTHS.map((m) => (
+                        <SelectItem key={m.value} value={String(m.value)}>
+                          {m.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <p className="text-xs text-gray-500">Standart: Iyun</p>
                 </div>
               </div>
 
               <Alert>
                 <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  Bu sozlamalar yangi akademik yillar yaratishda foydalaniladi
-                </AlertDescription>
+                <AlertDescription>Bu sozlamalar yangi akademik yillar yaratishda foydalaniladi</AlertDescription>
               </Alert>
 
               <div className="flex justify-end">
                 <Button
-                  onClick={handleSaveAcademic}
+                  onClick={() => updateMutation.mutate(academicSettings)}
                   disabled={updateMutation.isPending}
                   className="bg-blue-600 hover:bg-blue-700"
                 >
                   {updateMutation.isPending ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Saqlanmoqda...
-                    </>
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saqlanmoqda...</>
                   ) : (
-                    <>
-                      <Save className="w-4 h-4 mr-2" />
-                      Saqlash
-                    </>
+                    <><Save className="w-4 h-4 mr-2" />Saqlash</>
                   )}
                 </Button>
               </div>
@@ -486,14 +415,136 @@ export default function BranchSettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* Salary Settings */}
+        {/* ── Finance (new) ── */}
+        <TabsContent value="finance" className="space-y-6">
+          {/* Currency info */}
+          <Card className="border-gray-200 bg-gray-50">
+            <CardHeader>
+              <CardTitle className="text-base">Valyuta Ma&apos;lumotlari</CardTitle>
+              <CardDescription>Tizim tomonidan boshqariladi</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-gray-500 text-xs">Valyuta kodi</Label>
+                  <p className="text-lg font-bold text-gray-900 mt-1">{settings?.currency || "UZS"}</p>
+                </div>
+                <div>
+                  <Label className="text-gray-500 text-xs">Valyuta belgisi</Label>
+                  <p className="text-lg font-bold text-gray-900 mt-1">{settings?.currency_symbol || "so'm"}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Payment penalty / discount */}
+          <Card>
+            <CardHeader>
+              <CardTitle>To&apos;lov Sozlamalari</CardTitle>
+              <CardDescription>Kechikish jarimasi va erta to&apos;lash chegirmasi</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="lateFee">Kechikish jarimasi (%)</Label>
+                  <Input
+                    id="lateFee"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    value={financeSettings.late_payment_penalty_percent}
+                    onChange={(e) =>
+                      setFinanceSettings({ ...financeSettings, late_payment_penalty_percent: e.target.value })
+                    }
+                  />
+                  <p className="text-xs text-gray-500">Muddatidan keyin to&apos;lansa qo&apos;llaniladigan jarima</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="earlyDiscount">Erta to&apos;lash chegirmasi (%)</Label>
+                  <Input
+                    id="earlyDiscount"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    value={financeSettings.early_payment_discount_percent}
+                    onChange={(e) =>
+                      setFinanceSettings({ ...financeSettings, early_payment_discount_percent: e.target.value })
+                    }
+                  />
+                  <p className="text-xs text-gray-500">Muddatidan oldin to&apos;lansa beriladigan chegirma</p>
+                </div>
+              </div>
+
+              <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
+                <h4 className="font-medium text-blue-900 mb-2 text-sm">Hisoblash namunasi (1 000 000 so&apos;m)</h4>
+                <div className="text-sm text-blue-800 space-y-1">
+                  <p>
+                    Kechikish jarimasi:{" "}
+                    <span className="font-semibold">
+                      +{(1000000 * parseFloat(financeSettings.late_payment_penalty_percent || "0") / 100).toLocaleString()} so&apos;m
+                    </span>
+                  </p>
+                  <p>
+                    Erta to&apos;lash chegirmasi:{" "}
+                    <span className="font-semibold">
+                      -{(1000000 * parseFloat(financeSettings.early_payment_discount_percent || "0") / 100).toLocaleString()} so&apos;m
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end">
+                <Button
+                  onClick={() => updateMutation.mutate(financeSettings)}
+                  disabled={updateMutation.isPending}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  {updateMutation.isPending ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saqlanmoqda...</>
+                  ) : (
+                    <><Save className="w-4 h-4 mr-2" />Saqlash</>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Finance config links */}
+          <div>
+            <h3 className="font-semibold text-gray-900 mb-1">Moliya konfiguratsiyasi</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Kassalar, abonement tariflari, kategoriyalar va chegirmalarni boshqaring
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {financeConfigItems.map((item) => (
+                <Link key={item.href} href={item.href}>
+                  <Card className="hover:shadow-md transition-shadow cursor-pointer border-gray-200 hover:border-blue-200">
+                    <CardContent className="flex items-center gap-4 p-4">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${item.color}`}>
+                        <item.icon className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 text-sm">{item.label}</p>
+                        <p className="text-xs text-gray-500 truncate">{item.description}</p>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-gray-300 shrink-0" />
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* ── Salary ── */}
         <TabsContent value="salary" className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle>Maosh Hisoblash Sozlamalari</CardTitle>
-              <CardDescription>
-                Avtomatik maosh hisoblash va to'lash parametrlari
-              </CardDescription>
+              <CardDescription>Avtomatik maosh hisoblash va to&apos;lash parametrlari</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -515,7 +566,7 @@ export default function BranchSettingsPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="salaryDay">Maosh to'lash kuni (oyning)</Label>
+                  <Label htmlFor="salaryDay">Maosh to&apos;lash kuni (oyning)</Label>
                   <Input
                     id="salaryDay"
                     type="number"
@@ -523,19 +574,16 @@ export default function BranchSettingsPage() {
                     max="31"
                     value={salarySettings.salary_calculation_day}
                     onChange={(e) =>
-                      setSalarySettings({
-                        ...salarySettings,
-                        salary_calculation_day: parseInt(e.target.value),
-                      })
+                      setSalarySettings({ ...salarySettings, salary_calculation_day: parseInt(e.target.value) })
                     }
                   />
-                  <p className="text-xs text-gray-500">1-31 oralig'ida</p>
+                  <p className="text-xs text-gray-500">1–31 oralig&apos;ida</p>
                 </div>
               </div>
 
               <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                 <div className="space-y-1">
-                  <Label htmlFor="autoCalculate" className="text-base">
+                  <Label htmlFor="autoCalculate" className="text-base cursor-pointer">
                     Avtomatik maosh hisoblash
                   </Label>
                   <p className="text-sm text-gray-600">
@@ -545,11 +593,8 @@ export default function BranchSettingsPage() {
                 <Switch
                   id="autoCalculate"
                   checked={salarySettings.auto_calculate_salary}
-                  onCheckedChange={(checked: boolean) =>
-                    setSalarySettings({
-                      ...salarySettings,
-                      auto_calculate_salary: checked,
-                    })
+                  onCheckedChange={(checked) =>
+                    setSalarySettings({ ...salarySettings, auto_calculate_salary: checked })
                   }
                 />
               </div>
@@ -557,26 +602,20 @@ export default function BranchSettingsPage() {
               <Alert>
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  Avtomatik hisoblash o'chirilgan bo'lsa, faqat qo'lda maosh qo'shish mumkin
+                  Avtomatik hisoblash o&apos;chirilgan bo&apos;lsa, faqat qo&apos;lda maosh qo&apos;shish mumkin
                 </AlertDescription>
               </Alert>
 
               <div className="flex justify-end">
                 <Button
-                  onClick={handleSaveSalary}
+                  onClick={() => updateMutation.mutate(salarySettings)}
                   disabled={updateMutation.isPending}
                   className="bg-blue-600 hover:bg-blue-700"
                 >
                   {updateMutation.isPending ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Saqlanmoqda...
-                    </>
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saqlanmoqda...</>
                   ) : (
-                    <>
-                      <Save className="w-4 h-4 mr-2" />
-                      Saqlash
-                    </>
+                    <><Save className="w-4 h-4 mr-2" />Saqlash</>
                   )}
                 </Button>
               </div>
@@ -584,112 +623,12 @@ export default function BranchSettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* Payment Settings */}
-        <TabsContent value="payment" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>To'lov Sozlamalari</CardTitle>
-              <CardDescription>
-                Jarima va chegirma parametrlari
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="lateFee">Kechikish jarimasi (%)</Label>
-                  <Input
-                    id="lateFee"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    max="100"
-                    value={paymentSettings.late_payment_penalty_percent}
-                    onChange={(e) =>
-                      setPaymentSettings({
-                        ...paymentSettings,
-                        late_payment_penalty_percent: e.target.value,
-                      })
-                    }
-                  />
-                  <p className="text-xs text-gray-500">
-                    Muddatidan keyin to'lansa qo'llaniladigan jarima
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="earlyDiscount">Erta to'lash chegirmasi (%)</Label>
-                  <Input
-                    id="earlyDiscount"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    max="100"
-                    value={paymentSettings.early_payment_discount_percent}
-                    onChange={(e) =>
-                      setPaymentSettings({
-                        ...paymentSettings,
-                        early_payment_discount_percent: e.target.value,
-                      })
-                    }
-                  />
-                  <p className="text-xs text-gray-500">
-                    Muddatidan oldin to'lansa beriladigan chegirma
-                  </p>
-                </div>
-              </div>
-
-              <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                <h4 className="font-medium text-blue-900 mb-2">Hisoblash namunasi</h4>
-                <div className="text-sm text-blue-800 space-y-1">
-                  <p>
-                    • To'lov: 1,000,000 so'm
-                  </p>
-                  <p>
-                    • Kechikish jarimasi ({paymentSettings.late_payment_penalty_percent}%):{" "}
-                    <span className="font-semibold">
-                      {(1000000 * parseFloat(paymentSettings.late_payment_penalty_percent || "0") / 100).toLocaleString()} so'm
-                    </span>
-                  </p>
-                  <p>
-                    • Erta to'lash chegirmasi ({paymentSettings.early_payment_discount_percent}%):{" "}
-                    <span className="font-semibold">
-                      {(1000000 * parseFloat(paymentSettings.early_payment_discount_percent || "0") / 100).toLocaleString()} so'm
-                    </span>
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex justify-end">
-                <Button
-                  onClick={handleSavePayment}
-                  disabled={updateMutation.isPending}
-                  className="bg-blue-600 hover:bg-blue-700"
-                >
-                  {updateMutation.isPending ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Saqlanmoqda...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-4 h-4 mr-2" />
-                      Saqlash
-                    </>
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Work Settings */}
+        {/* ── Work ── */}
         <TabsContent value="work" className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle>Ish Vaqti Sozlamalari</CardTitle>
-              <CardDescription>
-                Xodimlar ish vaqti va kunlarini belgilang
-              </CardDescription>
+              <CardDescription>Xodimlar ish vaqti va kunlarini belgilang</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -702,13 +641,10 @@ export default function BranchSettingsPage() {
                     max="7"
                     value={workSettings.work_days_per_week}
                     onChange={(e) =>
-                      setWorkSettings({
-                        ...workSettings,
-                        work_days_per_week: parseInt(e.target.value),
-                      })
+                      setWorkSettings({ ...workSettings, work_days_per_week: parseInt(e.target.value) })
                     }
                   />
-                  <p className="text-xs text-gray-500">1-7 oralig'ida</p>
+                  <p className="text-xs text-gray-500">1–7 oralig&apos;ida</p>
                 </div>
 
                 <div className="space-y-2">
@@ -720,10 +656,7 @@ export default function BranchSettingsPage() {
                     max="24"
                     value={workSettings.work_hours_per_day}
                     onChange={(e) =>
-                      setWorkSettings({
-                        ...workSettings,
-                        work_hours_per_day: parseInt(e.target.value),
-                      })
+                      setWorkSettings({ ...workSettings, work_hours_per_day: parseInt(e.target.value) })
                     }
                   />
                   <p className="text-xs text-gray-500">Standart: 8 soat</p>
@@ -731,16 +664,16 @@ export default function BranchSettingsPage() {
               </div>
 
               <div className="p-4 bg-gray-50 rounded-lg">
-                <h4 className="font-medium text-gray-900 mb-2">Hisoblash</h4>
+                <h4 className="font-medium text-gray-900 mb-2 text-sm">Hisoblash</h4>
                 <div className="text-sm text-gray-700 space-y-1">
                   <p>
-                    • Haftalik ish soatlari:{" "}
+                    Haftalik ish soatlari:{" "}
                     <span className="font-semibold">
                       {workSettings.work_days_per_week * workSettings.work_hours_per_day} soat
                     </span>
                   </p>
                   <p>
-                    • Oylik ish soatlari (4.3 hafta):{" "}
+                    Oylik ish soatlari (4.3 hafta):{" "}
                     <span className="font-semibold">
                       {Math.round(workSettings.work_days_per_week * workSettings.work_hours_per_day * 4.3)} soat
                     </span>
@@ -757,20 +690,14 @@ export default function BranchSettingsPage() {
 
               <div className="flex justify-end">
                 <Button
-                  onClick={handleSaveWork}
+                  onClick={() => updateMutation.mutate(workSettings)}
                   disabled={updateMutation.isPending}
                   className="bg-blue-600 hover:bg-blue-700"
                 >
                   {updateMutation.isPending ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Saqlanmoqda...
-                    </>
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saqlanmoqda...</>
                   ) : (
-                    <>
-                      <Save className="w-4 h-4 mr-2" />
-                      Saqlash
-                    </>
+                    <><Save className="w-4 h-4 mr-2" />Saqlash</>
                   )}
                 </Button>
               </div>
@@ -778,54 +705,6 @@ export default function BranchSettingsPage() {
           </Card>
         </TabsContent>
       </Tabs>
-
-      {/* Admin Modules */}
-      <div className="space-y-3">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">Boshqaruv bo'limlari</h2>
-          <p className="text-sm text-gray-500">Tez-tez o'zgarmaydigan tizim sozlamalari</p>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {adminModules.map((mod) => (
-            <Link key={mod.href} href={mod.href}>
-              <Card className="hover:shadow-md transition-shadow cursor-pointer border-gray-200 hover:border-blue-200">
-                <CardContent className="flex items-center gap-4 p-4">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${mod.color}`}>
-                    <mod.icon className="w-5 h-5" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900 text-sm">{mod.name}</p>
-                    <p className="text-xs text-gray-500 truncate">{mod.description}</p>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      </div>
-
-      {/* Currency Info (Read-only) */}
-      <Card className="border-gray-200 bg-gray-50">
-        <CardHeader>
-          <CardTitle className="text-lg">Valyuta Ma'lumotlari</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label className="text-gray-600">Valyuta kodi</Label>
-              <p className="text-lg font-semibold text-gray-900">{settings?.currency}</p>
-            </div>
-            <div>
-              <Label className="text-gray-600">Valyuta belgisi</Label>
-              <p className="text-lg font-semibold text-gray-900">{settings?.currency_symbol}</p>
-            </div>
-          </div>
-          <p className="text-xs text-gray-500 mt-4">
-            Valyuta sozlamalari tizim tomonidan boshqariladi va o'zgartirilmaydi
-          </p>
-        </CardContent>
-      </Card>
     </div>
   );
 }

@@ -1,382 +1,256 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { financeApi } from "@/lib/api";
 import { useAuth } from "@/lib/hooks";
-import { formatCurrency } from "@/lib/utils";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { formatCurrency, cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  ArrowLeft,
   Search,
-  Download,
+  Wallet,
   TrendingUp,
   TrendingDown,
-  Wallet,
-  Users,
   RefreshCw,
+  X,
 } from "lucide-react";
+import { BalanceDetailSheet } from "@/components/finance/balances/BalanceDetailSheet";
+import { PaymentDetailSheet } from "@/components/finance/payments/PaymentDetailSheet";
+import { PaymentModal } from "@/components/finance/payments/PaymentModal";
+import type { StudentBalance, Payment } from "@/types/finance";
+
+function getInitials(name: string) {
+  return name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
+}
 
 export default function StudentBalancesPage() {
-  const router = useRouter();
   const { currentBranch } = useAuth();
   const branchId = currentBranch?.branch_id;
 
-  const [searchQuery, setSearchQuery] = useState("");
-  const [ordering, setOrdering] = useState("-balance");
+  const [search, setSearch] = useState("");
+  const [sortAsc, setSortAsc] = useState(false);
+  const [selectedBalance, setSelectedBalance] = useState<StudentBalance | null>(null);
+  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
+  const [paymentOpen, setPaymentOpen] = useState(false);
 
-  // Fetch student balances
-  const { data: balancesData, isLoading, refetch } = useQuery({
-    queryKey: ["student-balances", branchId, searchQuery, ordering],
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["student-balances", branchId, search, sortAsc],
     queryFn: () =>
       financeApi.getStudentBalances({
         branch_id: branchId,
-        search: searchQuery || undefined,
-        ordering: ordering,
+        search: search || undefined,
+        ordering: sortAsc ? "balance" : "-balance",
       }),
     enabled: !!branchId,
   });
 
-  const balances = balancesData?.results || [];
+  const balances = data?.results || [];
 
-  // Calculate summary statistics
-  const summary = balances.reduce(
-    (acc, balance) => {
-      acc.totalBalance += balance.balance;
-      if (balance.balance > 0) {
-        acc.positiveCount += 1;
-        acc.positiveBalance += balance.balance;
-      } else if (balance.balance < 0) {
-        acc.negativeCount += 1;
-        acc.negativeBalance += balance.balance;
+  const stats = balances.reduce(
+    (acc, b) => {
+      if (b.balance > 0) {
+        acc.pos++;
+        acc.posSum += b.balance;
+      } else if (b.balance < 0) {
+        acc.neg++;
+        acc.negSum += b.balance;
       } else {
-        acc.zeroCount += 1;
+        acc.zero++;
       }
       return acc;
     },
-    {
-      totalBalance: 0,
-      positiveCount: 0,
-      positiveBalance: 0,
-      negativeCount: 0,
-      negativeBalance: 0,
-      zeroCount: 0,
-    }
+    { pos: 0, posSum: 0, neg: 0, negSum: 0, zero: 0 }
   );
 
-  const getBalanceBadge = (balance: number) => {
-    if (balance > 0) {
-      return (
-        <Badge className="bg-green-100 text-green-700 hover:bg-green-200">
-          {formatCurrency(balance)}
-        </Badge>
-      );
-    } else if (balance < 0) {
-      return (
-        <Badge className="bg-red-100 text-red-700 hover:bg-red-200">
-          {formatCurrency(balance)}
-        </Badge>
-      );
-    }
-    return (
-      <Badge variant="secondary" className="bg-gray-100 text-gray-700">
-        {formatCurrency(balance)}
-      </Badge>
-    );
-  };
+  function handleAddPayment() {
+    setSelectedBalance(null);
+    setPaymentOpen(true);
+  }
 
   return (
-    <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-        <div className="flex items-center gap-3 sm:gap-4">
+    <>
+      <div className="space-y-4 p-4 md:p-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">
+              O&apos;quvchi balanslari
+            </h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {!isLoading && `${data?.count ?? balances.length} ta o'quvchi`}
+            </p>
+          </div>
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => router.push("/school/finance")}
-            className="shrink-0"
-          >
-            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-          </Button>
-          <div>
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">
-              O&apos;quvchilar Balanslari
-            </h1>
-            <p className="text-sm sm:text-base text-muted-foreground mt-1">
-              Barcha o&apos;quvchilar moliyaviy holati
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            size="icon"
             onClick={() => refetch()}
-            className="shrink-0"
+            className="w-8 h-8"
           >
-            <RefreshCw className="w-4 h-4" />
-          </Button>
-          <Button variant="outline" className="gap-2">
-            <Download className="w-4 h-4" />
-            Eksport
+            <RefreshCw className="w-3.5 h-3.5" />
           </Button>
         </div>
-      </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        <Card className="border-t-4 border-t-blue-500">
-          <CardContent className="p-4 sm:p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs sm:text-sm text-gray-600 mb-1">Umumiy Balans</p>
-                <p className="text-xl sm:text-2xl font-bold text-blue-600">
-                  {formatCurrency(summary.totalBalance)}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {balances.length} ta o&apos;quvchi
-                </p>
-              </div>
-              <div className="p-3 bg-blue-100 rounded-lg">
-                <Wallet className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
-              </div>
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-green-50 border border-green-100 rounded-xl p-3 flex items-center gap-3">
+            <div className="p-1.5 bg-green-100 rounded-lg shrink-0">
+              <TrendingUp className="w-4 h-4 text-green-600" />
             </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-t-4 border-t-green-500">
-          <CardContent className="p-4 sm:p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs sm:text-sm text-gray-600 mb-1">Ijobiy Balans</p>
-                <p className="text-xl sm:text-2xl font-bold text-green-600">
-                  {formatCurrency(summary.positiveBalance)}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {summary.positiveCount} ta o&apos;quvchi
-                </p>
-              </div>
-              <div className="p-3 bg-green-100 rounded-lg">
-                <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-t-4 border-t-red-500">
-          <CardContent className="p-4 sm:p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs sm:text-sm text-gray-600 mb-1">Salbiy Balans</p>
-                <p className="text-xl sm:text-2xl font-bold text-red-600">
-                  {formatCurrency(summary.negativeBalance)}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {summary.negativeCount} ta o&apos;quvchi
-                </p>
-              </div>
-              <div className="p-3 bg-red-100 rounded-lg">
-                <TrendingDown className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-t-4 border-t-gray-500">
-          <CardContent className="p-4 sm:p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs sm:text-sm text-gray-600 mb-1">Nol Balans</p>
-                <p className="text-xl sm:text-2xl font-bold text-gray-600">
-                  {summary.zeroCount}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  ta o&apos;quvchi
-                </p>
-              </div>
-              <div className="p-3 bg-gray-100 rounded-lg">
-                <Users className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filters */}
-      <Card>
-        <CardContent className="p-4 sm:p-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div className="sm:col-span-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  placeholder="Ism yoki shaxsiy raqam..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-2">
-              <Button
-                variant={ordering === "-balance" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setOrdering("-balance")}
-                className="flex-1"
-              >
-                Balans ↓
-              </Button>
-              <Button
-                variant={ordering === "balance" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setOrdering("balance")}
-                className="flex-1"
-              >
-                Balans ↑
-              </Button>
-            </div>
-
-            <div className="flex gap-2">
-              <Button
-                variant={ordering === "student_name" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setOrdering("student_name")}
-                className="flex-1"
-              >
-                Ism A-Z
-              </Button>
-              <Button
-                variant={ordering === "-created_at" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setOrdering("-created_at")}
-                className="flex-1"
-              >
-                Yangi
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Balances Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base sm:text-lg">
-            O&apos;quvchilar Ro&apos;yxati
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <p className="text-gray-600">Yuklanmoqda...</p>
-            </div>
-          ) : balances.length === 0 ? (
-            <div className="text-center py-12">
-              <Wallet className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500 mb-2">O&apos;quvchilar topilmadi</p>
-              <p className="text-sm text-gray-400">
-                Filtrlarni o&apos;zgartiring yoki yangi o&apos;quvchi qo&apos;shing
+            <div className="min-w-0">
+              <p className="text-xs text-green-600 font-medium">
+                {stats.pos} ta ijobiy
+              </p>
+              <p className="text-sm font-bold text-green-700 truncate">
+                {formatCurrency(stats.posSum)}
               </p>
             </div>
+          </div>
+          <div className="bg-red-50 border border-red-100 rounded-xl p-3 flex items-center gap-3">
+            <div className="p-1.5 bg-red-100 rounded-lg shrink-0">
+              <TrendingDown className="w-4 h-4 text-red-600" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-red-600 font-medium">
+                {stats.neg} ta salbiy
+              </p>
+              <p className="text-sm font-bold text-red-700 truncate">
+                {formatCurrency(stats.negSum)}
+              </p>
+            </div>
+          </div>
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex items-center gap-3">
+            <div className="p-1.5 bg-gray-100 rounded-lg shrink-0">
+              <Wallet className="w-4 h-4 text-gray-500" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 font-medium">
+                {stats.zero} ta nol
+              </p>
+              <p className="text-sm font-bold text-gray-600">Balansiz</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Search + sort */}
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Input
+              placeholder="Ism yoki shaxsiy raqam..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 h-9 text-sm"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          <button
+            onClick={() => setSortAsc(!sortAsc)}
+            className="px-3 h-9 text-xs font-medium rounded-lg border bg-white text-gray-600 border-gray-200 hover:border-gray-300 transition-colors whitespace-nowrap"
+          >
+            Balans {sortAsc ? "↑" : "↓"}
+          </button>
+        </div>
+
+        {/* List */}
+        <div className="bg-white border rounded-xl overflow-hidden">
+          {isLoading ? (
+            <div className="py-16 text-center">
+              <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+              <p className="text-sm text-gray-500">Yuklanmoqda...</p>
+            </div>
+          ) : balances.length === 0 ? (
+            <div className="py-16 text-center">
+              <Wallet className="w-12 h-12 text-gray-200 mx-auto mb-3" />
+              <p className="text-sm text-gray-500">O&apos;quvchilar topilmadi</p>
+            </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="whitespace-nowrap">O&apos;quvchi</TableHead>
-                    <TableHead className="whitespace-nowrap">Shaxsiy Raqam</TableHead>
-                    <TableHead className="whitespace-nowrap text-right">Balans</TableHead>
-                    <TableHead className="whitespace-nowrap">Eslatma</TableHead>
-                    <TableHead className="whitespace-nowrap">So&apos;nggi Yangilanish</TableHead>
-                    <TableHead className="whitespace-nowrap">Amallar</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {balances.map((balance) => (
-                    <TableRow
-                      key={balance.id}
-                      className="hover:bg-gray-50"
-                    >
-                      <TableCell>
-                        <p className="font-medium text-gray-900">
-                          {balance.student_name}
-                        </p>
-                      </TableCell>
-                      <TableCell>
-                        <code className="text-xs bg-gray-100 px-2 py-1 rounded">
-                          {balance.student_personal_number}
-                        </code>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {getBalanceBadge(balance.balance)}
-                      </TableCell>
-                      <TableCell>
-                        {balance.notes ? (
-                          <p className="text-sm text-gray-600 max-w-xs truncate">
-                            {balance.notes}
-                          </p>
-                        ) : (
-                          <span className="text-gray-400">-</span>
+            <div className="divide-y">
+              {balances.map((b) => {
+                const pos = b.balance > 0;
+                const neg = b.balance < 0;
+                return (
+                  <div
+                    key={b.id}
+                    onClick={() => setSelectedBalance(b)}
+                    className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 cursor-pointer transition-colors"
+                  >
+                    <Avatar className="w-9 h-9 shrink-0">
+                      <AvatarFallback
+                        className={cn(
+                          "text-xs font-semibold",
+                          pos
+                            ? "bg-green-100 text-green-700"
+                            : neg
+                            ? "bg-red-100 text-red-700"
+                            : "bg-gray-100 text-gray-500"
                         )}
-                      </TableCell>
-                      <TableCell>
-                        <p className="text-sm text-gray-600">
-                          {new Date(balance.updated_at).toLocaleDateString("uz-UZ", {
-                            year: "numeric",
-                            month: "short",
-                            day: "numeric",
-                          })}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {new Date(balance.updated_at).toLocaleTimeString("uz-UZ", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </p>
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() =>
-                            router.push(`/school/finance/student-balances/${balance.id}`)
-                          }
-                        >
-                          Ko&apos;rish
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                      >
+                        {getInitials(b.student_name)}
+                      </AvatarFallback>
+                    </Avatar>
+
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {b.student_name}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {b.student_personal_number}
+                      </p>
+                    </div>
+
+                    <span
+                      className={cn(
+                        "text-sm font-bold shrink-0",
+                        pos
+                          ? "text-green-600"
+                          : neg
+                          ? "text-red-600"
+                          : "text-gray-400"
+                      )}
+                    >
+                      {pos && "+"}
+                      {formatCurrency(b.balance)}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Pagination Info */}
-      {balancesData && balancesData.count > balances.length && (
-        <Card>
-          <CardContent className="p-4 text-center text-sm text-gray-600">
-            Ko&apos;rsatilgan: {balances.length} / {balancesData.count}
-          </CardContent>
-        </Card>
-      )}
-    </div>
+        {data && data.count > balances.length && (
+          <p className="text-center text-xs text-gray-400">
+            Ko&apos;rsatilgan: {balances.length} / {data.count}
+          </p>
+        )}
+      </div>
+
+      <BalanceDetailSheet
+        balance={selectedBalance}
+        onClose={() => setSelectedBalance(null)}
+        onPaymentClick={setSelectedPayment}
+        onAddPayment={handleAddPayment}
+      />
+
+      <PaymentDetailSheet
+        payment={selectedPayment}
+        onClose={() => setSelectedPayment(null)}
+      />
+
+      <PaymentModal
+        open={paymentOpen}
+        onClose={() => setPaymentOpen(false)}
+        onSuccess={() => refetch()}
+      />
+    </>
   );
 }

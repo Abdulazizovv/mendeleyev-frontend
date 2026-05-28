@@ -1,22 +1,13 @@
 "use client";
 
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { financeApi } from "@/lib/api";
 import { useAuth } from "@/lib/hooks";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, fmtDateTime } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  ArrowLeft,
-  TrendingUp,
-  TrendingDown,
-  Search,
-  Download,
-  Receipt,
-} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -26,191 +17,236 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { TRANSACTION_TYPE_LABELS, PAYMENT_METHOD_LABELS } from "@/types/finance";
-import CreateIncomeModal from "@/components/finance/transactions/CreateIncomeModal";
-import CreateExpenseModal from "@/components/finance/transactions/CreateExpenseModal";
+  TrendingUp,
+  TrendingDown,
+  Search,
+  Download,
+  Receipt,
+  Plus,
+  X,
+  Calendar,
+  ArrowUpRight,
+  ArrowDownRight,
+  RefreshCw,
+} from "lucide-react";
+import { TransactionModal } from "@/components/finance/transactions/TransactionModal";
+import { TransactionDetailSheet } from "@/components/finance/transactions/TransactionDetailSheet";
 import { ExportModal } from "@/components/finance/ExportModal";
+import { cn } from "@/lib/utils";
+import type { Transaction, TransactionType } from "@/types/finance";
+
+const TYPE_LABELS: Record<string, string> = {
+  income: "Kirim",
+  expense: "Chiqim",
+  payment: "To'lov",
+  salary: "Maosh",
+  transfer: "O'tkazma",
+  refund: "Qaytarish",
+};
+
+const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
+  completed: { label: "Bajarilgan", cls: "bg-green-100 text-green-800 border-green-200" },
+  pending: { label: "Kutilmoqda", cls: "bg-yellow-100 text-yellow-800 border-yellow-200" },
+  cancelled: { label: "Bekor", cls: "bg-gray-100 text-gray-700 border-gray-200" },
+  failed: { label: "Xatolik", cls: "bg-red-100 text-red-800 border-red-200" },
+};
+
+function isIncomeLike(type: string) {
+  return type === "income" || type === "payment";
+}
+
+function getQuickRange(key: string): { from: string; to: string } {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+  if (key === "today") {
+    const t = fmt(now);
+    return { from: t, to: t };
+  }
+  if (key === "week") {
+    const mon = new Date(now);
+    mon.setDate(now.getDate() - now.getDay() + 1);
+    return { from: fmt(mon), to: fmt(now) };
+  }
+  if (key === "month") {
+    const first = new Date(now.getFullYear(), now.getMonth(), 1);
+    return { from: fmt(first), to: "" };
+  }
+  return { from: "", to: "" };
+}
 
 export default function TransactionsPage() {
-  const router = useRouter();
   const { currentBranch } = useAuth();
   const branchId = currentBranch?.branch_id;
 
-  const [searchQuery, setSearchQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [cashRegisterFilter, setCashRegisterFilter] = useState<string>("all");
-  const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
-  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
-  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalType, setModalType] = useState<"income" | "expense">("income");
+  const [exportOpen, setExportOpen] = useState(false);
+  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
 
-  // Fetch cash registers for filter
-  const { data: cashRegistersData } = useQuery({
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [registerFilter, setRegisterFilter] = useState("all");
+
+  // Joriy oy — default filter
+  const [dateFrom, setDateFrom] = useState(() => {
+    const n = new Date();
+    return new Date(n.getFullYear(), n.getMonth(), 1).toISOString().split("T")[0];
+  });
+  const [dateTo, setDateTo] = useState("");
+  const [activeQuick, setActiveQuick] = useState("month");
+
+  const { data: registersData } = useQuery({
     queryKey: ["cash-registers", branchId],
     queryFn: () => financeApi.getCashRegisters({ branch_id: branchId }),
     enabled: !!branchId,
   });
+  const cashRegisters = registersData?.results || [];
 
-  const cashRegisters = cashRegistersData?.results || [];
-
-  // Fetch transactions
-  const { data: transactionsData, isLoading, refetch } = useQuery({
-    queryKey: ["transactions", branchId, searchQuery, typeFilter, statusFilter, cashRegisterFilter],
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["transactions", branchId, search, typeFilter, registerFilter, dateFrom, dateTo],
     queryFn: () =>
       financeApi.getTransactions({
         branch_id: branchId,
-        search: searchQuery || undefined,
+        search: search || undefined,
         transaction_type: typeFilter !== "all" ? typeFilter : undefined,
-        status: statusFilter !== "all" ? statusFilter : undefined,
-        cash_register: cashRegisterFilter !== "all" ? cashRegisterFilter : undefined,
-        ordering: "-transaction_date",
-      }),
+        cash_register: registerFilter !== "all" ? registerFilter : undefined,
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
+        ordering: "-created_at",
+      } as any),
     enabled: !!branchId,
   });
 
-  const transactions = transactionsData?.results || [];
+  const transactions = data?.results || [];
 
-  // Calculate summary
   const summary = transactions.reduce(
-    (acc, transaction) => {
-      if (transaction.status === "completed") {
-        if (transaction.transaction_type === "income" || transaction.transaction_type === "payment") {
-          acc.totalIncome += transaction.amount;
-        } else if (transaction.transaction_type === "expense" || transaction.transaction_type === "salary") {
-          acc.totalExpense += transaction.amount;
-        }
-      }
+    (acc, t) => {
+      if (t.status !== "completed") return acc;
+      if (isIncomeLike(t.transaction_type)) acc.income += t.amount;
+      else acc.expense += t.amount;
       return acc;
     },
-    { totalIncome: 0, totalExpense: 0 }
+    { income: 0, expense: 0 }
   );
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "completed":
-        return "bg-green-100 text-green-800 border-green-200";
-      case "pending":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      case "cancelled":
-        return "bg-gray-100 text-gray-800 border-gray-200";
-      case "failed":
-        return "bg-red-100 text-red-800 border-red-200";
-      default:
-        return "bg-gray-100 text-gray-800 border-gray-200";
-    }
+  const openModal = (type: "income" | "expense") => {
+    setModalType(type);
+    setModalOpen(true);
   };
 
-  const getTypeColor = (type: string) => {
-    if (type === "income" || type === "payment") {
-      return "text-green-600";
-    } else if (type === "expense" || type === "salary") {
-      return "text-red-600";
+  const applyQuick = (key: string) => {
+    if (activeQuick === key) {
+      setActiveQuick("");
+      setDateFrom("");
+      setDateTo("");
+      return;
     }
-    return "text-gray-600";
+    const r = getQuickRange(key);
+    setDateFrom(r.from);
+    setDateTo(r.to);
+    setActiveQuick(key);
   };
+
+  const clearFilters = () => {
+    const n = new Date();
+    setSearch("");
+    setTypeFilter("all");
+    setRegisterFilter("all");
+    setDateFrom(new Date(n.getFullYear(), n.getMonth(), 1).toISOString().split("T")[0]);
+    setDateTo("");
+    setActiveQuick("month");
+  };
+
+  const hasFilter = !!(search || typeFilter !== "all" || registerFilter !== "all");
 
   return (
-    <div className="space-y-6 p-4 sm:p-6">
+    <div className="space-y-4 p-4 md:p-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => router.push("/school/finance")}
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-              Tranzaksiyalar
-            </h1>
-            <p className="text-sm sm:text-base text-muted-foreground mt-1">
-              Barcha moliyaviy operatsiyalar
-            </p>
-          </div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Tranzaksiyalar</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Barcha moliyaviy operatsiyalar
+          </p>
         </div>
-
-        <div className="flex flex-wrap gap-2">
+        <div className="flex items-center gap-2">
           <Button
             variant="outline"
-            onClick={() => setIsExportModalOpen(true)}
-            className="gap-2"
+            size="sm"
+            onClick={() => setExportOpen(true)}
+            className="gap-1.5"
           >
-            <Download className="w-4 h-4" />
+            <Download className="w-3.5 h-3.5" />
             Excel
           </Button>
           <Button
             variant="outline"
-            onClick={() => setIsExpenseModalOpen(true)}
-            className="gap-2 bg-gradient-to-r from-red-50 to-rose-50 hover:from-red-100 hover:to-rose-100 border-red-200"
+            size="sm"
+            onClick={() => openModal("expense")}
+            className="gap-1.5 border-red-200 text-red-600 hover:bg-red-50"
           >
-            <TrendingDown className="w-4 h-4 text-red-600" />
-            <span className="text-red-600">Chiqim</span>
+            <TrendingDown className="w-3.5 h-3.5" />
+            Chiqim
           </Button>
           <Button
-            onClick={() => setIsIncomeModalOpen(true)}
-            className="gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+            size="sm"
+            onClick={() => openModal("income")}
+            className="gap-1.5 bg-green-600 hover:bg-green-700"
           >
-            <TrendingUp className="w-4 h-4" />
+            <TrendingUp className="w-3.5 h-3.5" />
             Kirim
           </Button>
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-3">
         <Card className="border-t-4 border-t-green-500">
-          <CardContent className="p-4 sm:p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs sm:text-sm text-gray-600 mb-1">Jami Kirim</p>
-                <p className="text-xl sm:text-2xl font-bold text-green-600">
-                  {formatCurrency(summary.totalIncome)}
-                </p>
-              </div>
-              <div className="p-3 bg-green-100 rounded-lg">
-                <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
-              </div>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 bg-green-100 rounded-lg shrink-0">
+              <ArrowUpRight className="w-5 h-5 text-green-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Kirim</p>
+              <p className="text-lg font-bold text-green-600">
+                {formatCurrency(summary.income)}
+              </p>
             </div>
           </CardContent>
         </Card>
-
         <Card className="border-t-4 border-t-red-500">
-          <CardContent className="p-4 sm:p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs sm:text-sm text-gray-600 mb-1">Jami Chiqim</p>
-                <p className="text-xl sm:text-2xl font-bold text-red-600">
-                  {formatCurrency(summary.totalExpense)}
-                </p>
-              </div>
-              <div className="p-3 bg-red-100 rounded-lg">
-                <TrendingDown className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" />
-              </div>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 bg-red-100 rounded-lg shrink-0">
+              <ArrowDownRight className="w-5 h-5 text-red-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Chiqim</p>
+              <p className="text-lg font-bold text-red-600">
+                {formatCurrency(summary.expense)}
+              </p>
             </div>
           </CardContent>
         </Card>
-
         <Card className="border-t-4 border-t-blue-500">
-          <CardContent className="p-4 sm:p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs sm:text-sm text-gray-600 mb-1">Sof Balans</p>
-                <p className="text-xl sm:text-2xl font-bold text-blue-600">
-                  {formatCurrency(summary.totalIncome - summary.totalExpense)}
-                </p>
-              </div>
-              <div className="p-3 bg-blue-100 rounded-lg">
-                <Receipt className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
-              </div>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 bg-blue-100 rounded-lg shrink-0">
+              <Receipt className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Sof</p>
+              <p
+                className={cn(
+                  "text-lg font-bold",
+                  summary.income - summary.expense >= 0
+                    ? "text-blue-600"
+                    : "text-orange-600"
+                )}
+              >
+                {formatCurrency(summary.income - summary.expense)}
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -218,40 +254,34 @@ export default function TransactionsPage() {
 
       {/* Filters */}
       <Card>
-        <CardContent className="p-4 sm:p-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            <div className="sm:col-span-2 lg:col-span-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  placeholder="Qidirish..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
+        <CardContent className="p-4 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input
+                placeholder="Qidirish..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9 h-9"
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
 
-            <Select value={cashRegisterFilter} onValueChange={setCashRegisterFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Kassa" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Barcha kassalar</SelectItem>
-                {cashRegisters.map((register) => (
-                  <SelectItem key={register.id} value={register.id.toString()}>
-                    {register.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
+            {/* Type */}
             <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger>
+              <SelectTrigger className="h-9">
                 <SelectValue placeholder="Turi" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Barchasi</SelectItem>
+                <SelectItem value="all">Barcha turlar</SelectItem>
                 <SelectItem value="income">Kirim</SelectItem>
                 <SelectItem value="expense">Chiqim</SelectItem>
                 <SelectItem value="payment">To&apos;lov</SelectItem>
@@ -261,154 +291,212 @@ export default function TransactionsPage() {
               </SelectContent>
             </Select>
 
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Holat" />
+            {/* Register */}
+            <Select value={registerFilter} onValueChange={setRegisterFilter}>
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="Kassa" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Barchasi</SelectItem>
-                <SelectItem value="completed">Bajarilgan</SelectItem>
-                <SelectItem value="pending">Kutilmoqda</SelectItem>
-                <SelectItem value="cancelled">Bekor qilingan</SelectItem>
-                <SelectItem value="failed">Muvaffaqiyatsiz</SelectItem>
+                <SelectItem value="all">Barcha kassalar</SelectItem>
+                {cashRegisters.map((r) => (
+                  <SelectItem key={r.id} value={r.id.toString()}>
+                    {r.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
+          </div>
 
-            <Button variant="outline" className="gap-2">
-              <Download className="w-4 h-4" />
-              Eksport
-            </Button>
+          {/* Date range + quick selectors */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
+            <Input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => { setDateFrom(e.target.value); setActiveQuick(""); }}
+              className="h-8 w-36 text-sm"
+            />
+            <span className="text-gray-400 text-sm">—</span>
+            <Input
+              type="date"
+              value={dateTo}
+              onChange={(e) => { setDateTo(e.target.value); setActiveQuick(""); }}
+              className="h-8 w-36 text-sm"
+            />
+            <div className="flex gap-1 ml-1">
+              {[
+                { key: "today", label: "Bugun" },
+                { key: "week", label: "Hafta" },
+                { key: "month", label: "Oy" },
+                { key: "all", label: "Barchasi" },
+              ].map((q) => (
+                <button
+                  key={q.key}
+                  onClick={() => applyQuick(q.key)}
+                  className={cn(
+                    "px-2.5 py-1 rounded-md text-xs font-medium transition-colors",
+                    activeQuick === q.key
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  )}
+                >
+                  {q.label}
+                </button>
+              ))}
+            </div>
+            {hasFilter && (
+              <button
+                onClick={clearFilters}
+                className="ml-auto flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+                Filtrlarni tozalash
+              </button>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Transactions Table */}
+      {/* Transaction list */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Receipt className="w-5 h-5" />
-            Tranzaksiyalar ro&apos;yxati
+        <CardHeader className="flex flex-row items-center justify-between pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Receipt className="w-4 h-4" />
+            Ro&apos;yxat
+            {!isLoading && (
+              <span className="text-sm font-normal text-gray-400">
+                ({transactions.length} ta)
+              </span>
+            )}
           </CardTitle>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => refetch()}
+            className="w-8 h-8"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+          </Button>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {isLoading ? (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-              <p className="text-gray-600 mt-4">Yuklanmoqda...</p>
+            <div className="py-16 text-center">
+              <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+              <p className="text-sm text-gray-500">Yuklanmoqda...</p>
             </div>
           ) : transactions.length === 0 ? (
-            <div className="text-center py-12">
-              <Receipt className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-              <p className="text-gray-600 mb-4">Hech qanday tranzaksiya topilmadi</p>
-              <div className="flex gap-2 justify-center">
-                <Button
-                  onClick={() => setIsIncomeModalOpen(true)}
-                  variant="outline"
-                  size="sm"
+            <div className="py-16 text-center">
+              <Receipt className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500 mb-1">Tranzaksiyalar topilmadi</p>
+              {hasFilter && (
+                <button
+                  onClick={clearFilters}
+                  className="text-sm text-blue-600 hover:underline mt-1"
                 >
-                  Kirim qo&apos;shish
-                </Button>
-                <Button
-                  onClick={() => setIsExpenseModalOpen(true)}
-                  variant="outline"
-                  size="sm"
-                >
-                  Chiqim qo&apos;shish
-                </Button>
-              </div>
+                  Filtrlarni tozalash
+                </button>
+              )}
+              {!hasFilter && (
+                <div className="flex gap-2 justify-center mt-3">
+                  <Button size="sm" variant="outline" onClick={() => openModal("income")} className="gap-1.5">
+                    <Plus className="w-3.5 h-3.5" />
+                    Kirim
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => openModal("expense")} className="gap-1.5">
+                    <Plus className="w-3.5 h-3.5" />
+                    Chiqim
+                  </Button>
+                </div>
+              )}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Sana</TableHead>
-                    <TableHead>Turi</TableHead>
-                    <TableHead>Kategoriya</TableHead>
-                    <TableHead>Kassa</TableHead>
-                    <TableHead>To&apos;lov usuli</TableHead>
-                    <TableHead>Tavsif</TableHead>
-                    <TableHead className="text-right">Summa</TableHead>
-                    <TableHead>Holat</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {transactions.map((transaction) => (
-                    <TableRow
-                      key={transaction.id}
-                      className="cursor-pointer hover:bg-gray-50"
+            <div className="divide-y">
+              {transactions.map((tx) => {
+                const income = isIncomeLike(tx.transaction_type);
+                const statusCfg = STATUS_CONFIG[tx.status] || STATUS_CONFIG.completed;
+                const showStatus = tx.status !== "completed";
+
+                return (
+                  <div
+                    key={tx.id}
+                    onClick={() => setSelectedTx(tx)}
+                    className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors cursor-pointer"
+                  >
+                    {/* Type indicator */}
+                    <div
+                      className={cn(
+                        "w-9 h-9 rounded-full flex items-center justify-center shrink-0",
+                        income ? "bg-green-100" : "bg-red-100"
+                      )}
                     >
-                      <TableCell className="font-medium">
-                        {new Date(transaction.transaction_date).toLocaleDateString(
-                          "uz-UZ"
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <span className={`font-medium ${getTypeColor(transaction.transaction_type)}`}>
-                          {TRANSACTION_TYPE_LABELS[transaction.transaction_type]}
+                      {income ? (
+                        <TrendingUp className="w-4 h-4 text-green-600" />
+                      ) : (
+                        <TrendingDown className="w-4 h-4 text-red-600" />
+                      )}
+                    </div>
+
+                    {/* Main info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-900 truncate">
+                          {tx.category_name || TYPE_LABELS[tx.transaction_type] || tx.transaction_type}
                         </span>
-                      </TableCell>
-                      <TableCell className="text-gray-600">
-                        {transaction.category_name || "-"}
-                      </TableCell>
-                      <TableCell className="text-gray-600">
-                        {transaction.cash_register_name}
-                      </TableCell>
-                      <TableCell className="text-gray-600">
-                        {PAYMENT_METHOD_LABELS[transaction.payment_method]}
-                      </TableCell>
-                      <TableCell className="max-w-xs truncate text-gray-600">
-                        {transaction.description || "-"}
-                      </TableCell>
-                      <TableCell className={`text-right font-semibold ${getTypeColor(transaction.transaction_type)}`}>
-                        {(transaction.transaction_type === "income" || transaction.transaction_type === "payment") ? "+" : "-"}
-                        {formatCurrency(transaction.amount)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={getStatusColor(transaction.status)}
-                        >
-                          {transaction.status_display}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                        {showStatus && (
+                          <Badge
+                            variant="outline"
+                            className={cn("text-xs px-1.5 py-0 shrink-0", statusCfg.cls)}
+                          >
+                            {statusCfg.label}
+                          </Badge>
+                        )}
+                      </div>
+                      {tx.description && (
+                        <p className="text-xs text-gray-600 truncate mt-0.5">{tx.description}</p>
+                      )}
+                      <p className="text-xs text-gray-400 mt-0.5 truncate">
+                        {tx.cash_register_name} · {fmtDateTime(tx.created_at)}
+                      </p>
+                    </div>
+
+                    {/* Amount */}
+                    <p
+                      className={cn(
+                        "text-sm font-bold shrink-0",
+                        income ? "text-green-600" : "text-red-600"
+                      )}
+                    >
+                      {income ? "+" : "−"}
+                      {formatCurrency(tx.amount)}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Modals */}
-      <CreateIncomeModal
-        open={isIncomeModalOpen}
-        onClose={() => setIsIncomeModalOpen(false)}
-        onSuccess={() => {
-          refetch();
-          setIsIncomeModalOpen(false);
-        }}
+      <TransactionModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSuccess={() => refetch()}
+        defaultType={modalType}
       />
 
-      <CreateExpenseModal
-        open={isExpenseModalOpen}
-        onClose={() => setIsExpenseModalOpen(false)}
-        onSuccess={() => {
-          refetch();
-          setIsExpenseModalOpen(false);
-        }}
+      <TransactionDetailSheet
+        tx={selectedTx}
+        onClose={() => setSelectedTx(null)}
       />
 
       <ExportModal
-        open={isExportModalOpen}
-        onOpenChange={setIsExportModalOpen}
+        open={exportOpen}
+        onOpenChange={setExportOpen}
         exportType="transactions"
         defaultFilters={{
-          transaction_type: typeFilter !== "all" ? typeFilter as import('@/types/finance').TransactionType : undefined,
-          status: statusFilter !== "all" ? statusFilter as import('@/types/finance').TransactionStatus : undefined,
-          cash_register: cashRegisterFilter !== "all" ? cashRegisterFilter : undefined,
-          search: searchQuery || undefined,
+          transaction_type: typeFilter !== "all" ? (typeFilter as TransactionType) : undefined,
+          cash_register: registerFilter !== "all" ? registerFilter : undefined,
+          search: search || undefined,
         }}
       />
     </div>

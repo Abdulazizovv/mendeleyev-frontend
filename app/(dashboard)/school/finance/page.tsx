@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { financeApi } from "@/lib/api";
@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/hooks";
 import { formatCurrency } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Wallet,
   TrendingUp,
@@ -19,478 +20,363 @@ import {
   DollarSign,
   BarChart3,
   Receipt,
-  BadgePercent,
   Building2,
-  ArrowLeft,
   Calendar,
-  PieChart,
+  Plus,
+  ArrowRight,
+  Package,
+  BadgePercent,
 } from "lucide-react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+
+const uzbekMonths = [
+  "Yanvar","Fevral","Mart","Aprel","May","Iyun",
+  "Iyul","Avgust","Sentabr","Oktabr","Noyabr","Dekabr",
+];
 
 export default function FinancePage() {
   const router = useRouter();
   const { currentBranch } = useAuth();
   const branchId = currentBranch?.branch_id;
 
-  // Fetch statistics
   const { data: statistics, isLoading } = useQuery({
     queryKey: ["finance-statistics", branchId],
     queryFn: () => financeApi.getStatistics({ branch_id: branchId }),
     enabled: !!branchId,
   });
 
-  // Fetch cash registers
   const { data: cashRegistersData } = useQuery({
     queryKey: ["cash-registers", branchId],
     queryFn: () => financeApi.getCashRegisters({ branch_id: branchId }),
     enabled: !!branchId,
   });
 
+  const { data: recentPaymentsData } = useQuery({
+    queryKey: ["payments-recent", branchId],
+    queryFn: () =>
+      financeApi.getPayments({
+        branch_id: branchId,
+        ordering: "-payment_date",
+        page_size: 6,
+      }),
+    enabled: !!branchId,
+  });
+
   const cashRegisters = cashRegistersData?.results || [];
   const summary = statistics?.summary;
   const monthlyStats = statistics?.monthly_stats || [];
+  const recentPayments = recentPaymentsData?.results || [];
+
+  const statCards = [
+    {
+      label: "Jami Kirim",
+      value: summary?.total_income || 0,
+      icon: TrendingUp,
+      arrow: ArrowUpRight,
+      color: "border-t-green-500",
+      bg: "bg-green-100",
+      iconColor: "text-green-600",
+      arrowColor: "text-green-500",
+    },
+    {
+      label: "Jami Chiqim",
+      value: summary?.total_expense || 0,
+      icon: TrendingDown,
+      arrow: ArrowDownRight,
+      color: "border-t-red-500",
+      bg: "bg-red-100",
+      iconColor: "text-red-600",
+      arrowColor: "text-red-500",
+    },
+    {
+      label: "Sof Balans",
+      value: summary?.net_balance || 0,
+      icon: Wallet,
+      arrow: BarChart3,
+      color: "border-t-blue-500",
+      bg: "bg-blue-100",
+      iconColor: "text-blue-600",
+      arrowColor: "text-blue-500",
+    },
+    {
+      label: "Jami To'lovlar",
+      value: summary?.total_payments || 0,
+      icon: DollarSign,
+      arrow: CreditCard,
+      color: "border-t-purple-500",
+      bg: "bg-purple-100",
+      iconColor: "text-purple-600",
+      arrowColor: "text-purple-500",
+      sub: `${summary?.payments_count || 0} ta to'lov`,
+    },
+  ];
 
   return (
-    <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6">
+    <div className="space-y-5 p-4 md:p-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-        <div className="flex items-center gap-3 sm:gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => router.push("/school")}
-            className="shrink-0"
-          >
-            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-          </Button>
-          <div>
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">
-              Moliya Boshqaruvi
-            </h1>
-            <p className="text-muted-foreground mt-1 text-xs sm:text-sm">
-              To&apos;liq moliya tizimi va hisobotlar
-            </p>
-          </div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Moliya Boshqaruvi</h1>
+          <p className="text-muted-foreground mt-0.5 text-sm">
+            {currentBranch?.branch_name} — moliya hisobotlari
+          </p>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => router.push("/school/finance/transactions")}
-            className="gap-2"
-          >
-            <Receipt className="w-3 h-3 sm:w-4 sm:h-4" />
-            <span className="hidden sm:inline">Tranzaksiyalar</span>
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => router.push("/school/finance/payments")}
-            className="gap-2"
-          >
-            <CreditCard className="w-3 h-3 sm:w-4 sm:h-4" />
-            <span className="hidden sm:inline">To&apos;lovlar</span>
-          </Button>
-        </div>
+        <Button
+          onClick={() => router.push("/school/finance/payments/create")}
+          className="gap-2 shrink-0"
+        >
+          <Plus className="w-4 h-4" />
+          To&apos;lov qabul qilish
+        </Button>
       </div>
 
-      {/* Statistics Cards */}
+      {/* Stats Cards */}
       {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
             <Card key={i} className="animate-pulse">
-              <CardContent className="p-4 sm:p-6">
-                <div className="h-20 sm:h-24 bg-gray-200 rounded"></div>
+              <CardContent className="p-6">
+                <div className="h-20 bg-gray-200 rounded" />
               </CardContent>
             </Card>
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          {/* Total Income */}
-          <Card className="border-t-4 border-t-green-500 hover:shadow-lg transition-all hover:-translate-y-1">
-            <CardContent className="p-4 sm:p-6">
-              <div className="flex items-center justify-between mb-3">
-                <div className="p-2 sm:p-3 bg-green-100 rounded-lg">
-                  <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-green-600" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {statCards.map((stat) => (
+            <Card
+              key={stat.label}
+              className={`border-t-4 ${stat.color} hover:shadow-lg transition-all hover:-translate-y-0.5`}
+            >
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <div className={`p-2.5 ${stat.bg} rounded-lg`}>
+                    <stat.icon className={`w-5 h-5 ${stat.iconColor}`} />
+                  </div>
+                  <stat.arrow className={`w-4 h-4 ${stat.arrowColor}`} />
                 </div>
-                <ArrowUpRight className="w-4 h-4 text-green-500" />
-              </div>
-              <p className="text-xs sm:text-sm font-medium text-gray-600 mb-1">
-                Jami Kirim
-              </p>
-              <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">
-                {formatCurrency(summary?.total_income || 0)}
-              </p>
-            </CardContent>
-          </Card>
-
-          {/* Total Expense */}
-          <Card className="border-t-4 border-t-red-500 hover:shadow-lg transition-all hover:-translate-y-1">
-            <CardContent className="p-4 sm:p-6">
-              <div className="flex items-center justify-between mb-3">
-                <div className="p-2 sm:p-3 bg-red-100 rounded-lg">
-                  <TrendingDown className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-red-600" />
-                </div>
-                <ArrowDownRight className="w-4 h-4 text-red-500" />
-              </div>
-              <p className="text-xs sm:text-sm font-medium text-gray-600 mb-1">
-                Jami Chiqim
-              </p>
-              <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">
-                {formatCurrency(summary?.total_expense || 0)}
-              </p>
-            </CardContent>
-          </Card>
-
-          {/* Net Balance */}
-          <Card className="border-t-4 border-t-blue-500 hover:shadow-lg transition-all hover:-translate-y-1">
-            <CardContent className="p-4 sm:p-6">
-              <div className="flex items-center justify-between mb-3">
-                <div className="p-2 sm:p-3 bg-blue-100 rounded-lg">
-                  <Wallet className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-blue-600" />
-                </div>
-                <BarChart3 className="w-4 h-4 text-blue-500" />
-              </div>
-              <p className="text-xs sm:text-sm font-medium text-gray-600 mb-1">
-                Sof Balans
-              </p>
-              <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">
-                {formatCurrency(summary?.net_balance || 0)}
-              </p>
-            </CardContent>
-          </Card>
-
-          {/* Total Payments */}
-          <Card className="border-t-4 border-t-purple-500 hover:shadow-lg transition-all hover:-translate-y-1">
-            <CardContent className="p-4 sm:p-6">
-              <div className="flex items-center justify-between mb-3">
-                <div className="p-2 sm:p-3 bg-purple-100 rounded-lg">
-                  <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-purple-600" />
-                </div>
-                <CreditCard className="w-4 h-4 text-purple-500" />
-              </div>
-              <p className="text-xs sm:text-sm font-medium text-gray-600 mb-1">
-                Jami To&apos;lovlar
-              </p>
-              <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">
-                {formatCurrency(summary?.total_payments || 0)}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">
-                {summary?.payments_count || 0} ta to&apos;lov
-              </p>
-            </CardContent>
-          </Card>
+                <p className="text-xs font-medium text-gray-500 mb-1">{stat.label}</p>
+                <p className="text-xl font-bold text-gray-900">{formatCurrency(stat.value)}</p>
+                {stat.sub && <p className="text-xs text-gray-400 mt-1">{stat.sub}</p>}
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
 
-      {/* Monthly Statistics - Simple Table View */}
-      {monthlyStats && monthlyStats.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-              <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
-              Oylik Statistika
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-3 px-2 text-xs sm:text-sm font-semibold text-gray-600">Oy</th>
-                    <th className="text-right py-3 px-2 text-xs sm:text-sm font-semibold text-green-600">Kirim</th>
-                    <th className="text-right py-3 px-2 text-xs sm:text-sm font-semibold text-red-600">Chiqim</th>
-                    <th className="text-right py-3 px-2 text-xs sm:text-sm font-semibold text-blue-600">Balans</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {monthlyStats.slice(0, 6).map((stat, index) => {
-                    const balance = stat.income - stat.expense;
-                    // Parse month - API returns ISO format: "2025-12-01T00:00:00+05:00"
-                    const monthDate = new Date(stat.month);
-                    
-                    // O'zbekcha oy nomlari
-                    const uzbekMonths = [
-                      "Yanvar", "Fevral", "Mart", "Aprel", "May", "Iyun",
-                      "Iyul", "Avgust", "Sentabr", "Oktabr", "Noyabr", "Dekabr"
-                    ];
-                    
-                    const monthName = uzbekMonths[monthDate.getMonth()];
-                    const year = monthDate.getFullYear();
-                    
-                    return (
-                      <tr key={index} className="border-b hover:bg-gray-50">
-                        <td className="py-3 px-2 text-xs sm:text-sm font-medium">
-                          {monthName} {year}
-                        </td>
-                        <td className="text-right py-3 px-2 text-xs sm:text-sm text-green-600 font-medium">
-                          {formatCurrency(stat.income)}
-                        </td>
-                        <td className="text-right py-3 px-2 text-xs sm:text-sm text-red-600 font-medium">
-                          {formatCurrency(stat.expense)}
-                        </td>
-                        <td className={`text-right py-3 px-2 text-xs sm:text-sm font-bold ${
-                          balance >= 0 ? "text-blue-600" : "text-orange-600"
-                        }`}>
-                          {formatCurrency(balance)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Main content grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* Monthly Stats */}
+        {monthlyStats.length > 0 && (
+          <Card className="lg:col-span-2">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Calendar className="w-4 h-4" />
+                Oylik Statistika
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-gray-50">
+                      <th className="text-left py-2.5 px-4 font-semibold text-gray-500 text-xs">OY</th>
+                      <th className="text-right py-2.5 px-4 font-semibold text-green-600 text-xs">KIRIM</th>
+                      <th className="text-right py-2.5 px-4 font-semibold text-red-600 text-xs">CHIQIM</th>
+                      <th className="text-right py-2.5 px-4 font-semibold text-blue-600 text-xs">BALANS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {monthlyStats.slice(0, 6).map((stat, i) => {
+                      const d = new Date(stat.month);
+                      const balance = stat.income - stat.expense;
+                      return (
+                        <tr key={i} className="border-b last:border-0 hover:bg-gray-50">
+                          <td className="py-3 px-4 font-medium">
+                            {uzbekMonths[d.getMonth()]} {d.getFullYear()}
+                          </td>
+                          <td className="text-right py-3 px-4 text-green-600 font-medium">
+                            {formatCurrency(stat.income)}
+                          </td>
+                          <td className="text-right py-3 px-4 text-red-600 font-medium">
+                            {formatCurrency(stat.expense)}
+                          </td>
+                          <td
+                            className={`text-right py-3 px-4 font-bold ${
+                              balance >= 0 ? "text-blue-600" : "text-orange-600"
+                            }`}
+                          >
+                            {formatCurrency(balance)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-7 gap-2 sm:gap-3">
-        <Card
-          className="cursor-pointer hover:shadow-lg transition-all hover:-translate-y-1 bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200"
-          onClick={() => router.push("/school/finance/cash-registers")}
-        >
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex flex-col items-center gap-2 text-center">
-              <div className="p-2 bg-blue-600 rounded-lg">
-                <Building2 className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-              </div>
-              <div>
-                <p className="font-semibold text-gray-900 text-xs sm:text-sm">
-                  Kassalar
-                </p>
-                <p className="text-xs text-gray-600">{cashRegisters.length} ta</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card
-          className="cursor-pointer hover:shadow-lg transition-all hover:-translate-y-1 bg-gradient-to-br from-green-50 to-emerald-50 border-green-200"
-          onClick={() => router.push("/school/finance/transactions")}
-        >
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex flex-col items-center gap-2 text-center">
-              <div className="p-2 bg-green-600 rounded-lg">
-                <Receipt className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-              </div>
-              <div>
-                <p className="font-semibold text-gray-900 text-xs sm:text-sm">
-                  Tranzaksiyalar
-                </p>
-                <p className="text-xs text-gray-600">Operatsiyalar</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card
-          className="cursor-pointer hover:shadow-lg transition-all hover:-translate-y-1 bg-gradient-to-br from-indigo-50 to-blue-50 border-indigo-200"
-          onClick={() => router.push("/school/finance/payments")}
-        >
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex flex-col items-center gap-2 text-center">
-              <div className="p-2 bg-indigo-600 rounded-lg">
-                <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-              </div>
-              <div>
-                <p className="font-semibold text-gray-900 text-xs sm:text-sm">
-                  To&apos;lovlar
-                </p>
-                <p className="text-xs text-gray-600">
-                  {summary?.payments_count || 0} ta
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card
-          className="cursor-pointer hover:shadow-lg transition-all hover:-translate-y-1 bg-gradient-to-br from-teal-50 to-cyan-50 border-teal-200"
-          onClick={() => router.push("/school/finance/student-balances")}
-        >
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex flex-col items-center gap-2 text-center">
-              <div className="p-2 bg-teal-600 rounded-lg">
-                <Users className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-              </div>
-              <div>
-                <p className="font-semibold text-gray-900 text-xs sm:text-sm">
-                  Balanslar
-                </p>
-                <p className="text-xs text-gray-600">O&apos;quvchilar</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card
-          className="cursor-pointer hover:shadow-lg transition-all hover:-translate-y-1 bg-gradient-to-br from-purple-50 to-pink-50 border-purple-200"
-          onClick={() => router.push("/school/finance/categories")}
-        >
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex flex-col items-center gap-2 text-center">
-              <div className="p-2 bg-purple-600 rounded-lg">
-                <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-              </div>
-              <div>
-                <p className="font-semibold text-gray-900 text-xs sm:text-sm">
-                  Kategoriyalar
-                </p>
-                <p className="text-xs text-gray-600">Kirim/Chiqim</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card
-          className="cursor-pointer hover:shadow-lg transition-all hover:-translate-y-1 bg-gradient-to-br from-pink-50 to-rose-50 border-pink-200"
-          onClick={() => router.push("/school/finance/subscription-plans")}
-        >
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex flex-col items-center gap-2 text-center">
-              <div className="p-2 bg-pink-600 rounded-lg">
-                <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-              </div>
-              <div>
-                <p className="font-semibold text-gray-900 text-xs sm:text-sm">
-                  Abonementlar
-                </p>
-                <p className="text-xs text-gray-600">Tariflar</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card
-          className="cursor-pointer hover:shadow-lg transition-all hover:-translate-y-1 bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200"
-          onClick={() => router.push("/school/finance/discounts")}
-        >
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex flex-col items-center gap-2 text-center">
-              <div className="p-2 bg-orange-600 rounded-lg">
-                <BadgePercent className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-              </div>
-              <div>
-                <p className="font-semibold text-gray-900 text-xs sm:text-sm">
-                  Chegirmalar
-                </p>
-                <p className="text-xs text-gray-600">Takliflar</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Cash Registers & Student Balances */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
         {/* Cash Registers */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-3">
-            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-              <Building2 className="w-4 h-4 sm:w-5 sm:h-5" />
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Building2 className="w-4 h-4" />
               Kassalar
             </CardTitle>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => router.push("/school/finance/cash-registers")}
-              className="text-xs sm:text-sm"
+              className="text-xs gap-1 text-blue-600 hover:text-blue-700"
             >
               Barchasi
+              <ArrowRight className="w-3 h-3" />
             </Button>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-2">
             {cashRegisters.length === 0 ? (
-              <div className="text-center py-8">
-                <Building2 className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-3" />
-                <p className="text-gray-600 mb-4 text-xs sm:text-sm">
-                  Hech qanday kassa topilmadi
-                </p>
+              <div className="text-center py-6">
+                <Building2 className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                <p className="text-sm text-gray-500 mb-3">Kassa topilmadi</p>
                 <Button
-                  onClick={() =>
-                    router.push("/school/finance/cash-registers")
-                  }
                   size="sm"
+                  variant="outline"
+                  onClick={() => router.push("/school/finance/cash-registers")}
                 >
-                  Kassa yaratish
+                  Kassa qo&apos;shish
                 </Button>
               </div>
             ) : (
-              <div className="space-y-2">
-                {cashRegisters.slice(0, 5).map((register) => (
-                  <div
-                    key={register.id}
-                    className="flex items-center justify-between p-2 sm:p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
-                    onClick={() =>
-                      router.push(`/school/finance/cash-registers/${register.id}`)
-                    }
-                  >
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <div
-                        className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                          register.is_active ? "bg-green-500" : "bg-gray-400"
-                        }`}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-gray-900 text-xs sm:text-sm truncate">
-                          {register.name}
-                        </p>
-                        {register.location && (
-                          <p className="text-xs text-gray-500 truncate">
-                            {register.location}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <p className="font-semibold text-xs sm:text-sm text-gray-900 ml-2 flex-shrink-0">
-                      {formatCurrency(register.balance)}
-                    </p>
+              cashRegisters.slice(0, 6).map((r) => (
+                <div
+                  key={r.id}
+                  className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+                  onClick={() => router.push(`/school/finance/cash-registers/${r.id}`)}
+                >
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <div className={`w-2 h-2 rounded-full shrink-0 ${r.is_active ? "bg-green-500" : "bg-gray-300"}`} />
+                    <p className="font-medium text-sm text-gray-900 truncate">{r.name}</p>
                   </div>
-                ))}
-              </div>
+                  <p className="font-semibold text-sm text-gray-900 ml-2 shrink-0">
+                    {formatCurrency(r.balance)}
+                  </p>
+                </div>
+              ))
             )}
-          </CardContent>
-        </Card>
 
-        {/* Student Balances Summary */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-              <Users className="w-4 h-4 sm:w-5 sm:h-5" />
-              O&apos;quvchilar Balansi
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2 sm:space-y-3">
-              <div className="flex items-center justify-between p-3 sm:p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+            {/* Student balance summary */}
+            <div className="mt-3 pt-3 border-t space-y-2">
+              <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-100">
                 <div>
-                  <p className="text-xs sm:text-sm text-gray-600 mb-1">
-                    Jami balans
-                  </p>
-                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">
-                    {formatCurrency(summary?.total_student_balance || 0)}
-                  </p>
+                  <p className="text-xs text-gray-500">O&apos;quvchilar balansi</p>
+                  <p className="font-bold text-gray-900">{formatCurrency(summary?.total_student_balance || 0)}</p>
                 </div>
-                <div className="p-2 sm:p-3 bg-blue-600 rounded-lg">
-                  <Wallet className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-white" />
-                </div>
+                <Wallet className="w-5 h-5 text-blue-500" />
               </div>
-              <div className="flex items-center justify-between p-3 sm:p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
+              <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-100">
                 <div>
-                  <p className="text-xs sm:text-sm text-gray-600 mb-1">
-                    Kassadagi pul
-                  </p>
-                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">
-                    {formatCurrency(summary?.total_cash_balance || 0)}
-                  </p>
+                  <p className="text-xs text-gray-500">Kassadagi jami</p>
+                  <p className="font-bold text-gray-900">{formatCurrency(summary?.total_cash_balance || 0)}</p>
                 </div>
-                <div className="p-2 sm:p-3 bg-green-600 rounded-lg">
-                  <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-white" />
-                </div>
+                <DollarSign className="w-5 h-5 text-green-500" />
               </div>
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Recent Payments */}
+      {recentPayments.length > 0 && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Receipt className="w-4 h-4" />
+              So&apos;nggi To&apos;lovlar
+            </CardTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push("/school/finance/payments")}
+              className="text-xs gap-1 text-blue-600 hover:text-blue-700"
+            >
+              Barchasi
+              <ArrowRight className="w-3 h-3" />
+            </Button>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y">
+              {recentPayments.map((payment) => (
+                <div
+                  key={payment.id}
+                  className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 cursor-pointer transition-colors"
+                  onClick={() => router.push(`/school/finance/payments/${payment.id}`)}
+                >
+                  <Avatar className="w-8 h-8 shrink-0">
+                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-xs font-bold">
+                      {payment.student?.full_name
+                        ?.split(" ")
+                        .map((n: string) => n[0])
+                        .join("")
+                        .slice(0, 2) || "??"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {payment.student?.full_name || payment.student_name || "—"}
+                    </p>
+                    <p className="text-xs text-gray-400 truncate">
+                      {payment.subscription_plan_name} ·{" "}
+                      {new Date(payment.payment_date).toLocaleDateString("uz-UZ", {
+                        day: "numeric",
+                        month: "short",
+                      })}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-bold text-green-600">{formatCurrency(payment.final_amount)}</p>
+                    <Badge variant="outline" className="text-xs px-1.5 py-0 mt-0.5">
+                      {payment.payment_method_display}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Finance Config shortcuts */}
+      <div>
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+          Moliya sozlamalari
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { label: "Kassalar", href: "/school/finance/cash-registers", icon: Building2, color: "text-blue-600 bg-blue-50 border-blue-100" },
+            { label: "Abonement tariflari", href: "/school/finance/subscription-plans", icon: Package, color: "text-purple-600 bg-purple-50 border-purple-100" },
+            { label: "Kategoriyalar", href: "/school/finance/categories", icon: BarChart3, color: "text-teal-600 bg-teal-50 border-teal-100" },
+            { label: "Chegirmalar", href: "/school/finance/discounts", icon: BadgePercent, color: "text-orange-600 bg-orange-50 border-orange-100" },
+          ].map((item) => (
+            <Card
+              key={item.href}
+              className="cursor-pointer hover:shadow-md transition-all border hover:border-gray-300"
+              onClick={() => router.push(item.href)}
+            >
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className={`p-2 rounded-lg border ${item.color}`}>
+                  <item.icon className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-900 leading-tight">{item.label}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Boshqarish</p>
+                </div>
+                <ArrowRight className="w-3.5 h-3.5 text-gray-300 ml-auto shrink-0" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
     </div>
   );

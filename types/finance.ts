@@ -106,7 +106,11 @@ export interface Transaction {
     avatar_url?: string;
   };
   transaction_date: string;
-  metadata?: Record<string, any>;
+  metadata?: {
+    balance_before?: number;
+    balance_after?: number;
+    [key: string]: any;
+  };
   created_at: string;
   updated_at: string;
 }
@@ -473,9 +477,9 @@ export interface PaymentQueryParams extends BaseQueryParams {
   student_profile?: string;
   subscription_plan?: string;
   discount?: string;
-  period_start?: string;
-  period_end?: string;
   payment_method?: string;
+  payment_date_from?: string;
+  payment_date_to?: string;
 }
 
 // ==================== Paginated Response ====================

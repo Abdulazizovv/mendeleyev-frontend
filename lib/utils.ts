@@ -63,3 +63,32 @@ export function formatCurrency(amount: number | null | undefined): string {
   if (amount === null || amount === undefined) return "0 so'm";
   return amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " so'm";
 }
+
+// Qisqa oy nomlari (kichik harf)
+const UZ_MONTHS_SHORT = [
+  "yan", "fev", "mar", "apr", "may", "iyun",
+  "iyul", "avg", "sen", "okt", "noy", "dek",
+];
+
+// Chiroyli sana: "Bugun" | "Kecha" | "5 may" | "5 may 2024"
+export function fmtDate(dateStr: string): string {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const dOnly = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const todayOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diff = todayOnly.getTime() - dOnly.getTime();
+  if (diff === 0) return "Bugun";
+  if (diff === 86_400_000) return "Kecha";
+  const day = d.getDate();
+  const mon = UZ_MONTHS_SHORT[d.getMonth()];
+  if (d.getFullYear() === now.getFullYear()) return `${day} ${mon}`;
+  return `${day} ${mon} ${d.getFullYear()}`;
+}
+
+// Chiroyli sana + vaqt: "Bugun, 14:30" | "5 may, 09:15"
+export function fmtDateTime(dateStr: string): string {
+  const d = new Date(dateStr);
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${fmtDate(dateStr)}, ${hh}:${mm}`;
+}
