@@ -705,9 +705,7 @@ export default function CreatePaymentPage() {
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="cash">Naqd pul</SelectItem>
-                              <SelectItem value="card">Karta</SelectItem>
-                              <SelectItem value="bank_transfer">Bank o&apos;tkazmasi</SelectItem>
-                              <SelectItem value="mobile_payment">Mobil to&apos;lov</SelectItem>
+                              <SelectItem value="card">Plastik karta</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>

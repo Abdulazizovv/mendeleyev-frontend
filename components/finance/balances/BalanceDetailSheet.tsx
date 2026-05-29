@@ -34,10 +34,7 @@ function getInitials(name: string) {
 
 const METHOD_LABEL: Record<string, string> = {
   cash: "Naqd",
-  card: "Karta",
-  bank_transfer: "Bank",
-  mobile_payment: "Mobil",
-  other: "Boshqa",
+  card: "Plastik karta",
 };
 
 const TX_TYPE_LABEL: Record<string, string> = {

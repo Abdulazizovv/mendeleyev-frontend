@@ -58,8 +58,6 @@ export function RecentTransactionsCard({
     const styles: Record<string, string> = {
       cash: "bg-green-100 text-green-800 border-green-300",
       card: "bg-blue-100 text-blue-800 border-blue-300",
-      bank_transfer: "bg-purple-100 text-purple-800 border-purple-300",
-      mobile_payment: "bg-indigo-100 text-indigo-800 border-indigo-300",
     };
     return styles[method] || "bg-gray-100 text-gray-800 border-gray-300";
   };

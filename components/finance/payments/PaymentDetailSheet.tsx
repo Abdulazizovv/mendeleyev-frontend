@@ -18,10 +18,7 @@ interface Props {
 
 const METHOD_LABELS: Record<string, string> = {
   cash: "Naqd pul",
-  card: "Karta",
-  bank_transfer: "Bank o'tkazmasi",
-  mobile_payment: "Mobil to'lov",
-  other: "Boshqa",
+  card: "Plastik karta",
 };
 
 const PERIOD_LABELS: Record<string, string> = {

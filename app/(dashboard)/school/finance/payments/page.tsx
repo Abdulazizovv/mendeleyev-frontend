@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   CreditCard,
+  Banknote,
   Search,
   X,
   Download,
@@ -20,6 +21,7 @@ import {
   RefreshCw,
   BadgePercent,
   Receipt,
+  ArrowUpRight,
 } from "lucide-react";
 import { ExportModal } from "@/components/finance/ExportModal";
 import { PaymentModal } from "@/components/finance/payments/PaymentModal";
@@ -50,14 +52,6 @@ function getQuickRange(key: string): { from: string; to: string } {
   return { from: "", to: "" };
 }
 
-const METHOD_LABEL: Record<string, string> = {
-  cash: "Naqd",
-  card: "Karta",
-  bank_transfer: "Bank",
-  mobile_payment: "Mobil",
-  other: "Boshqa",
-};
-
 export default function PaymentsPage() {
   const { currentBranch } = useAuth();
   const branchId = currentBranch?.branch_id;
@@ -69,15 +63,17 @@ export default function PaymentsPage() {
   const [dateFrom, setDateFrom] = useState(MONTH_START);
   const [dateTo, setDateTo] = useState("");
   const [activeQuick, setActiveQuick] = useState("month");
+  const [methodFilter, setMethodFilter] = useState<"all" | "cash" | "card">("all");
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ["payments", branchId, search, dateFrom, dateTo],
+    queryKey: ["payments", branchId, search, dateFrom, dateTo, methodFilter],
     queryFn: () =>
       financeApi.getPayments({
         branch_id: branchId,
         search: search || undefined,
         payment_date_from: dateFrom || undefined,
         payment_date_to: dateTo || undefined,
+        payment_method: methodFilter !== "all" ? methodFilter : undefined,
         ordering: "-payment_date",
       }),
     enabled: !!branchId,
@@ -86,6 +82,14 @@ export default function PaymentsPage() {
   const payments = data?.results || [];
   const totalAmount = payments.reduce((s, p) => s + p.final_amount, 0);
   const totalDiscount = payments.reduce((s, p) => s + (p.discount_amount || 0), 0);
+  const cashTotal = payments
+    .filter((p) => p.payment_method === "cash")
+    .reduce((s, p) => s + p.final_amount, 0);
+  const cardTotal = payments
+    .filter((p) => p.payment_method === "card")
+    .reduce((s, p) => s + p.final_amount, 0);
+  const cashCount = payments.filter((p) => p.payment_method === "cash").length;
+  const cardCount = payments.filter((p) => p.payment_method === "card").length;
 
   function applyQuick(key: string) {
     if (activeQuick === key) {
@@ -100,18 +104,20 @@ export default function PaymentsPage() {
     setActiveQuick(key);
   }
 
-  const hasFilter = !!(search || dateFrom || dateTo);
+  const hasFilter = !!(search || dateFrom || dateTo || methodFilter !== "all");
 
   function clearAll() {
     setSearch("");
     setDateFrom(MONTH_START);
     setDateTo("");
     setActiveQuick("month");
+    setMethodFilter("all");
   }
 
   return (
     <div className="space-y-4 p-4 md:p-6">
-      {/* Header */}
+
+      {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">To&apos;lovlar</h1>
@@ -140,16 +146,16 @@ export default function PaymentsPage() {
         </div>
       </div>
 
-      {/* Stats */}
+      {/* ── Stats ── */}
       <div className="grid grid-cols-3 gap-3">
         <Card className="border-t-4 border-t-green-500">
           <CardContent className="p-4 flex items-center gap-3">
             <div className="p-2 bg-green-100 rounded-lg shrink-0">
-              <CreditCard className="w-5 h-5 text-green-600" />
+              <ArrowUpRight className="w-5 h-5 text-green-600" />
             </div>
             <div>
               <p className="text-xs text-gray-500">Jami</p>
-              <p className="text-lg font-bold text-green-600">
+              <p className="text-lg font-bold text-green-600 tabular-nums">
                 {formatCurrency(totalAmount)}
               </p>
             </div>
@@ -162,7 +168,7 @@ export default function PaymentsPage() {
             </div>
             <div>
               <p className="text-xs text-gray-500">Chegirma</p>
-              <p className="text-lg font-bold text-orange-600">
+              <p className="text-lg font-bold text-orange-600 tabular-nums">
                 {formatCurrency(totalDiscount)}
               </p>
             </div>
@@ -181,7 +187,62 @@ export default function PaymentsPage() {
         </Card>
       </div>
 
-      {/* Filters */}
+      {/* ── Naqd / Plastik breakdown ── */}
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          onClick={() => setMethodFilter(methodFilter === "cash" ? "all" : "cash")}
+          className={cn(
+            "text-left p-3.5 rounded-xl border transition-all",
+            methodFilter === "cash"
+              ? "border-amber-400 bg-amber-50 ring-1 ring-amber-300"
+              : "border-amber-200 bg-amber-50/40 hover:bg-amber-50 hover:border-amber-300"
+          )}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center">
+                <Banknote className="w-4 h-4 text-amber-600" />
+              </div>
+              <span className="text-sm font-semibold text-gray-800">Naqd pul</span>
+            </div>
+            <span className="text-xs text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full font-medium">
+              {cashCount} ta
+            </span>
+          </div>
+          <p className="text-xl font-bold text-amber-700 tabular-nums">{formatCurrency(cashTotal)}</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {totalAmount > 0 ? Math.round((cashTotal / totalAmount) * 100) : 0}% ulushi
+          </p>
+        </button>
+
+        <button
+          onClick={() => setMethodFilter(methodFilter === "card" ? "all" : "card")}
+          className={cn(
+            "text-left p-3.5 rounded-xl border transition-all",
+            methodFilter === "card"
+              ? "border-purple-400 bg-purple-50 ring-1 ring-purple-300"
+              : "border-purple-200 bg-purple-50/40 hover:bg-purple-50 hover:border-purple-300"
+          )}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 bg-purple-100 rounded-lg flex items-center justify-center">
+                <CreditCard className="w-4 h-4 text-purple-600" />
+              </div>
+              <span className="text-sm font-semibold text-gray-800">Plastik karta</span>
+            </div>
+            <span className="text-xs text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full font-medium">
+              {cardCount} ta
+            </span>
+          </div>
+          <p className="text-xl font-bold text-purple-700 tabular-nums">{formatCurrency(cardTotal)}</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {totalAmount > 0 ? Math.round((cardTotal / totalAmount) * 100) : 0}% ulushi
+          </p>
+        </button>
+      </div>
+
+      {/* ── Filters ── */}
       <Card>
         <CardContent className="p-4 space-y-3">
           <div className="relative">
@@ -207,20 +268,14 @@ export default function PaymentsPage() {
             <Input
               type="date"
               value={dateFrom}
-              onChange={(e) => {
-                setDateFrom(e.target.value);
-                setActiveQuick("");
-              }}
+              onChange={(e) => { setDateFrom(e.target.value); setActiveQuick(""); }}
               className="h-8 w-36 text-sm"
             />
             <span className="text-gray-400 text-sm">—</span>
             <Input
               type="date"
               value={dateTo}
-              onChange={(e) => {
-                setDateTo(e.target.value);
-                setActiveQuick("");
-              }}
+              onChange={(e) => { setDateTo(e.target.value); setActiveQuick(""); }}
               className="h-8 w-36 text-sm"
             />
             <div className="flex gap-1 ml-1">
@@ -257,11 +312,11 @@ export default function PaymentsPage() {
         </CardContent>
       </Card>
 
-      {/* List */}
+      {/* ── List ── */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <CreditCard className="w-4 h-4" />
+            <Receipt className="w-4 h-4" />
             Ro&apos;yxat
             {!isLoading && (
               <span className="text-sm font-normal text-gray-400">
@@ -269,12 +324,7 @@ export default function PaymentsPage() {
               </span>
             )}
           </CardTitle>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => refetch()}
-            className="w-8 h-8"
-          >
+          <Button variant="ghost" size="icon" onClick={() => refetch()} className="w-8 h-8">
             <RefreshCw className="w-3.5 h-3.5" />
           </Button>
         </CardHeader>
@@ -302,7 +352,7 @@ export default function PaymentsPage() {
               {payments.map((payment) => {
                 const name =
                   payment.student?.full_name || payment.student_name || "—";
-                const method = METHOD_LABEL[payment.payment_method] || "";
+                const isCard = payment.payment_method === "card";
                 const hasDiscount = payment.discount_amount > 0;
 
                 return (
@@ -311,18 +361,26 @@ export default function PaymentsPage() {
                     onClick={() => setSelectedPayment(payment)}
                     className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors cursor-pointer"
                   >
-                    <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-                      <CreditCard className="w-4 h-4 text-green-600" />
+                    {/* Method icon */}
+                    <div
+                      className={cn(
+                        "w-9 h-9 rounded-full flex items-center justify-center shrink-0",
+                        isCard ? "bg-purple-100" : "bg-amber-100"
+                      )}
+                    >
+                      {isCard ? (
+                        <CreditCard className="w-4 h-4 text-purple-600" />
+                      ) : (
+                        <Banknote className="w-4 h-4 text-amber-600" />
+                      )}
                     </div>
 
+                    {/* Info */}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {name}
-                      </p>
+                      <p className="text-sm font-medium text-gray-900 truncate">{name}</p>
                       <p className="text-xs text-gray-400 truncate mt-0.5">
                         {[
                           payment.subscription_plan_name,
-                          method,
                           fmtDateTime(payment.created_at),
                         ]
                           .filter(Boolean)
@@ -330,15 +388,29 @@ export default function PaymentsPage() {
                       </p>
                     </div>
 
-                    <div className="text-right shrink-0">
-                      <p className="text-sm font-bold text-green-600">
+                    {/* Amount + badges */}
+                    <div className="text-right shrink-0 flex flex-col items-end gap-0.5">
+                      <p className="text-sm font-bold text-green-600 tabular-nums">
                         +{formatCurrency(payment.final_amount)}
                       </p>
-                      {hasDiscount && (
-                        <Badge className="text-[10px] px-1.5 py-0 bg-orange-100 text-orange-600 border-0 font-medium mt-0.5">
-                          -{formatCurrency(payment.discount_amount)}
+                      <div className="flex items-center gap-1">
+                        {hasDiscount && (
+                          <Badge className="text-[10px] px-1.5 py-0 bg-orange-100 text-orange-600 border-0 font-medium">
+                            -{formatCurrency(payment.discount_amount)}
+                          </Badge>
+                        )}
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-[10px] px-1.5 py-0 font-medium",
+                            isCard
+                              ? "border-purple-200 bg-purple-50 text-purple-700"
+                              : "border-amber-200 bg-amber-50 text-amber-700"
+                          )}
+                        >
+                          {isCard ? "Plastik" : "Naqd"}
                         </Badge>
-                      )}
+                      </div>
                     </div>
                   </div>
                 );

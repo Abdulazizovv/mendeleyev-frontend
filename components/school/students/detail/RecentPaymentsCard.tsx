@@ -23,14 +23,10 @@ export function RecentPaymentsCard({
     const styles: Record<string, string> = {
       cash: "bg-green-100 text-green-800 border-green-300",
       card: "bg-blue-100 text-blue-800 border-blue-300",
-      bank_transfer: "bg-purple-100 text-purple-800 border-purple-300",
     };
     const labels: Record<string, string> = {
       cash: "Naqd",
-      card: "Karta",
-      bank_transfer: "Bank",
-      click: "Click",
-      payme: "Payme",
+      card: "Plastik karta",
       monthly: "Oylik",
       quarterly: "Choraklik",
       yearly: "Yillik",

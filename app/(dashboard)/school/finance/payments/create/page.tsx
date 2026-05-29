@@ -140,7 +140,7 @@ export default function CreatePaymentPage() {
 
   const { data: cashRegistersData } = useQuery({
     queryKey: ["cash-registers", branchId],
-    queryFn: () => financeApi.getCashRegisters({ branch_id: branchId }),
+    queryFn: () => financeApi.getCashRegisters({ branch_id: branchId, is_active: true }),
     enabled: !!branchId,
   });
   const cashRegisters = cashRegistersData?.results ?? [];
@@ -154,7 +154,9 @@ export default function CreatePaymentPage() {
 
   // Auto-select first cash register
   useEffect(() => {
-    if (cashRegisters.length > 0 && !cashRegisterId) setCashRegisterId(cashRegisters[0].id);
+    if (cashRegisters.length > 0 && !cashRegisterId) {
+      setCashRegisterId(cashRegisters[0].id);
+    }
   }, [cashRegisters, cashRegisterId]);
 
   // Auto-fill subscription/discount from student's active subscription
@@ -539,10 +541,18 @@ export default function CreatePaymentPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="cash">Naqd pul</SelectItem>
-                        <SelectItem value="card">Karta</SelectItem>
-                        <SelectItem value="bank_transfer">Bank o&apos;tkazmasi</SelectItem>
-                        <SelectItem value="mobile_payment">Mobil to&apos;lov</SelectItem>
+                        <SelectItem value="cash">
+                          <span className="flex items-center gap-1.5">
+                            <Banknote className="w-3.5 h-3.5 text-emerald-600" />
+                            Naqd pul
+                          </span>
+                        </SelectItem>
+                        <SelectItem value="card">
+                          <span className="flex items-center gap-1.5">
+                            <CreditCard className="w-3.5 h-3.5 text-blue-600" />
+                            Plastik karta
+                          </span>
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -574,7 +584,7 @@ export default function CreatePaymentPage() {
                     <SelectContent>
                       {cashRegisters.map((r) => (
                         <SelectItem key={r.id} value={r.id}>
-                          {r.name} ({formatCurrency(r.balance)})
+                          {r.name} — {formatCurrency(r.balance)}
                         </SelectItem>
                       ))}
                     </SelectContent>

@@ -106,6 +106,7 @@ export const financeApi = {
     branch_id?: string;
     search?: string;
     ordering?: string;
+    is_active?: boolean;
   }): Promise<PaginatedResponse<CashRegister>> => {
     const response = await apiClient.get<PaginatedResponse<CashRegister>>(
       `/school/finance/cash-registers/`,

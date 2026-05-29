@@ -1422,7 +1422,6 @@ export default function StaffPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="cash">{paymentMethodLabels.cash}</SelectItem>
-                    <SelectItem value="bank_transfer">{paymentMethodLabels.bank_transfer}</SelectItem>
                     <SelectItem value="card">{paymentMethodLabels.card}</SelectItem>
                   </SelectContent>
                 </Select>

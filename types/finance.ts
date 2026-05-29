@@ -268,21 +268,72 @@ export interface CreatePaymentRequest {
 
 // ==================== Statistics ====================
 
+export interface FinanceStatisticsSummary {
+  total_income: number;
+  total_expense: number;
+  net_balance: number;
+  total_cash_balance: number;
+  cash_income: number;
+  cash_expense: number;
+  cash_net: number;
+  card_income: number;
+  card_expense: number;
+  card_net: number;
+  total_student_balance: number;
+  total_payments: number;
+  payments_count: number;
+}
+
+export interface PaymentMethodStat {
+  label: string;
+  income: number;
+  expense: number;
+  net: number;
+  count: number;
+}
+
+export interface TransactionTypeStat {
+  label: string;
+  total: number;
+  count: number;
+}
+
+export interface CategoryStat {
+  category__name: string;
+  total: number;
+  count: number;
+}
+
+export interface RegisterStat {
+  id: string;
+  name: string;
+  balance: number;
+  cash_net: number;
+  card_net: number;
+  location?: string;
+}
+
+export interface MonthlyStat {
+  month: string;
+  income: number;
+  expense: number;
+}
+
+export interface DailyStat {
+  day: string;
+  income: number;
+  expense: number;
+}
+
 export interface FinanceStatistics {
-  summary: {
-    total_income: number;
-    total_expense: number;
-    net_balance: number;
-    total_cash_balance: number;
-    total_student_balance: number;
-    total_payments: number;
-    payments_count: number;
-  };
-  monthly_stats: {
-    month: string;
-    income: number;
-    expense: number;
-  }[];
+  summary: FinanceStatisticsSummary;
+  by_payment_method: Record<string, PaymentMethodStat>;
+  registers: RegisterStat[];
+  by_transaction_type: Record<string, TransactionTypeStat>;
+  top_income_categories: CategoryStat[];
+  top_expense_categories: CategoryStat[];
+  monthly_stats: MonthlyStat[];
+  daily_stats: DailyStat[];
 }
 
 // ==================== Enums ====================
@@ -303,12 +354,7 @@ export type TransactionStatus =
   | "cancelled" 
   | "failed";
 
-export type PaymentMethod = 
-  | "cash" 
-  | "card" 
-  | "bank_transfer" 
-  | "mobile_payment" 
-  | "other";
+export type PaymentMethod = "cash" | "card";
 
 export type PeriodType = 
   | "monthly" 
@@ -345,10 +391,7 @@ export const TRANSACTION_STATUS_LABELS: Record<TransactionStatus, string> = {
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   cash: "Naqd pul",
-  card: "Karta",
-  bank_transfer: "Bank o'tkazmasi",
-  mobile_payment: "Mobil to'lov",
-  other: "Boshqa",
+  card: "Plastik karta",
 };
 
 export const PERIOD_TYPE_LABELS: Record<PeriodType, string> = {
@@ -464,6 +507,7 @@ export interface BaseQueryParams {
 
 export interface TransactionQueryParams extends BaseQueryParams {
   transaction_type?: string;
+  payment_method?: string;
   status?: string;
   cash_register?: string;
   category?: string;

@@ -27,10 +27,7 @@ const TYPE_LABELS: Record<string, string> = {
 
 const METHOD_LABELS: Record<string, string> = {
   cash: "Naqd pul",
-  card: "Karta",
-  bank_transfer: "Bank o'tkazmasi",
-  mobile_payment: "Mobil to'lov",
-  other: "Boshqa",
+  card: "Plastik karta",
 };
 
 const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {

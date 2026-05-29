@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { financeApi } from "@/lib/api";
 import { useAuth } from "@/lib/hooks";
-import { formatCurrency, fmtDateTime } from "@/lib/utils";
+import { formatCurrency, fmtDateTime, cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,11 +28,12 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   RefreshCw,
+  Banknote,
+  CreditCard,
 } from "lucide-react";
 import { TransactionModal } from "@/components/finance/transactions/TransactionModal";
 import { TransactionDetailSheet } from "@/components/finance/transactions/TransactionDetailSheet";
 import { ExportModal } from "@/components/finance/ExportModal";
-import { cn } from "@/lib/utils";
 import type { Transaction, TransactionType } from "@/types/finance";
 
 const TYPE_LABELS: Record<string, string> = {
@@ -88,9 +89,9 @@ export default function TransactionsPage() {
 
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [methodFilter, setMethodFilter] = useState("all");
   const [registerFilter, setRegisterFilter] = useState("all");
 
-  // Joriy oy — default filter
   const [dateFrom, setDateFrom] = useState(() => {
     const n = new Date();
     return new Date(n.getFullYear(), n.getMonth(), 1).toISOString().split("T")[0];
@@ -106,17 +107,18 @@ export default function TransactionsPage() {
   const cashRegisters = registersData?.results || [];
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ["transactions", branchId, search, typeFilter, registerFilter, dateFrom, dateTo],
+    queryKey: ["transactions", branchId, search, typeFilter, methodFilter, registerFilter, dateFrom, dateTo],
     queryFn: () =>
       financeApi.getTransactions({
         branch_id: branchId,
         search: search || undefined,
         transaction_type: typeFilter !== "all" ? typeFilter : undefined,
+        payment_method: methodFilter !== "all" ? methodFilter : undefined,
         cash_register: registerFilter !== "all" ? registerFilter : undefined,
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
         ordering: "-created_at",
-      } as any),
+      }),
     enabled: !!branchId,
   });
 
@@ -125,11 +127,18 @@ export default function TransactionsPage() {
   const summary = transactions.reduce(
     (acc, t) => {
       if (t.status !== "completed") return acc;
-      if (isIncomeLike(t.transaction_type)) acc.income += t.amount;
-      else acc.expense += t.amount;
+      if (isIncomeLike(t.transaction_type)) {
+        acc.income += t.amount;
+        if (t.payment_method === "cash") acc.cashIncome += t.amount;
+        else if (t.payment_method === "card") acc.cardIncome += t.amount;
+      } else {
+        acc.expense += t.amount;
+        if (t.payment_method === "cash") acc.cashExpense += t.amount;
+        else if (t.payment_method === "card") acc.cardExpense += t.amount;
+      }
       return acc;
     },
-    { income: 0, expense: 0 }
+    { income: 0, expense: 0, cashIncome: 0, cardIncome: 0, cashExpense: 0, cardExpense: 0 }
   );
 
   const openModal = (type: "income" | "expense") => {
@@ -154,17 +163,19 @@ export default function TransactionsPage() {
     const n = new Date();
     setSearch("");
     setTypeFilter("all");
+    setMethodFilter("all");
     setRegisterFilter("all");
     setDateFrom(new Date(n.getFullYear(), n.getMonth(), 1).toISOString().split("T")[0]);
     setDateTo("");
     setActiveQuick("month");
   };
 
-  const hasFilter = !!(search || typeFilter !== "all" || registerFilter !== "all");
+  const hasFilter = !!(search || typeFilter !== "all" || methodFilter !== "all" || registerFilter !== "all");
 
   return (
     <div className="space-y-4 p-4 md:p-6">
-      {/* Header */}
+
+      {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Tranzaksiyalar</h1>
@@ -202,7 +213,7 @@ export default function TransactionsPage() {
         </div>
       </div>
 
-      {/* Stats */}
+      {/* ── Stats ── */}
       <div className="grid grid-cols-3 gap-3">
         <Card className="border-t-4 border-t-green-500">
           <CardContent className="p-4 flex items-center gap-3">
@@ -211,7 +222,7 @@ export default function TransactionsPage() {
             </div>
             <div>
               <p className="text-xs text-gray-500">Kirim</p>
-              <p className="text-lg font-bold text-green-600">
+              <p className="text-lg font-bold text-green-600 tabular-nums">
                 {formatCurrency(summary.income)}
               </p>
             </div>
@@ -224,7 +235,7 @@ export default function TransactionsPage() {
             </div>
             <div>
               <p className="text-xs text-gray-500">Chiqim</p>
-              <p className="text-lg font-bold text-red-600">
+              <p className="text-lg font-bold text-red-600 tabular-nums">
                 {formatCurrency(summary.expense)}
               </p>
             </div>
@@ -239,10 +250,8 @@ export default function TransactionsPage() {
               <p className="text-xs text-gray-500">Sof</p>
               <p
                 className={cn(
-                  "text-lg font-bold",
-                  summary.income - summary.expense >= 0
-                    ? "text-blue-600"
-                    : "text-orange-600"
+                  "text-lg font-bold tabular-nums",
+                  summary.income - summary.expense >= 0 ? "text-blue-600" : "text-orange-600"
                 )}
               >
                 {formatCurrency(summary.income - summary.expense)}
@@ -252,10 +261,67 @@ export default function TransactionsPage() {
         </Card>
       </div>
 
-      {/* Filters */}
+      {/* ── Naqd / Plastik breakdown ── */}
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          onClick={() => setMethodFilter(methodFilter === "cash" ? "all" : "cash")}
+          className={cn(
+            "text-left p-3.5 rounded-xl border transition-all",
+            methodFilter === "cash"
+              ? "border-amber-400 bg-amber-50 ring-1 ring-amber-300"
+              : "border-amber-200 bg-amber-50/40 hover:bg-amber-50 hover:border-amber-300"
+          )}
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center">
+              <Banknote className="w-4 h-4 text-amber-600" />
+            </div>
+            <span className="text-sm font-semibold text-gray-800">Naqd pul</span>
+          </div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs">
+            <span className="text-gray-400">Kirim</span>
+            <span className="font-bold text-emerald-700 tabular-nums text-right">
+              +{formatCurrency(summary.cashIncome)}
+            </span>
+            <span className="text-gray-400">Chiqim</span>
+            <span className="font-bold text-red-600 tabular-nums text-right">
+              -{formatCurrency(summary.cashExpense)}
+            </span>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setMethodFilter(methodFilter === "card" ? "all" : "card")}
+          className={cn(
+            "text-left p-3.5 rounded-xl border transition-all",
+            methodFilter === "card"
+              ? "border-purple-400 bg-purple-50 ring-1 ring-purple-300"
+              : "border-purple-200 bg-purple-50/40 hover:bg-purple-50 hover:border-purple-300"
+          )}
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-7 h-7 bg-purple-100 rounded-lg flex items-center justify-center">
+              <CreditCard className="w-4 h-4 text-purple-600" />
+            </div>
+            <span className="text-sm font-semibold text-gray-800">Plastik karta</span>
+          </div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs">
+            <span className="text-gray-400">Kirim</span>
+            <span className="font-bold text-emerald-700 tabular-nums text-right">
+              +{formatCurrency(summary.cardIncome)}
+            </span>
+            <span className="text-gray-400">Chiqim</span>
+            <span className="font-bold text-red-600 tabular-nums text-right">
+              -{formatCurrency(summary.cardExpense)}
+            </span>
+          </div>
+        </button>
+      </div>
+
+      {/* ── Filters ── */}
       <Card>
         <CardContent className="p-4 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             {/* Search */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -291,6 +357,28 @@ export default function TransactionsPage() {
               </SelectContent>
             </Select>
 
+            {/* Payment method */}
+            <Select value={methodFilter} onValueChange={setMethodFilter}>
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="To'lov usuli" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Barcha usullar</SelectItem>
+                <SelectItem value="cash">
+                  <span className="flex items-center gap-2">
+                    <Banknote className="w-3.5 h-3.5 text-amber-600" />
+                    Naqd pul
+                  </span>
+                </SelectItem>
+                <SelectItem value="card">
+                  <span className="flex items-center gap-2">
+                    <CreditCard className="w-3.5 h-3.5 text-purple-600" />
+                    Plastik karta
+                  </span>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+
             {/* Register */}
             <Select value={registerFilter} onValueChange={setRegisterFilter}>
               <SelectTrigger className="h-9">
@@ -307,7 +395,7 @@ export default function TransactionsPage() {
             </Select>
           </div>
 
-          {/* Date range + quick selectors */}
+          {/* Date range */}
           <div className="flex flex-wrap items-center gap-2">
             <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
             <Input
@@ -357,7 +445,7 @@ export default function TransactionsPage() {
         </CardContent>
       </Card>
 
-      {/* Transaction list */}
+      {/* ── Transaction list ── */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <CardTitle className="text-base flex items-center gap-2">
@@ -369,12 +457,7 @@ export default function TransactionsPage() {
               </span>
             )}
           </CardTitle>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => refetch()}
-            className="w-8 h-8"
-          >
+          <Button variant="ghost" size="icon" onClick={() => refetch()} className="w-8 h-8">
             <RefreshCw className="w-3.5 h-3.5" />
           </Button>
         </CardHeader>
@@ -415,6 +498,7 @@ export default function TransactionsPage() {
                 const income = isIncomeLike(tx.transaction_type);
                 const statusCfg = STATUS_CONFIG[tx.status] || STATUS_CONFIG.completed;
                 const showStatus = tx.status !== "completed";
+                const isCard = tx.payment_method === "card";
 
                 return (
                   <div
@@ -438,14 +522,14 @@ export default function TransactionsPage() {
 
                     {/* Main info */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
                         <span className="text-sm font-medium text-gray-900 truncate">
                           {tx.category_name || TYPE_LABELS[tx.transaction_type] || tx.transaction_type}
                         </span>
                         {showStatus && (
                           <Badge
                             variant="outline"
-                            className={cn("text-xs px-1.5 py-0 shrink-0", statusCfg.cls)}
+                            className={cn("text-[10px] px-1.5 py-0 shrink-0", statusCfg.cls)}
                           >
                             {statusCfg.label}
                           </Badge>
@@ -459,16 +543,36 @@ export default function TransactionsPage() {
                       </p>
                     </div>
 
-                    {/* Amount */}
-                    <p
-                      className={cn(
-                        "text-sm font-bold shrink-0",
-                        income ? "text-green-600" : "text-red-600"
-                      )}
-                    >
-                      {income ? "+" : "−"}
-                      {formatCurrency(tx.amount)}
-                    </p>
+                    {/* Amount + method badge */}
+                    <div className="text-right shrink-0 flex flex-col items-end gap-0.5">
+                      <p
+                        className={cn(
+                          "text-sm font-bold tabular-nums",
+                          income ? "text-green-600" : "text-red-600"
+                        )}
+                      >
+                        {income ? "+" : "−"}
+                        {formatCurrency(tx.amount)}
+                      </p>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-[10px] px-1.5 py-0 font-medium",
+                          isCard
+                            ? "border-purple-200 bg-purple-50 text-purple-700"
+                            : "border-amber-200 bg-amber-50 text-amber-700"
+                        )}
+                      >
+                        <span className="flex items-center gap-0.5">
+                          {isCard ? (
+                            <CreditCard className="w-2.5 h-2.5" />
+                          ) : (
+                            <Banknote className="w-2.5 h-2.5" />
+                          )}
+                          {isCard ? "Plastik" : "Naqd"}
+                        </span>
+                      </Badge>
+                    </div>
                   </div>
                 );
               })}

@@ -9,11 +9,11 @@ import { formatCurrency } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Wallet,
   TrendingUp,
   TrendingDown,
-  Users,
   CreditCard,
   ArrowUpRight,
   ArrowDownRight,
@@ -26,6 +26,8 @@ import {
   ArrowRight,
   Package,
   BadgePercent,
+  Banknote,
+  MapPin,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
@@ -71,45 +73,52 @@ export default function FinancePage() {
   const cashRegisters = cashRegistersData?.results || [];
   const summary = statistics?.summary;
   const monthlyStats = statistics?.monthly_stats || [];
+  const registers = statistics?.registers || [];
+  const byMethod = statistics?.by_payment_method ?? {};
   const recentPayments = recentPaymentsData?.results || [];
+
+  // Map is_active from the cashRegisters list onto statistics registers
+  const isActiveMap = Object.fromEntries(cashRegisters.map((r) => [r.id, r.is_active]));
 
   const statCards = [
     {
-      label: "Kirim",
+      label: "Jami kirim",
       value: summary?.total_income || 0,
       icon: TrendingUp,
       arrow: ArrowUpRight,
-      color: "border-t-green-500",
-      bg: "bg-green-100",
-      iconColor: "text-green-600",
-      arrowColor: "text-green-500",
+      borderColor: "border-t-emerald-500",
+      bg: "bg-emerald-100",
+      iconColor: "text-emerald-600",
+      arrowColor: "text-emerald-500",
+      sub: `${summary?.payments_count || 0} ta to'lov`,
     },
     {
-      label: "Chiqim",
+      label: "Jami chiqim",
       value: summary?.total_expense || 0,
       icon: TrendingDown,
       arrow: ArrowDownRight,
-      color: "border-t-red-500",
+      borderColor: "border-t-red-500",
       bg: "bg-red-100",
       iconColor: "text-red-600",
       arrowColor: "text-red-500",
     },
     {
-      label: "Sof Balans",
+      label: "Sof balans",
       value: summary?.net_balance || 0,
       icon: Wallet,
       arrow: BarChart3,
-      color: "border-t-blue-500",
+      borderColor: "border-t-blue-500",
       bg: "bg-blue-100",
       iconColor: "text-blue-600",
       arrowColor: "text-blue-500",
+      sub: summary && summary.net_balance >= 0 ? "Musbat balans" : "Manfiy balans",
     },
     {
-      label: "To'lovlar",
+      label: "O'quvchi to'lovlari",
       value: summary?.total_payments || 0,
       icon: DollarSign,
       arrow: CreditCard,
-      color: "border-t-purple-500",
+      borderColor: "border-t-purple-500",
       bg: "bg-purple-100",
       iconColor: "text-purple-600",
       arrowColor: "text-purple-500",
@@ -119,7 +128,8 @@ export default function FinancePage() {
 
   return (
     <div className="space-y-5 p-4 md:p-6">
-      {/* Header */}
+
+      {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Moliya Boshqaruvi</h1>
@@ -136,17 +146,21 @@ export default function FinancePage() {
         </Button>
       </div>
 
-      {/* Stats Cards */}
+      {/* ── Period label ── */}
       <div className="flex items-center gap-2">
         <p className="text-sm font-semibold text-gray-700">{CURRENT_MONTH_LABEL} statistikasi</p>
         <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">Shu oy</span>
       </div>
+
+      {/* ── 4 summary cards ── */}
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => (
-            <Card key={i} className="animate-pulse">
-              <CardContent className="p-6">
-                <div className="h-20 bg-gray-200 rounded" />
+          {[1,2,3,4].map((i) => (
+            <Card key={i}>
+              <CardContent className="p-5">
+                <Skeleton className="w-10 h-10 rounded-lg mb-3" />
+                <Skeleton className="h-4 w-24 mb-1.5" />
+                <Skeleton className="h-7 w-32" />
               </CardContent>
             </Card>
           ))}
@@ -156,7 +170,7 @@ export default function FinancePage() {
           {statCards.map((stat) => (
             <Card
               key={stat.label}
-              className={`border-t-4 ${stat.color} hover:shadow-lg transition-all hover:-translate-y-0.5`}
+              className={`border-t-4 ${stat.borderColor} hover:shadow-lg transition-all hover:-translate-y-0.5`}
             >
               <CardContent className="p-5">
                 <div className="flex items-center justify-between mb-3">
@@ -166,7 +180,7 @@ export default function FinancePage() {
                   <stat.arrow className={`w-4 h-4 ${stat.arrowColor}`} />
                 </div>
                 <p className="text-xs font-medium text-gray-500 mb-1">{stat.label}</p>
-                <p className="text-xl font-bold text-gray-900">{formatCurrency(stat.value)}</p>
+                <p className="text-xl font-bold text-gray-900 tabular-nums">{formatCurrency(stat.value)}</p>
                 {stat.sub && <p className="text-xs text-gray-400 mt-1">{stat.sub}</p>}
               </CardContent>
             </Card>
@@ -174,15 +188,101 @@ export default function FinancePage() {
         </div>
       )}
 
-      {/* Main content grid */}
+      {/* ── Naqd / Plastik breakdown ── */}
+      {!isLoading && summary && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+          {/* Naqd pul */}
+          <Card className="border-amber-200 bg-amber-50/50">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 bg-amber-100 rounded-xl flex items-center justify-center">
+                    <Banknote className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-gray-800">Naqd pul</p>
+                    <p className="text-xs text-amber-600">{byMethod.cash?.count ?? 0} ta tranzaksiya</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-gray-400 mb-0.5">Sof</p>
+                  <p className={`text-base font-bold tabular-nums ${(summary.cash_net ?? 0) >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                    {(summary.cash_net ?? 0) >= 0 ? "+" : ""}{formatCurrency(summary.cash_net ?? 0)}
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-white/70 rounded-lg p-2.5 border border-amber-100">
+                  <p className="text-xs text-gray-400 mb-1 flex items-center gap-1">
+                    <ArrowUpRight className="w-3 h-3 text-emerald-500" />
+                    Kirim
+                  </p>
+                  <p className="text-sm font-bold text-emerald-700 tabular-nums">{formatCurrency(summary.cash_income ?? 0)}</p>
+                </div>
+                <div className="bg-white/70 rounded-lg p-2.5 border border-amber-100">
+                  <p className="text-xs text-gray-400 mb-1 flex items-center gap-1">
+                    <ArrowDownRight className="w-3 h-3 text-red-500" />
+                    Chiqim
+                  </p>
+                  <p className="text-sm font-bold text-red-600 tabular-nums">{formatCurrency(summary.cash_expense ?? 0)}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Plastik karta */}
+          <Card className="border-purple-200 bg-purple-50/50">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 bg-purple-100 rounded-xl flex items-center justify-center">
+                    <CreditCard className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-gray-800">Plastik karta</p>
+                    <p className="text-xs text-purple-600">{byMethod.card?.count ?? 0} ta tranzaksiya</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-gray-400 mb-0.5">Sof</p>
+                  <p className={`text-base font-bold tabular-nums ${(summary.card_net ?? 0) >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                    {(summary.card_net ?? 0) >= 0 ? "+" : ""}{formatCurrency(summary.card_net ?? 0)}
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-white/70 rounded-lg p-2.5 border border-purple-100">
+                  <p className="text-xs text-gray-400 mb-1 flex items-center gap-1">
+                    <ArrowUpRight className="w-3 h-3 text-emerald-500" />
+                    Kirim
+                  </p>
+                  <p className="text-sm font-bold text-emerald-700 tabular-nums">{formatCurrency(summary.card_income ?? 0)}</p>
+                </div>
+                <div className="bg-white/70 rounded-lg p-2.5 border border-purple-100">
+                  <p className="text-xs text-gray-400 mb-1 flex items-center gap-1">
+                    <ArrowDownRight className="w-3 h-3 text-red-500" />
+                    Chiqim
+                  </p>
+                  <p className="text-sm font-bold text-red-600 tabular-nums">{formatCurrency(summary.card_expense ?? 0)}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+        </div>
+      )}
+
+      {/* ── Main 3-col grid: Monthly table + Kassalar ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Monthly Stats */}
+
+        {/* Oylik jadval */}
         {monthlyStats.length > 0 && (
           <Card className="lg:col-span-2">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
                 <Calendar className="w-4 h-4" />
-                Oylik Statistika
+                Oylik statistika
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
@@ -191,7 +291,7 @@ export default function FinancePage() {
                   <thead>
                     <tr className="border-b bg-gray-50">
                       <th className="text-left py-2.5 px-4 font-semibold text-gray-500 text-xs">OY</th>
-                      <th className="text-right py-2.5 px-4 font-semibold text-green-600 text-xs">KIRIM</th>
+                      <th className="text-right py-2.5 px-4 font-semibold text-emerald-600 text-xs">KIRIM</th>
                       <th className="text-right py-2.5 px-4 font-semibold text-red-600 text-xs">CHIQIM</th>
                       <th className="text-right py-2.5 px-4 font-semibold text-blue-600 text-xs">BALANS</th>
                     </tr>
@@ -201,22 +301,18 @@ export default function FinancePage() {
                       const d = new Date(stat.month);
                       const balance = stat.income - stat.expense;
                       return (
-                        <tr key={i} className="border-b last:border-0 hover:bg-gray-50">
+                        <tr key={i} className="border-b last:border-0 hover:bg-gray-50 transition-colors">
                           <td className="py-3 px-4 font-medium">
                             {UZ_MONTHS[d.getMonth()]} {d.getFullYear()}
                           </td>
-                          <td className="text-right py-3 px-4 text-green-600 font-medium">
-                            {formatCurrency(stat.income)}
+                          <td className="text-right py-3 px-4 text-emerald-600 font-semibold tabular-nums">
+                            +{formatCurrency(stat.income)}
                           </td>
-                          <td className="text-right py-3 px-4 text-red-600 font-medium">
-                            {formatCurrency(stat.expense)}
+                          <td className="text-right py-3 px-4 text-red-600 font-semibold tabular-nums">
+                            −{formatCurrency(stat.expense)}
                           </td>
-                          <td
-                            className={`text-right py-3 px-4 font-bold ${
-                              balance >= 0 ? "text-blue-600" : "text-orange-600"
-                            }`}
-                          >
-                            {formatCurrency(balance)}
+                          <td className={`text-right py-3 px-4 font-bold tabular-nums ${balance >= 0 ? "text-blue-600" : "text-orange-600"}`}>
+                            {balance >= 0 ? "+" : ""}{formatCurrency(balance)}
                           </td>
                         </tr>
                       );
@@ -228,7 +324,7 @@ export default function FinancePage() {
           </Card>
         )}
 
-        {/* Cash Registers */}
+        {/* Kassalar — with cash/card breakdown */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
@@ -245,8 +341,10 @@ export default function FinancePage() {
               <ArrowRight className="w-3 h-3" />
             </Button>
           </CardHeader>
-          <CardContent className="space-y-2">
-            {cashRegisters.length === 0 ? (
+          <CardContent className="space-y-2.5">
+            {isLoading ? (
+              [1,2,3].map(i => <Skeleton key={i} className="h-20 w-full rounded-xl" />)
+            ) : registers.length === 0 ? (
               <div className="text-center py-6">
                 <Building2 className="w-10 h-10 text-gray-300 mx-auto mb-2" />
                 <p className="text-sm text-gray-500 mb-3">Kassa topilmadi</p>
@@ -259,51 +357,85 @@ export default function FinancePage() {
                 </Button>
               </div>
             ) : (
-              cashRegisters.slice(0, 6).map((r) => (
-                <div
-                  key={r.id}
-                  className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
-                  onClick={() => router.push(`/school/finance/cash-registers/${r.id}`)}
-                >
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <div className={`w-2 h-2 rounded-full shrink-0 ${r.is_active ? "bg-green-500" : "bg-gray-300"}`} />
-                    <p className="font-medium text-sm text-gray-900 truncate">{r.name}</p>
+              registers.slice(0, 5).map((r) => {
+                const total = Math.abs(r.cash_net) + Math.abs(r.card_net) || 1;
+                const cashPct = Math.round((Math.abs(r.cash_net) / total) * 100);
+                const cardPct = 100 - cashPct;
+                const active = isActiveMap[r.id] !== false;
+                return (
+                  <div
+                    key={r.id}
+                    className="p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer border border-transparent hover:border-gray-200"
+                    onClick={() => router.push("/school/finance/cash-registers")}
+                  >
+                    {/* Name + balance */}
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 mt-0.5 ${active ? "bg-emerald-500" : "bg-gray-300"}`} />
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-gray-800 truncate">{r.name}</p>
+                          {r.location && (
+                            <p className="text-xs text-gray-400 flex items-center gap-0.5 mt-0.5">
+                              <MapPin className="w-2.5 h-2.5" />{r.location}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-sm font-bold text-gray-900 tabular-nums ml-2 shrink-0">
+                        {formatCurrency(r.balance)}
+                      </p>
+                    </div>
+                    {/* Cash/card progress bar */}
+                    <div className="flex h-1.5 rounded-full overflow-hidden gap-0.5 mb-1.5">
+                      <div className="bg-amber-400 rounded-l-full transition-all" style={{ width: `${cashPct}%` }} />
+                      <div className="bg-purple-400 rounded-r-full transition-all" style={{ width: `${cardPct}%` }} />
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="flex items-center gap-1 text-amber-700 font-medium">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+                        Naqd: {formatCurrency(r.cash_net)}
+                      </span>
+                      <span className="flex items-center gap-1 text-purple-700 font-medium">
+                        <span className="w-1.5 h-1.5 rounded-full bg-purple-400 inline-block" />
+                        Plastik: {formatCurrency(r.card_net)}
+                      </span>
+                    </div>
                   </div>
-                  <p className="font-semibold text-sm text-gray-900 ml-2 shrink-0">
-                    {formatCurrency(r.balance)}
-                  </p>
-                </div>
-              ))
+                );
+              })
             )}
 
-            {/* Student balance summary */}
-            <div className="mt-3 pt-3 border-t space-y-2">
-              <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-100">
-                <div>
-                  <p className="text-xs text-gray-500">O&apos;quvchilar balansi</p>
-                  <p className="font-bold text-gray-900">{formatCurrency(summary?.total_student_balance || 0)}</p>
+            {/* Totals */}
+            {!isLoading && summary && (
+              <div className="pt-2 border-t space-y-2">
+                <div className="flex items-center justify-between px-1 py-2 bg-blue-50 rounded-lg border border-blue-100">
+                  <div>
+                    <p className="text-xs text-gray-500">Kassalardagi jami</p>
+                    <p className="font-bold text-gray-900 tabular-nums">{formatCurrency(summary.total_cash_balance)}</p>
+                  </div>
+                  <Wallet className="w-5 h-5 text-blue-500 mr-1" />
                 </div>
-                <Wallet className="w-5 h-5 text-blue-500" />
-              </div>
-              <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-100">
-                <div>
-                  <p className="text-xs text-gray-500">Kassadagi jami</p>
-                  <p className="font-bold text-gray-900">{formatCurrency(summary?.total_cash_balance || 0)}</p>
+                <div className="flex items-center justify-between px-1 py-2 bg-indigo-50 rounded-lg border border-indigo-100">
+                  <div>
+                    <p className="text-xs text-gray-500">O&apos;quvchilar balansi</p>
+                    <p className="font-bold text-gray-900 tabular-nums">{formatCurrency(summary.total_student_balance)}</p>
+                  </div>
+                  <DollarSign className="w-5 h-5 text-indigo-400 mr-1" />
                 </div>
-                <DollarSign className="w-5 h-5 text-green-500" />
               </div>
-            </div>
+            )}
           </CardContent>
         </Card>
+
       </div>
 
-      {/* Recent Payments */}
+      {/* ── So'nggi to'lovlar ── */}
       {recentPayments.length > 0 && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <Receipt className="w-4 h-4" />
-              So&apos;nggi To&apos;lovlar
+              So&apos;nggi to&apos;lovlar
             </CardTitle>
             <Button
               variant="ghost"
@@ -317,47 +449,65 @@ export default function FinancePage() {
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y">
-              {recentPayments.map((payment) => (
-                <div
-                  key={payment.id}
-                  className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 cursor-pointer transition-colors"
-                  onClick={() => router.push(`/school/finance/payments/${payment.id}`)}
-                >
-                  <Avatar className="w-8 h-8 shrink-0">
-                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-xs font-bold">
-                      {payment.student?.full_name
-                        ?.split(" ")
-                        .map((n: string) => n[0])
-                        .join("")
-                        .slice(0, 2) || "??"}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">
-                      {payment.student?.full_name || payment.student_name || "—"}
-                    </p>
-                    <p className="text-xs text-gray-400 truncate">
-                      {payment.subscription_plan_name} ·{" "}
-                      {new Date(payment.payment_date).toLocaleDateString("uz-UZ", {
-                        day: "numeric",
-                        month: "short",
-                      })}
-                    </p>
+              {recentPayments.map((payment) => {
+                const isCard = payment.payment_method === "card";
+                return (
+                  <div
+                    key={payment.id}
+                    className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 cursor-pointer transition-colors"
+                    onClick={() => router.push(`/school/finance/payments/${payment.id}`)}
+                  >
+                    <Avatar className="w-8 h-8 shrink-0">
+                      <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-xs font-bold">
+                        {payment.student?.full_name
+                          ?.split(" ")
+                          .map((n: string) => n[0])
+                          .join("")
+                          .slice(0, 2) || "??"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {payment.student?.full_name || payment.student_name || "—"}
+                      </p>
+                      <p className="text-xs text-gray-400 truncate">
+                        {payment.subscription_plan_name} ·{" "}
+                        {new Date(payment.payment_date).toLocaleDateString("uz-UZ", {
+                          day: "numeric",
+                          month: "short",
+                        })}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-bold text-emerald-600 tabular-nums">{formatCurrency(payment.final_amount)}</p>
+                      <Badge
+                        variant="outline"
+                        className={`text-xs px-1.5 py-0 mt-0.5 ${
+                          isCard
+                            ? "border-purple-200 text-purple-700 bg-purple-50"
+                            : "border-amber-200 text-amber-700 bg-amber-50"
+                        }`}
+                      >
+                        {isCard ? (
+                          <span className="flex items-center gap-0.5">
+                            <CreditCard className="w-2.5 h-2.5" /> Plastik
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-0.5">
+                            <Banknote className="w-2.5 h-2.5" /> Naqd
+                          </span>
+                        )}
+                      </Badge>
+                    </div>
                   </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-sm font-bold text-green-600">{formatCurrency(payment.final_amount)}</p>
-                    <Badge variant="outline" className="text-xs px-1.5 py-0 mt-0.5">
-                      {payment.payment_method_display}
-                    </Badge>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Finance Config shortcuts */}
+      {/* ── Sozlamalar shortcuts ── */}
       <div>
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
           Moliya sozlamalari
@@ -388,6 +538,7 @@ export default function FinancePage() {
           ))}
         </div>
       </div>
+
     </div>
   );
 }

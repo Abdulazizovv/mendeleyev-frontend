@@ -113,7 +113,7 @@ export default function StaffDetailPage() {
 	const [paySalaryForm, setPaySalaryForm] = React.useState({
 		amount: 0,
 		payment_date: todayIso,
-		payment_method: "bank_transfer" as PaymentMethod,
+		payment_method: "cash" as PaymentMethod,
 		payment_type: "salary" as SalaryPaymentType,
 		cash_register_id: "",
 		notes: "",
@@ -138,7 +138,7 @@ export default function StaffDetailPage() {
 	const resetPaySalaryForm = () => setPaySalaryForm({
 		amount: 0,
 		payment_date: todayIso,
-		payment_method: "bank_transfer",
+		payment_method: "cash",
 		payment_type: "salary",
 		cash_register_id: "",
 		notes: "",
@@ -289,7 +289,7 @@ export default function StaffDetailPage() {
 				transaction_type: "salary",
 				category: salaryCategory?.id,
 				amount: paySalaryForm.amount,
-				payment_method: paySalaryForm.payment_method,
+				payment_method: paySalaryForm.payment_method as "cash" | "card",
 				description: `${salaryPaymentTypeLabels[paySalaryForm.payment_type]} • ${staff.full_name} • ${uzbekMonths[selectedMonth - 1]} ${selectedYear}`,
 				reference_number: paySalaryForm.reference_number || undefined,
 				employee_membership: staffId,
@@ -1087,10 +1087,7 @@ export default function StaffDetailPage() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="cash">Naqd pul</SelectItem>
-                          <SelectItem value="bank_transfer">Bank o&apos;tkazmasi</SelectItem>
-                          <SelectItem value="card">Karta</SelectItem>
-                          <SelectItem value="mobile_payment">Mobil to&apos;lov</SelectItem>
-                          <SelectItem value="other">Boshqa</SelectItem>
+                          <SelectItem value="card">Plastik karta</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

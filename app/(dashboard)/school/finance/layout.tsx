@@ -14,6 +14,7 @@ import {
   BadgePercent,
   Settings2,
   ChevronDown,
+  LineChart,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -27,6 +28,7 @@ const operations = [
   { label: "Tranzaksiyalar", href: "/school/finance/transactions", icon: Receipt },
   { label: "To'lovlar", href: "/school/finance/payments", icon: CreditCard },
   { label: "Balanslar", href: "/school/finance/student-balances", icon: Users },
+  { label: "Statistika", href: "/school/finance/statistics", icon: LineChart },
 ];
 
 const settingsItems = [

@@ -108,15 +108,16 @@ interface QuickAction {
   icon: React.ElementType;
   color: string;
   bg: string;
+  soon?: boolean;
 }
 
 const QUICK_ACTIONS: QuickAction[] = [
-  { label: "O'quvchi qo'shish",   href: "/school/students",         icon: UserPlus,      color: "text-blue-600",    bg: "bg-blue-50 hover:bg-blue-100" },
-  { label: "To'lov qabul qilish", href: "/school/finance/payments", icon: CreditCard,    color: "text-emerald-600", bg: "bg-emerald-50 hover:bg-emerald-100" },
-  { label: "Davomat belgilash",   href: "/school/attendance",       icon: ClipboardList, color: "text-purple-600",  bg: "bg-purple-50 hover:bg-purple-100" },
-  { label: "Baholar",             href: "/school/grades",           icon: Award,         color: "text-orange-600",  bg: "bg-orange-50 hover:bg-orange-100" },
-  { label: "Jadval",              href: "/school/schedule",         icon: Calendar,      color: "text-pink-600",    bg: "bg-pink-50 hover:bg-pink-100" },
-  { label: "Moliya hisoboti",     href: "/school/finance",          icon: BarChart3,     color: "text-indigo-600",  bg: "bg-indigo-50 hover:bg-indigo-100" },
+  { label: "O'quvchi qo'shish",   href: "/school/students",            icon: UserPlus,      color: "text-blue-600",    bg: "bg-blue-50 hover:bg-blue-100" },
+  { label: "To'lov qabul qilish", href: "/school/finance/payments",    icon: CreditCard,    color: "text-emerald-600", bg: "bg-emerald-50 hover:bg-emerald-100" },
+  { label: "Davomat belgilash",   href: "/school/attendance",          icon: ClipboardList, color: "text-purple-600",  bg: "bg-purple-50 hover:bg-purple-100", soon: true },
+  { label: "Baholar",             href: "/school/grades",              icon: Award,         color: "text-orange-600",  bg: "bg-orange-50 hover:bg-orange-100", soon: true },
+  { label: "Jadval",              href: "/school/schedule",            icon: Calendar,      color: "text-pink-600",    bg: "bg-pink-50 hover:bg-pink-100" },
+  { label: "Moliya hisoboti",     href: "/school/finance/statistics",  icon: BarChart3,     color: "text-indigo-600",  bg: "bg-indigo-50 hover:bg-indigo-100" },
 ];
 
 // ── Stat card ─────────────────────────────────────────────────────────────────
@@ -364,12 +365,23 @@ export default function SchoolDashboard() {
               <Link
                 key={action.href}
                 href={action.href}
-                className={`flex flex-col items-center gap-2 p-3 rounded-xl ${action.bg} transition-colors border border-transparent hover:border-gray-200`}
+                className={`relative flex flex-col items-center gap-2 p-3 rounded-xl transition-colors border border-transparent ${
+                  action.soon
+                    ? "bg-gray-50 hover:bg-gray-100 opacity-75"
+                    : `${action.bg} hover:border-gray-200`
+                }`}
               >
+                {action.soon && (
+                  <span className="absolute -top-1.5 -right-1.5 text-[9px] font-bold bg-amber-400 text-amber-900 px-1.5 py-0.5 rounded-full leading-none">
+                    Tez orada
+                  </span>
+                )}
                 <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center">
-                  <action.icon className={`w-5 h-5 ${action.color}`} />
+                  <action.icon className={`w-5 h-5 ${action.soon ? "text-gray-400" : action.color}`} />
                 </div>
-                <span className="text-xs font-medium text-gray-700 text-center leading-tight">{action.label}</span>
+                <span className={`text-xs font-medium text-center leading-tight ${action.soon ? "text-gray-400" : "text-gray-700"}`}>
+                  {action.label}
+                </span>
               </Link>
             ))}
           </div>

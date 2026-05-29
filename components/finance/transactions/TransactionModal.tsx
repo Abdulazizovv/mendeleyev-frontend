@@ -309,11 +309,8 @@ export function TransactionModal({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="cash">Naqd</SelectItem>
-                  <SelectItem value="card">Karta</SelectItem>
-                  <SelectItem value="bank_transfer">Bank</SelectItem>
-                  <SelectItem value="mobile_payment">Mobil</SelectItem>
-                  <SelectItem value="other">Boshqa</SelectItem>
+                  <SelectItem value="cash">Naqd pul</SelectItem>
+                  <SelectItem value="card">Plastik karta</SelectItem>
                 </SelectContent>
               </Select>
             </div>
