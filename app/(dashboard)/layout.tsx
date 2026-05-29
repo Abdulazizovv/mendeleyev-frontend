@@ -231,6 +231,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const branchType = (currentBranch?.branch_type ?? "school") as BranchType;
   const rolePath = currentBranch ? roleToPath(role, branchType) : "";
 
+  // Staff roles that share branch_admin navigation (full branch access)
+  const isBranchStaff = [
+    "branch_admin", "admin", "accountant", "manager", "director",
+  ].includes(role);
+
   const navigationItems: NavItem[] = useMemo(() => {
     if (!currentBranch) return [];
 
@@ -238,7 +243,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       { name: "Asosiy", href: `/${rolePath}`, icon: LayoutDashboard },
     ];
 
-    if (role === "branch_admin") {
+    if (isBranchStaff) {
       const branchItems = getBranchNavigationItems(branchType);
       return [
         ...baseItems,
@@ -278,7 +283,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       ];
     }
     return baseItems;
-  }, [role, branchType, rolePath, currentBranch]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, branchType, rolePath, currentBranch, isBranchStaff]);
 
   // Auto-expand groups that contain the active route
   useEffect(() => {

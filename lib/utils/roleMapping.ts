@@ -11,17 +11,27 @@
 
 import type { UserRole, BranchType } from "@/types/auth";
 
+// Roles that have full access to branch dashboard (school / training-center)
+const BRANCH_STAFF_ROLES: UserRole[] = [
+  "branch_admin",
+  "admin",
+  "accountant",
+  "manager",
+  "director",
+];
+
 /**
- * Map backend role to frontend URL path
- * For branch_admin, requires branchType for proper routing
+ * Map backend role to frontend URL path.
+ * Staff roles (admin, accountant, manager, director) are routed to the
+ * branch-specific dashboard, same as branch_admin.
  */
 export function roleToPath(role: UserRole, branchType?: BranchType): string {
-  if (role === "branch_admin" && branchType) {
+  if (BRANCH_STAFF_ROLES.includes(role) && branchType) {
     return branchType === "center" ? "training-center" : "school";
   }
 
-  const mapping: Record<UserRole, string> = {
-    branch_admin: "branch-admin", // fallback if branchType not provided
+  const mapping: Partial<Record<UserRole, string>> = {
+    branch_admin: "school", // fallback when branchType is unknown
     super_admin: "super-admin",
     teacher: "teacher",
     student: "student",
@@ -29,7 +39,7 @@ export function roleToPath(role: UserRole, branchType?: BranchType): string {
     other: "other",
   };
 
-  return mapping[role] || role;
+  return mapping[role] ?? "school";
 }
 
 

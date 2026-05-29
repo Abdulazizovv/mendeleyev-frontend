@@ -13,6 +13,10 @@ export type AuthState =
 export type UserRole =
   | "super_admin"
   | "branch_admin"
+  | "admin"
+  | "accountant"
+  | "manager"
+  | "director"
   | "teacher"
   | "student"
   | "parent"
