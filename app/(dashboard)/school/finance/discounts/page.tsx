@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -56,6 +56,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { extractApiError } from "@/lib/error-messages";
 import type {
   Discount,
   CreateDiscountRequest,
@@ -105,8 +106,8 @@ export default function DiscountsPage() {
       setCreateModalOpen(false);
       resetForm();
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || "Xatolik yuz berdi");
+    onError: (error: unknown) => {
+      toast.error(extractApiError(error));
     },
   });
 
@@ -121,8 +122,8 @@ export default function DiscountsPage() {
       setSelectedDiscount(null);
       resetForm();
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || "Xatolik yuz berdi");
+    onError: (error: unknown) => {
+      toast.error(extractApiError(error));
     },
   });
 
@@ -135,8 +136,8 @@ export default function DiscountsPage() {
       setDeleteDialogOpen(false);
       setSelectedDiscount(null);
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || "Xatolik yuz berdi");
+    onError: (error: unknown) => {
+      toast.error(extractApiError(error));
     },
   });
 
@@ -324,11 +325,11 @@ export default function DiscountsPage() {
                             <span>
                               {discount.valid_from
                                 ? new Date(discount.valid_from).toLocaleDateString("uz-UZ")
-                                : "—"}
-                              {" → "}
+                                : "вЂ”"}
+                              {" в†’ "}
                               {discount.valid_until
                                 ? new Date(discount.valid_until).toLocaleDateString("uz-UZ")
-                                : "—"}
+                                : "вЂ”"}
                             </span>
                           </>
                         ) : (
@@ -364,7 +365,7 @@ export default function DiscountsPage() {
                       )}
                     </TableCell>
                     <TableCell className="max-w-xs truncate">
-                      {discount.description || "—"}
+                      {discount.description || "вЂ”"}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
@@ -635,3 +636,4 @@ export default function DiscountsPage() {
     </div>
   );
 }
+

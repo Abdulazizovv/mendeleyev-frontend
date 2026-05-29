@@ -40,6 +40,7 @@ import {
   Search,
 } from "lucide-react";
 import { toast } from "sonner";
+import { extractApiError } from "@/lib/error-messages";
 
 export default function CashRegistersPage() {
   const router = useRouter();
@@ -83,8 +84,8 @@ export default function CashRegistersPage() {
       resetForm();
       toast.success("Kassa muvaffaqiyatli yaratildi");
     },
-    onError: () => {
-      toast.error("Kassa yaratishda xatolik yuz berdi");
+    onError: (error: unknown) => {
+      toast.error(extractApiError(error));
     },
   });
 
@@ -99,8 +100,8 @@ export default function CashRegistersPage() {
       resetForm();
       toast.success("Kassa muvaffaqiyatli yangilandi");
     },
-    onError: () => {
-      toast.error("Kassa yangilashda xatolik yuz berdi");
+    onError: (error: unknown) => {
+      toast.error(extractApiError(error));
     },
   });
 
@@ -111,8 +112,8 @@ export default function CashRegistersPage() {
       queryClient.invalidateQueries({ queryKey: ["cash-registers"] });
       toast.success("Kassa muvaffaqiyatli o'chirildi");
     },
-    onError: () => {
-      toast.error("Kassa o'chirishda xatolik yuz berdi");
+    onError: (error: unknown) => {
+      toast.error(extractApiError(error));
     },
   });
 

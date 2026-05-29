@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -55,6 +55,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { extractApiError } from "@/lib/error-messages";
 import type {
   SubscriptionPlan,
   CreateSubscriptionPlanRequest,
@@ -108,8 +109,8 @@ export default function SubscriptionPlansPage() {
       setCreateModalOpen(false);
       resetForm();
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || "Xatolik yuz berdi");
+    onError: (error: unknown) => {
+      toast.error(extractApiError(error));
     },
   });
 
@@ -124,8 +125,8 @@ export default function SubscriptionPlansPage() {
       setSelectedPlan(null);
       resetForm();
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || "Xatolik yuz berdi");
+    onError: (error: unknown) => {
+      toast.error(extractApiError(error));
     },
   });
 
@@ -138,8 +139,8 @@ export default function SubscriptionPlansPage() {
       setDeleteDialogOpen(false);
       setSelectedPlan(null);
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || "Xatolik yuz berdi");
+    onError: (error: unknown) => {
+      toast.error(extractApiError(error));
     },
   });
 
@@ -325,7 +326,7 @@ export default function SubscriptionPlansPage() {
                       )}
                     </TableCell>
                     <TableCell className="max-w-xs truncate">
-                      {plan.description || "—"}
+                      {plan.description || "вЂ”"}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
@@ -620,3 +621,4 @@ export default function SubscriptionPlansPage() {
     </div>
   );
 }
+

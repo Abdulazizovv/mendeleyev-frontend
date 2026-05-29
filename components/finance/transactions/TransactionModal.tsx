@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { extractApiError } from "@/lib/error-messages";
 import {
   TrendingUp,
   TrendingDown,
@@ -91,6 +92,13 @@ export function TransactionModal({
     enabled: open,
   });
 
+  const { data: methodBalance } = useQuery({
+    queryKey: ["register-method-balance", cashRegisterId],
+    queryFn: () => financeApi.getRegisterMethodBalance(cashRegisterId),
+    enabled: !!cashRegisterId && open,
+    staleTime: 0,
+  });
+
   const cashRegisters = cashRegistersData?.results || [];
   const categories = categoriesData?.results || [];
 
@@ -119,12 +127,8 @@ export function TransactionModal({
       onSuccess?.();
       onClose();
     },
-    onError: (error: any) => {
-      toast.error(
-        error.response?.data?.detail ||
-        error.response?.data?.message ||
-        "Xatolik yuz berdi"
-      );
+    onError: (error: unknown) => {
+      toast.error(extractApiError(error));
     },
   });
 
@@ -132,9 +136,14 @@ export function TransactionModal({
   const isIncome = txType === "income";
   const canSubmit = !!cashRegisterId && amount > 0 && !mutation.isPending;
 
-  // Tanlangan kassa balansi
-  const selectedRegister = cashRegisters.find((r) => r.id === cashRegisterId);
-  const currentBalance = selectedRegister ? Number(selectedRegister.balance) : null;
+  // To'lov metodiga mos mavjud balans
+  const currentBalance =
+    methodBalance
+      ? paymentMethod === "cash"
+        ? methodBalance.cash_net
+        : methodBalance.card_net
+      : null;
+  const methodLabel = paymentMethod === "cash" ? "Naqd" : "Plastik";
   const balanceAfter =
     currentBalance !== null
       ? isIncome
@@ -222,10 +231,12 @@ export function TransactionModal({
           </div>
         </div>
 
-        {/* Kassa balansi preview */}
+        {/* Method balansi preview */}
         {currentBalance !== null && amount > 0 && (
           <div className="mx-5 mt-4 rounded-xl bg-gray-50 border border-gray-100 px-4 py-3 shrink-0">
-            <p className="text-xs text-gray-400 mb-1.5 font-medium">Kassa balansi</p>
+            <p className="text-xs text-gray-400 mb-1.5 font-medium">
+              {methodLabel} balansi
+            </p>
             <div className="flex items-center gap-2 text-sm font-semibold">
               <span className="text-gray-600">{formatCurrency(currentBalance)}</span>
               <ArrowRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
@@ -243,7 +254,7 @@ export function TransactionModal({
             </div>
             {balanceAfter !== null && balanceAfter < 0 && (
               <p className="text-xs text-red-500 mt-1">
-                ⚠ Kassada yetarli mablag&apos; yo&apos;q
+                ⚠ {methodLabel}da yetarli mablag&apos; yo&apos;q
               </p>
             )}
           </div>

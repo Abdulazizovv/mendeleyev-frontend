@@ -79,6 +79,12 @@ export default function PaymentsPage() {
     enabled: !!branchId,
   });
 
+  const { data: statsData } = useQuery({
+    queryKey: ["finance-statistics", branchId],
+    queryFn: () => financeApi.getStatistics({ branch_id: branchId }),
+    enabled: !!branchId,
+  });
+
   const payments = data?.results || [];
   const totalAmount = payments.reduce((s, p) => s + p.final_amount, 0);
   const totalDiscount = payments.reduce((s, p) => s + (p.discount_amount || 0), 0);
@@ -90,6 +96,10 @@ export default function PaymentsPage() {
     .reduce((s, p) => s + p.final_amount, 0);
   const cashCount = payments.filter((p) => p.payment_method === "cash").length;
   const cardCount = payments.filter((p) => p.payment_method === "card").length;
+
+  const statRegisters = statsData?.registers ?? [];
+  const totalCashAvail = statRegisters.reduce((s: number, r: any) => s + (r.cash_net || 0), 0);
+  const totalCardAvail = statRegisters.reduce((s: number, r: any) => s + (r.card_net || 0), 0);
 
   function applyQuick(key: string) {
     if (activeQuick === key) {
@@ -205,13 +215,14 @@ export default function PaymentsPage() {
               </div>
               <span className="text-sm font-semibold text-gray-800">Naqd pul</span>
             </div>
-            <span className="text-xs text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full font-medium">
-              {cashCount} ta
-            </span>
+            <div className="text-right">
+              <p className="text-xs text-gray-400">Mavjud</p>
+              <p className="text-sm font-bold text-amber-700 tabular-nums">{formatCurrency(totalCashAvail)}</p>
+            </div>
           </div>
-          <p className="text-xl font-bold text-amber-700 tabular-nums">{formatCurrency(cashTotal)}</p>
+          <p className="text-base font-semibold text-amber-600 tabular-nums">{formatCurrency(cashTotal)}</p>
           <p className="text-xs text-gray-400 mt-0.5">
-            {totalAmount > 0 ? Math.round((cashTotal / totalAmount) * 100) : 0}% ulushi
+            {cashCount} ta to'lov · {totalAmount > 0 ? Math.round((cashTotal / totalAmount) * 100) : 0}% ulushi
           </p>
         </button>
 
@@ -231,13 +242,14 @@ export default function PaymentsPage() {
               </div>
               <span className="text-sm font-semibold text-gray-800">Plastik karta</span>
             </div>
-            <span className="text-xs text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full font-medium">
-              {cardCount} ta
-            </span>
+            <div className="text-right">
+              <p className="text-xs text-gray-400">Mavjud</p>
+              <p className="text-sm font-bold text-purple-700 tabular-nums">{formatCurrency(totalCardAvail)}</p>
+            </div>
           </div>
-          <p className="text-xl font-bold text-purple-700 tabular-nums">{formatCurrency(cardTotal)}</p>
+          <p className="text-base font-semibold text-purple-600 tabular-nums">{formatCurrency(cardTotal)}</p>
           <p className="text-xs text-gray-400 mt-0.5">
-            {totalAmount > 0 ? Math.round((cardTotal / totalAmount) * 100) : 0}% ulushi
+            {cardCount} ta to'lov · {totalAmount > 0 ? Math.round((cardTotal / totalAmount) * 100) : 0}% ulushi
           </p>
         </button>
       </div>

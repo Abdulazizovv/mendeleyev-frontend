@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { extractApiError } from "@/lib/error-messages";
 import {
   ArrowLeft,
   Search,
@@ -213,8 +214,8 @@ export default function CreatePaymentPage() {
       queryClient.invalidateQueries({ queryKey: ["statistics"] });
       router.push("/school/finance/payments");
     },
-    onError: (error: any) => {
-      toast.error(error?.response?.data?.detail || "To'lov yaratishda xatolik yuz berdi");
+    onError: (error: unknown) => {
+      toast.error(extractApiError(error));
     },
   });
 

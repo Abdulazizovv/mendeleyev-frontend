@@ -77,6 +77,10 @@ export default function FinancePage() {
   const byMethod = statistics?.by_payment_method ?? {};
   const recentPayments = recentPaymentsData?.results || [];
 
+  // Kassalar bo'yicha umumiy mavjud balans (transfer hisoblab, all-time)
+  const totalCashAvail = registers.reduce((s, r) => s + (r.cash_net || 0), 0);
+  const totalCardAvail = registers.reduce((s, r) => s + (r.card_net || 0), 0);
+
   // Map is_active from the cashRegisters list onto statistics registers
   const isActiveMap = Object.fromEntries(cashRegisters.map((r) => [r.id, r.is_active]));
 
@@ -206,9 +210,9 @@ export default function FinancePage() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-gray-400 mb-0.5">Sof</p>
-                  <p className={`text-base font-bold tabular-nums ${(summary.cash_net ?? 0) >= 0 ? "text-emerald-700" : "text-red-600"}`}>
-                    {(summary.cash_net ?? 0) >= 0 ? "+" : ""}{formatCurrency(summary.cash_net ?? 0)}
+                  <p className="text-xs text-gray-400 mb-0.5">Mavjud</p>
+                  <p className={`text-base font-bold tabular-nums ${totalCashAvail >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                    {formatCurrency(totalCashAvail)}
                   </p>
                 </div>
               </div>
@@ -245,9 +249,9 @@ export default function FinancePage() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-gray-400 mb-0.5">Sof</p>
-                  <p className={`text-base font-bold tabular-nums ${(summary.card_net ?? 0) >= 0 ? "text-emerald-700" : "text-red-600"}`}>
-                    {(summary.card_net ?? 0) >= 0 ? "+" : ""}{formatCurrency(summary.card_net ?? 0)}
+                  <p className="text-xs text-gray-400 mb-0.5">Mavjud</p>
+                  <p className={`text-base font-bold tabular-nums ${totalCardAvail >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                    {formatCurrency(totalCardAvail)}
                   </p>
                 </div>
               </div>

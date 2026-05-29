@@ -2,6 +2,113 @@
  * Error messages in Uzbek language
  */
 
+// Common English DRF messages → Uzbek
+const DRF_TRANSLATIONS: Record<string, string> = {
+  "this field is required.": "Bu maydon to'ldirilishi shart.",
+  "this field may not be blank.": "Bu maydon bo'sh bo'lishi mumkin emas.",
+  "this field may not be null.": "Bu maydon bo'sh bo'lishi mumkin emas.",
+  "a valid integer is required.": "Butun son kiriting.",
+  "a valid number is required.": "Son kiriting.",
+  "ensure this value is greater than or equal to 0.": "Qiymat 0 dan katta yoki teng bo'lishi kerak.",
+  "ensure this value is greater than or equal to 1.": "Qiymat 1 dan katta yoki teng bo'lishi kerak.",
+  "ensure this value is less than or equal to": "Qiymat chegaradan oshmasligi kerak.",
+  "not found.": "Topilmadi.",
+  "authentication credentials were not provided.": "Avtorizatsiya talab qilinadi.",
+  "you do not have permission to perform this action.": "Sizda bu amalni bajarish uchun ruxsat yo'q.",
+  "invalid pk": "Noto'g'ri identifikator.",
+  "object with id": "Bunday ID topilmadi.",
+  "this field must be unique.": "Bu qiymat allaqachon mavjud.",
+  "enter a valid date.": "To'g'ri sana kiriting.",
+  "enter a valid number.": "To'g'ri raqam kiriting.",
+  "invalid data.": "Noto'g'ri ma'lumot.",
+};
+
+function translateDrf(msg: string): string {
+  const lower = msg.toLowerCase();
+  for (const [key, val] of Object.entries(DRF_TRANSLATIONS)) {
+    if (lower.startsWith(key) || lower === key) return val;
+  }
+  return msg;
+}
+
+/**
+ * Extract the first error message from any DRF error response.
+ * Handles: detail string/list, field errors, non_field_errors, message.
+ */
+export function extractApiError(error: unknown): string {
+  if (!error || typeof error !== "object") return "Noma'lum xatolik yuz berdi.";
+
+  const err = error as any;
+
+  // Network error
+  if (!err.response) {
+    return "Internet aloqasi yo'q. Iltimos, ulanishni tekshiring.";
+  }
+
+  const status: number = err.response?.status;
+  const data = err.response?.data;
+
+  if (!data) {
+    if (status >= 500) return "Server xatoligi yuz berdi. Keyinroq urinib ko'ring.";
+    return "Xatolik yuz berdi.";
+  }
+
+  // { detail: "string" | ["string"] }
+  if (data.detail) {
+    const d = Array.isArray(data.detail) ? data.detail[0] : data.detail;
+    return translateDrf(String(d));
+  }
+
+  // { non_field_errors: ["string"] }
+  if (Array.isArray(data.non_field_errors) && data.non_field_errors.length > 0) {
+    return translateDrf(String(data.non_field_errors[0]));
+  }
+
+  // Field errors: { field_name: ["error"] } or { field_name: "error" }
+  if (typeof data === "object" && !Array.isArray(data)) {
+    for (const key of Object.keys(data)) {
+      const val = data[key];
+      const msg = Array.isArray(val) ? val[0] : val;
+      if (msg && typeof msg === "string") {
+        const fieldName = FIELD_NAMES[key] || key;
+        return `${fieldName}: ${translateDrf(msg)}`;
+      }
+    }
+  }
+
+  // { message: "string" }
+  if (data.message) return String(data.message);
+
+  if (status >= 500) return "Server xatoligi yuz berdi. Keyinroq urinib ko'ring.";
+  if (status === 403) return "Sizda bu amalni bajarish uchun ruxsat yo'q.";
+  if (status === 404) return "So'ralgan ma'lumot topilmadi.";
+  if (status === 429) return "Juda ko'p so'rov yuborildi. Biroz kuting.";
+
+  return "Xatolik yuz berdi. Qaytadan urinib ko'ring.";
+}
+
+// Field name → Uzbek label mapping for field errors
+const FIELD_NAMES: Record<string, string> = {
+  amount: "Summa",
+  balance: "Balans",
+  cash_register: "Kassa",
+  payment_method: "To'lov usuli",
+  transaction_type: "Tranzaksiya turi",
+  category: "Kategoriya",
+  student_profile: "O'quvchi",
+  subscription_plan: "Abonement",
+  branch: "Filial",
+  period_start: "Boshlanish sanasi",
+  period_end: "Tugash sanasi",
+  payment_date: "To'lov sanasi",
+  from_method: "Manba usul",
+  to_method: "Manzil usul",
+  description: "Izoh",
+  name: "Nomi",
+  price: "Narx",
+  discount: "Chegirma",
+};
+
 export const ERROR_MESSAGES: Record<string, string> = {
   // Common errors
   network_error: "Internet aloqasi yo'q. Iltimos, internet ulanishini tekshiring.",

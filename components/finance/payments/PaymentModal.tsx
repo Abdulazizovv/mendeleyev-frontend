@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
+import { extractApiError } from "@/lib/error-messages";
 import {
   Search,
   X,
@@ -171,8 +172,8 @@ export function PaymentModal({ open, onClose, onSuccess }: Props) {
       onSuccess?.();
       onClose();
     },
-    onError: (error: any) => {
-      toast.error(error?.response?.data?.detail || "Xatolik yuz berdi");
+    onError: (error: unknown) => {
+      toast.error(extractApiError(error));
     },
   });
 

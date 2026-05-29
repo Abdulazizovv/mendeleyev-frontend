@@ -195,6 +195,34 @@ export const financeApi = {
     return response.data;
   },
 
+  internalTransfer: async (data: {
+    cash_register: string;
+    from_method: "cash" | "card";
+    to_method: "cash" | "card";
+    amount: number;
+    description?: string;
+    branch_id?: string;
+  }): Promise<{ success: boolean; amount: string; from_method: string; to_method: string; tx_id: string }> => {
+    const response = await apiClient.post(
+      `/school/finance/transactions/internal-transfer/`,
+      data
+    );
+    return response.data;
+  },
+
+  getRegisterMethodBalance: async (registerId: string): Promise<{
+    register_id: string;
+    register_name: string;
+    cash_net: number;
+    card_net: number;
+    total: number;
+  }> => {
+    const response = await apiClient.get(
+      `/school/finance/cash-registers/${registerId}/method-balance/`
+    );
+    return response.data;
+  },
+
   // ==================== STUDENT BALANCES ====================
 
   /**
