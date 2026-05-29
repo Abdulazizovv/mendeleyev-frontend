@@ -1,35 +1,28 @@
 "use client";
 
 import React from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { useDebounce } from "@/lib/hooks/useDebounce";
-import { staffApi, financeApi } from "@/lib/api";
+import { staffApi } from "@/lib/api";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   StaffMember,
-  Role,
   CreateStaffRequest,
   UpdateStaffRequest,
-  AddBalanceRequest,
-  ChangeBalanceRequest,
-  PaySalaryRequest,
   EMPLOYMENT_TYPE_LABELS,
-  EMPLOYMENT_STATUS_LABELS,
-  transactionTypeLabels,
-  paymentMethodLabels,
 } from "@/types/staff";
-import type { EmploymentType, TransactionType, PaymentMethod } from "@/types/staff";
+import type { EmploymentType } from "@/types/staff";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -52,150 +45,102 @@ import {
   Users,
   Plus,
   Edit,
-  DollarSign,
-  CreditCard,
   Search,
-  Wallet,
-  CheckCircle,
-  User,
-  Trash2,
+  ChevronRight,
+  Loader2,
   TrendingUp,
   TrendingDown,
+  DollarSign,
+  UserCheck,
   Eye,
   EyeOff,
 } from "lucide-react";
 import { toast } from "sonner";
+import { formatCurrency } from "@/lib/utils";
+import { extractApiError } from "@/lib/error-messages";
+import { StaffTransactionSheet } from "@/components/staff/StaffTransactionSheet";
 
-// Format currency
-const formatCurrency = (amount: number): string => {
-  return new Intl.NumberFormat("uz-UZ", {
-    style: "decimal",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount) + " so'm";
-};
+// ── Role config ───────────────────────────────────────────────────────────────
 
-// BranchRole options
-const BRANCH_ROLE_OPTIONS = [
-  { value: "teacher", label: "O'qituvchi" },
-  { value: "branch_admin", label: "Filial admini" },
-  { value: "other", label: "Boshqa xodim" },
+const ROLES = [
+  { value: "teacher", label: "O'qituvchi", color: "bg-blue-500" },
+  { value: "branch_admin", label: "Filial admini", color: "bg-purple-500" },
+  { value: "other", label: "Boshqa", color: "bg-slate-400" },
 ];
 
+const roleLabel = (r: string) => ROLES.find((x) => x.value === r)?.label ?? r;
+const roleColor = (r: string) => ROLES.find((x) => x.value === r)?.color ?? "bg-slate-400";
+
+function Avatar({ name, role }: { name: string; role: string }) {
+  const initials = name
+    .split(" ")
+    .slice(0, 2)
+    .map((w) => w[0] ?? "")
+    .join("")
+    .toUpperCase() || "?";
+  return (
+    <div
+      className={`w-9 h-9 rounded-full ${roleColor(role)} flex items-center justify-center text-white text-xs font-bold shrink-0`}
+    >
+      {initials}
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
 export default function StaffPage() {
+  const router = useRouter();
   const { currentBranch } = useAuth();
   const queryClient = useQueryClient();
-  const branchId = currentBranch?.branch_id || "";
+  const branchId = currentBranch?.branch_id ?? "";
 
-  // State
-  const [searchQuery, setSearchQuery] = React.useState("");
-  const [employmentTypeFilter, setEmploymentTypeFilter] = React.useState<string>("all");
-  const [roleFilter, setRoleFilter] = React.useState<string>("all");
-  const [customRoleFilter, setCustomRoleFilter] = React.useState<string>("all");
-  const [statusFilter, setStatusFilter] = React.useState<string>("all");
-  
-  // Balance visibility state
-  const [showAllBalances, setShowAllBalances] = React.useState(false);
-  const [visibleBalances, setVisibleBalances] = React.useState<Set<string>>(new Set());
-  
-  // Statistics visibility state
-  const [visibleStats, setVisibleStats] = React.useState<Set<string>>(new Set());
-  
-  const statsCards = ['budget', 'balance', 'salary-range', 'paid', 'pending'] as const;
-  type StatCard = typeof statsCards[number];
+  // ── Filters ────────────────────────────────────────────────────────────────
+  const [search, setSearch] = React.useState("");
+  const [roleFilter, setRoleFilter] = React.useState("all");
+  const [statusFilter, setStatusFilter] = React.useState("all");
+  const debouncedSearch = useDebounce(search, 400);
 
-  const [staffDialog, setStaffDialog] = React.useState<{
+  // ── Balance visibility ─────────────────────────────────────────────────────
+  const [showBalances, setShowBalances] = React.useState(false);
+
+  // ── Sheet: create / edit ───────────────────────────────────────────────────
+  const [editSheet, setEditSheet] = React.useState<{
     open: boolean;
     mode: "create" | "edit";
     data?: StaffMember;
   }>({ open: false, mode: "create" });
 
-  const [balanceDialog, setBalanceDialog] = React.useState<{
+  // ── Sheet: staff transaction ───────────────────────────────────────────────
+  const [txSheet, setTxSheet] = React.useState<{
     open: boolean;
-    data?: StaffMember;
+    staff?: StaffMember;
   }>({ open: false });
 
-  const [salaryDialog, setSalaryDialog] = React.useState<{
-    open: boolean;
-    data?: StaffMember;
-  }>({ open: false });
-
-  const [staffForm, setStaffForm] = React.useState<Partial<CreateStaffRequest>>({
+  // ── Form ───────────────────────────────────────────────────────────────────
+  const [form, setForm] = React.useState<Partial<CreateStaffRequest>>({
     role: "teacher",
     employment_type: "full_time",
     salary_type: "monthly",
     monthly_salary: 0,
   });
 
-  const [balanceForm, setBalanceForm] = React.useState<{
-    amount: number;
-    transaction_type: TransactionType;
-    description: string;
-  }>({
-    amount: 0,
-    transaction_type: "salary",
-    description: "",
-  });
-
-  const [salaryForm, setSalaryForm] = React.useState<{
-    amount: number;
-    payment_method: PaymentMethod;
-    notes: string;
-    cash_register_id: string;
-    category_id: string;
-  }>({
-    amount: 0,
-    payment_method: "cash",
-    notes: "",
-    cash_register_id: "",
-    category_id: "",
-  });
-
-  const debouncedSearch = useDebounce(searchQuery, 500);
-
-  // Queries
-  const { data: roles = [] } = useQuery({
+  // ── Queries ────────────────────────────────────────────────────────────────
+  const { data: rolesData = [] } = useQuery({
     queryKey: ["roles", branchId],
     queryFn: () => staffApi.getRoles(branchId),
     enabled: !!branchId,
   });
 
-  // Fetch cash registers
-  const { data: cashRegistersData } = useQuery({
-    queryKey: ["cash-registers", branchId],
-    queryFn: () => financeApi.getCashRegisters({ branch_id: branchId }),
-    enabled: !!branchId,
-  });
-
-  const cashRegisters = cashRegistersData?.results || [];
-
-  // Fetch expense categories (for salary payment)
-  const { data: categoriesData } = useQuery({
-    queryKey: ["finance-categories", branchId, "expense"],
-    queryFn: () => financeApi.getCategories({ 
-      type: "expense",
-      is_active: true 
-    }),
-    enabled: !!branchId,
-  });
-
-  const expenseCategories = categoriesData?.results || [];
-
-  const {
-    data: staffData,
-    isLoading: isLoadingStaff,
-  } = useQuery({
-    queryKey: ["staff", branchId, debouncedSearch, employmentTypeFilter, roleFilter, customRoleFilter, statusFilter],
-    queryFn: () => {
-      const params: any = { branch: branchId };
-      if (debouncedSearch) params.search = debouncedSearch;
-      if (employmentTypeFilter && employmentTypeFilter !== "all") 
-        params.employment_type = employmentTypeFilter as EmploymentType;
-      if (roleFilter && roleFilter !== "all") params.role = roleFilter;
-      if (customRoleFilter && customRoleFilter !== "all") params.role_ref = customRoleFilter;
-      if (statusFilter && statusFilter !== "all") params.status = statusFilter;
-      return staffApi.getStaff(params);
-    },
+  const { data: staffList = [], isLoading } = useQuery({
+    queryKey: ["staff", branchId, debouncedSearch, roleFilter, statusFilter],
+    queryFn: () =>
+      staffApi.getStaff({
+        branch: branchId,
+        ...(debouncedSearch && { search: debouncedSearch }),
+        ...(roleFilter !== "all" && { role: roleFilter }),
+        ...(statusFilter !== "all" && { status: statusFilter as import("@/types/staff").StaffStatus }),
+      }),
     enabled: !!branchId,
   });
 
@@ -205,1294 +150,649 @@ export default function StaffPage() {
     enabled: !!branchId,
   });
 
-  const staff = staffData || [];
-
-  // Mutations
-  const createStaffMutation = useMutation({
-    mutationFn: (data: CreateStaffRequest) => staffApi.createStaff(data),
+  // ── Mutations ──────────────────────────────────────────────────────────────
+  const createMutation = useMutation({
+    mutationFn: (d: CreateStaffRequest) => staffApi.createStaff(d),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["staff"] });
       queryClient.invalidateQueries({ queryKey: ["staff-stats"] });
-      setStaffDialog({ open: false, mode: "create" });
-      resetStaffForm();
+      setEditSheet({ open: false, mode: "create" });
       toast.success("Xodim muvaffaqiyatli qo'shildi");
     },
-    onError: (error: any) => {
-      const errors = error?.response?.data;
-      if (errors && typeof errors === "object") {
-        Object.keys(errors).forEach((field) => {
-          const messages = Array.isArray(errors[field]) ? errors[field] : [errors[field]];
-          messages.forEach((msg: string) => toast.error(`${field}: ${msg}`));
-        });
-      } else {
-        toast.error("Xodim qo'shishda xatolik yuz berdi");
-      }
-    },
+    onError: (e: unknown) => toast.error(extractApiError(e)),
   });
 
-  const updateStaffMutation = useMutation({
+  const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateStaffRequest }) =>
       staffApi.updateStaff(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["staff"] });
       queryClient.invalidateQueries({ queryKey: ["staff-stats"] });
-      setStaffDialog({ open: false, mode: "create" });
-      resetStaffForm();
-      toast.success("Xodim muvaffaqiyatli yangilandi");
+      setEditSheet({ open: false, mode: "create" });
+      toast.success("Xodim yangilandi");
     },
-    onError: () => {
-      toast.error("Xodimni yangilashda xatolik");
-    },
+    onError: (e: unknown) => toast.error(extractApiError(e)),
   });
 
-  const addBalanceMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: AddBalanceRequest }) =>
-      staffApi.addBalance(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["staff"] });
-      queryClient.invalidateQueries({ queryKey: ["staff-stats"] });
-      setBalanceDialog({ open: false });
-      resetBalanceForm();
-      toast.success("Balans muvaffaqiyatli yangilandi");
-    },
-    onError: () => {
-      toast.error("Balansni yangilashda xatolik");
-    },
-  });
-
-  const paySalaryMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: ChangeBalanceRequest }) =>
-      staffApi.changeBalance(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["staff"] });
-      queryClient.invalidateQueries({ queryKey: ["staff-stats"] });
-      queryClient.invalidateQueries({ queryKey: ["cash-registers"] });
-      setSalaryDialog({ open: false });
-      resetSalaryForm();
-      toast.success("Maosh muvaffaqiyatli to'landi!");
-    },
-    onError: (error: any) => {
-      const errorMessage = error?.response?.data?.error || "Maosh to'lashda xatolik";
-      toast.error(errorMessage);
-    },
-  });
-
-  const deleteStaffMutation = useMutation({
-    mutationFn: (staffId: string) => staffApi.deleteStaff(staffId),
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => staffApi.deleteStaff(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["staff"] });
       queryClient.invalidateQueries({ queryKey: ["staff-stats"] });
       toast.success("Xodim o'chirildi");
     },
-    onError: () => {
-      toast.error("Xodimni o'chirishda xatolik");
-    },
+    onError: (e: unknown) => toast.error(extractApiError(e)),
   });
 
-  // Handlers
-  const resetStaffForm = () => {
-    setStaffForm({
-      role: "teacher",
-      employment_type: "full_time",
-      salary_type: "monthly",
-      monthly_salary: 0,
+  // ── Handlers ───────────────────────────────────────────────────────────────
+  const openCreate = () => {
+    setForm({ role: "teacher", employment_type: "full_time", salary_type: "monthly", monthly_salary: 0 });
+    setEditSheet({ open: true, mode: "create" });
+  };
+
+  const openEdit = (m: StaffMember) => {
+    setForm({
+      role: m.role,
+      employment_type: m.employment_type ?? "full_time",
+      monthly_salary: m.monthly_salary,
+      title: m.title,
     });
+    setEditSheet({ open: true, mode: "edit", data: m });
   };
 
-  const resetBalanceForm = () => {
-    setBalanceForm({
-      amount: 0,
-      transaction_type: "salary",
-      description: "",
-    });
-  };
-
-  const resetSalaryForm = () => {
-    // Auto-select first cash register if available
-    const firstCashRegister = cashRegisters.length > 0 ? cashRegisters[0].id : "";
-    
-    // Try to find salary category
-    const salaryCategory = expenseCategories.find(cat => 
-      cat.code === "staff_salary" || cat.name.toLowerCase().includes("maosh")
-    );
-    
-    setSalaryForm({
-      amount: 0,
-      payment_method: "cash",
-      notes: "",
-      cash_register_id: firstCashRegister,
-      category_id: salaryCategory?.id || "",
-    });
-  };
-
-  const openCreateDialog = () => {
-    resetStaffForm();
-    setStaffDialog({ open: true, mode: "create" });
-  };
-
-  const openEditDialog = (member: StaffMember) => {
-    setStaffForm({
-      role: member.role,
-      employment_type: member.employment_type || "full_time",
-      monthly_salary: member.monthly_salary,
-      title: member.title,
-    });
-    setStaffDialog({ open: true, mode: "edit", data: member });
-  };
-
-  const openBalanceDialog = (member: StaffMember) => {
-    resetBalanceForm();
-    setBalanceDialog({ open: true, data: member });
-  };
-
-  const openSalaryDialog = (member: StaffMember) => {
-    resetSalaryForm();
-    setSalaryForm((prev) => ({
-      ...prev,
-      amount: member.monthly_salary,
-    }));
-    setSalaryDialog({ open: true, data: member });
-  };
-
-  const handleStaffSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (staffDialog.mode === "create") {
-      if (!staffForm.phone_number || !staffForm.first_name || !staffForm.last_name || !staffForm.role) {
-        toast.error("Barcha majburiy maydonlarni to'ldiring");
+    if (editSheet.mode === "create") {
+      if (!form.phone_number || !form.first_name || !form.last_name) {
+        toast.error("Ism, familiya va telefon raqamni kiriting");
         return;
       }
-
-      // Validate role="other" requires role_ref_id
-      if (staffForm.role === "other" && !staffForm.role_ref_id) {
-        toast.error("\"Boshqa xodim\" turi uchun rol tanlanishi shart");
+      if (form.role === "other" && !form.role_ref_id) {
+        toast.error("\"Boshqa xodim\" uchun maxsus rol tanlang");
         return;
       }
-
-      const data: CreateStaffRequest = {
-        phone_number: staffForm.phone_number!,
-        first_name: staffForm.first_name!,
-        last_name: staffForm.last_name!,
-        email: staffForm.email,
-        password: staffForm.password,
+      createMutation.mutate({
+        phone_number: form.phone_number!,
+        first_name: form.first_name!,
+        last_name: form.last_name!,
+        email: form.email,
+        password: form.password,
         branch_id: branchId,
-        role: staffForm.role!,
-        role_ref_id: staffForm.role_ref_id,
-        title: staffForm.title,
-        monthly_salary: staffForm.monthly_salary || 0,
-        salary_type: staffForm.salary_type || "monthly",
-        hire_date: staffForm.hire_date,
-        employment_type: staffForm.employment_type,
-        passport_serial: staffForm.passport_serial,
-        passport_number: staffForm.passport_number,
-        address: staffForm.address,
-        emergency_contact: staffForm.emergency_contact,
-        notes: staffForm.notes as Record<string, any> | undefined,
-      };
-
-      createStaffMutation.mutate(data);
-    } else if (staffDialog.data) {
-      const updateData: UpdateStaffRequest = {
-        role: staffForm.role,
-        role_ref_id: staffForm.role_ref_id,
-        title: staffForm.title,
-        employment_type: staffForm.employment_type,
-        monthly_salary: staffForm.monthly_salary,
-        salary_type: staffForm.salary_type,
-        passport_serial: staffForm.passport_serial,
-        passport_number: staffForm.passport_number,
-        address: staffForm.address,
-        emergency_contact: staffForm.emergency_contact,
-        notes: staffForm.notes as Record<string, any> | undefined,
-      };
-      updateStaffMutation.mutate({ id: staffDialog.data.id, data: updateData });
+        role: form.role!,
+        role_ref_id: form.role_ref_id,
+        title: form.title,
+        monthly_salary: form.monthly_salary ?? 0,
+        salary_type: form.salary_type ?? "monthly",
+        hire_date: form.hire_date,
+        employment_type: form.employment_type,
+        passport_serial: form.passport_serial,
+        passport_number: form.passport_number,
+        address: form.address,
+        emergency_contact: form.emergency_contact,
+      });
+    } else if (editSheet.data) {
+      updateMutation.mutate({
+        id: editSheet.data.id,
+        data: {
+          role: form.role,
+          role_ref_id: form.role_ref_id,
+          title: form.title,
+          employment_type: form.employment_type,
+          monthly_salary: form.monthly_salary,
+          salary_type: form.salary_type,
+          passport_serial: form.passport_serial,
+          passport_number: form.passport_number,
+          address: form.address,
+          emergency_contact: form.emergency_contact,
+        },
+      });
     }
   };
 
-  const handleBalanceSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const isPending = createMutation.isPending || updateMutation.isPending;
 
-    if (!balanceDialog.data || !balanceForm.amount) {
-      toast.error("Miqdorni kiriting");
-      return;
-    }
+  // ── Stats helpers ──────────────────────────────────────────────────────────
+  const statItems = stats
+    ? [
+        {
+          icon: Users,
+          color: "text-blue-600 bg-blue-50",
+          value: stats.total_staff,
+          label: "Jami xodim",
+          fmt: false,
+        },
+        {
+          icon: UserCheck,
+          color: "text-emerald-600 bg-emerald-50",
+          value: stats.active_staff,
+          label: "Faol",
+          fmt: false,
+        },
+        {
+          icon: DollarSign,
+          color: "text-amber-600 bg-amber-50",
+          value: stats.total_salary_budget,
+          label: "Maosh byudjeti",
+          fmt: true,
+        },
+        {
+          icon: stats.total_balance >= 0 ? TrendingUp : TrendingDown,
+          color: stats.total_balance >= 0 ? "text-green-600 bg-green-50" : "text-red-600 bg-red-50",
+          value: stats.total_balance,
+          label: "Umumiy balans",
+          fmt: true,
+        },
+      ]
+    : [];
 
-    const data: AddBalanceRequest = {
-      amount: balanceForm.amount,
-      transaction_type: balanceForm.transaction_type,
-      description: balanceForm.description,
-    };
-
-    addBalanceMutation.mutate({ id: balanceDialog.data.id, data });
-  };
-
-  const handleSalarySubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!salaryDialog.data) {
-      toast.error("Xodim ma'lumotlari topilmadi");
-      return;
-    }
-
-    if (!salaryForm.amount || salaryForm.amount <= 0) {
-      toast.error("To'lov miqdorini kiriting");
-      return;
-    }
-
-    if (!salaryForm.cash_register_id) {
-      toast.error("Kassani tanlang");
-      return;
-    }
-
-    if (!salaryForm.category_id) {
-      toast.error("Kategoriyani tanlang");
-      return;
-    }
-
-    const data: ChangeBalanceRequest = {
-      transaction_type: "deduction",
-      amount: salaryForm.amount,
-      description: salaryForm.notes || `Maosh to'lovi - ${new Date().toLocaleDateString('uz-UZ')}`,
-      create_cash_transaction: true,
-      cash_register_id: salaryForm.cash_register_id,
-      payment_method: salaryForm.payment_method,
-      reference: `SALARY-${Date.now()}`,
-    };
-
-    paySalaryMutation.mutate({ id: salaryDialog.data.id, data });
-  };
-
-  const handleDelete = (staffId: string, staffName: string) => {
-    if (confirm(`${staffName}ni o'chirmoqchimisiz?`)) {
-      deleteStaffMutation.mutate(staffId);
-    }
-  };
-
-  // Balance visibility handlers
-  const toggleAllBalances = () => {
-    setShowAllBalances(!showAllBalances);
-    if (!showAllBalances) {
-      setVisibleBalances(new Set());
-    }
-  };
-
-  const toggleBalanceVisibility = (e: React.MouseEvent, staffId: string) => {
-    e.stopPropagation(); // Prevent row click
-    const newVisible = new Set(visibleBalances);
-    if (newVisible.has(staffId)) {
-      newVisible.delete(staffId);
-    } else {
-      newVisible.add(staffId);
-    }
-    setVisibleBalances(newVisible);
-  };
-
-  const isBalanceVisible = (staffId: string) => {
-    return showAllBalances || visibleBalances.has(staffId);
-  };
-
-  // Statistics visibility handlers
-  const toggleStatVisibility = (statCard: StatCard) => {
-    const newVisible = new Set(visibleStats);
-    if (newVisible.has(statCard)) {
-      newVisible.delete(statCard);
-    } else {
-      newVisible.add(statCard);
-    }
-    setVisibleStats(newVisible);
-  };
-
-  const isStatVisible = (statCard: StatCard) => {
-    return visibleStats.has(statCard);
-  };
-
-  if (isLoadingStaff) {
+  // ── Loading ────────────────────────────────────────────────────────────────
+  if (isLoading && staffList.length === 0) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-600">Yuklanmoqda...</p>
-        </div>
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="space-y-5 p-1">
+
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Xodimlar Boshqaruvi</h1>
-          <p className="text-gray-600 mt-1">
-            Jami {staff.length} ta xodim • API v2
-          </p>
+          <h1 className="text-2xl font-bold text-gray-900">Xodimlar</h1>
+          {stats && (
+            <p className="text-sm text-gray-400 mt-0.5">
+              {stats.active_staff} faol · {stats.terminated_staff} tugatilgan
+            </p>
+          )}
         </div>
-        <div className="flex items-center gap-2">
-          <Button 
-            onClick={toggleAllBalances} 
-            variant="outline" 
-            size="lg" 
-            className="gap-2"
-          >
-            {showAllBalances ? (
-              <>
-                <EyeOff className="w-5 h-5" />
-                Balanslarni yashirish
-              </>
-            ) : (
-              <>
-                <Eye className="w-5 h-5" />
-                Balanslarni ko&apos;rsatish
-              </>
-            )}
-          </Button>
-          <Button onClick={openCreateDialog} size="lg" className="gap-2">
-            <Plus className="w-5 h-5" />
-            Xodim qo&apos;shish
-          </Button>
-        </div>
+        <Button size="sm" onClick={openCreate} className="gap-2">
+          <Plus className="w-4 h-4" />
+          Xodim qo&apos;shish
+        </Button>
       </div>
 
-      {/* Enhanced Statistics */}
+      {/* ── Stats ──────────────────────────────────────────────────────────── */}
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <Users className="w-6 h-6 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{stats.total_staff}</p>
-                  <p className="text-sm text-gray-600">Jami xodimlar</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {stats.active_staff} faol / {stats.terminated_staff} tugatilgan
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card 
-            className="cursor-pointer hover:shadow-md transition-shadow"
-            onClick={() => toggleStatVisibility('budget')}
-          >
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center">
-                  <DollarSign className="w-6 h-6 text-amber-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className={`text-lg font-bold truncate transition-all ${
-                    isStatVisible('budget') ? '' : 'blur-sm select-none'
-                  }`}>
-                    {isStatVisible('budget') ? formatCurrency(stats.total_salary_budget) : '•••••••'}
-                  </p>
-                  <p className="text-sm text-gray-600">Umumiy byudjet</p>
-                  <p className={`text-xs text-gray-500 mt-1 truncate transition-all ${
-                    isStatVisible('budget') ? '' : 'blur-sm select-none'
-                  }`}>
-                    O&apos;rtacha: {isStatVisible('budget') ? formatCurrency(Math.round(stats.average_salary)) : '•••••••'}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card 
-            className="cursor-pointer hover:shadow-md transition-shadow"
-            onClick={() => toggleStatVisibility('balance')}
-          >
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                  stats.total_balance >= 0 ? "bg-green-100" : "bg-red-100"
-                }`}>
-                  {stats.total_balance >= 0 ? (
-                    <TrendingUp className="w-6 h-6 text-green-600" />
-                  ) : (
-                    <TrendingDown className="w-6 h-6 text-red-600" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className={`text-lg font-bold truncate transition-all ${
-                    stats.total_balance < 0 ? "text-red-600" : ""
-                  } ${isStatVisible('balance') ? '' : 'blur-sm select-none'}`}>
-                    {isStatVisible('balance') ? formatCurrency(stats.total_balance) : '•••••••'}
-                  </p>
-                  <p className="text-sm text-gray-600">Umumiy balans</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card 
-            className="cursor-pointer hover:shadow-md transition-shadow"
-            onClick={() => toggleStatVisibility('salary-range')}
-          >
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                  <Wallet className="w-6 h-6 text-purple-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className={`text-sm text-gray-600 truncate transition-all ${
-                    isStatVisible('salary-range') ? '' : 'blur-sm select-none'
-                  }`}>
-                    Min: {isStatVisible('salary-range') ? formatCurrency(stats.min_salary) : '•••••••'}
-                  </p>
-                  <p className={`text-sm text-gray-600 truncate transition-all ${
-                    isStatVisible('salary-range') ? '' : 'blur-sm select-none'
-                  }`}>
-                    Max: {isStatVisible('salary-range') ? formatCurrency(stats.max_salary) : '•••••••'}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">Maosh diapazoni</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {statItems.map((s, i) => {
+            const Icon = s.icon;
+            return (
+              <Card key={i}>
+                <CardContent className="p-4 flex items-center gap-3">
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${s.color}`}>
+                    <Icon className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-bold text-gray-900 text-sm leading-none truncate">
+                      {s.fmt ? formatCurrency(s.value as number) : s.value}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">{s.label}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
-      {/* Payment Statistics */}
-      {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card 
-            className="cursor-pointer hover:shadow-md transition-shadow"
-            onClick={() => toggleStatVisibility('paid')}
-          >
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                  <CheckCircle className="w-6 h-6 text-green-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className={`text-lg font-bold truncate transition-all ${
-                    isStatVisible('paid') ? '' : 'blur-sm select-none'
-                  }`}>
-                    {isStatVisible('paid') ? formatCurrency(stats.total_paid) : '•••••••'}
-                  </p>
-                  <p className="text-sm text-gray-600">Jami to&apos;langan</p>
-                  <p className={`text-xs text-gray-500 mt-1 transition-all ${
-                    isStatVisible('paid') ? '' : 'blur-sm select-none'
-                  }`}>
-                    {isStatVisible('paid') ? `${stats.paid_payments_count} ta to'lov` : '•••'}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card 
-            className="cursor-pointer hover:shadow-md transition-shadow"
-            onClick={() => toggleStatVisibility('pending')}
-          >
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                  <CreditCard className="w-6 h-6 text-orange-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className={`text-lg font-bold truncate transition-all ${
-                    isStatVisible('pending') ? '' : 'blur-sm select-none'
-                  }`}>
-                    {isStatVisible('pending') ? formatCurrency(stats.total_pending) : '•••••••'}
-                  </p>
-                  <p className="text-sm text-gray-600">Kutilayotgan to&apos;lovlar</p>
-                  <p className={`text-xs text-gray-500 mt-1 transition-all ${
-                    isStatVisible('pending') ? '' : 'blur-sm select-none'
-                  }`}>
-                    {isStatVisible('pending') ? `${stats.pending_payments_count} ta to'lov` : '•••'}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+      {/* ── Filter bar ─────────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[180px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Input
+            placeholder="Ism, telefon yoki rol bo'yicha qidirish..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 h-9 text-sm"
+          />
         </div>
-      )}
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input
-                placeholder="Qidirish..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
-            </div>
+        <Select value={roleFilter} onValueChange={setRoleFilter}>
+          <SelectTrigger className="h-9 text-sm w-40">
+            <SelectValue placeholder="Rol" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Barcha rollar</SelectItem>
+            {ROLES.map((r) => (
+              <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-            <Select value={roleFilter} onValueChange={setRoleFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="BranchRole" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Barcha rollar</SelectItem>
-                {BRANCH_ROLE_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="h-9 text-sm w-36">
+            <SelectValue placeholder="Holat" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Barchasi</SelectItem>
+            <SelectItem value="active">Faol</SelectItem>
+            <SelectItem value="terminated">Tugatilgan</SelectItem>
+          </SelectContent>
+        </Select>
 
-            <Select value={customRoleFilter} onValueChange={setCustomRoleFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Maxsus rol" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Barcha maxsus rollar</SelectItem>
-                {roles.map((role) => (
-                  <SelectItem key={role.id} value={role.id}>
-                    {role.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowBalances((v) => !v)}
+          className="gap-1.5 text-gray-500 h-9"
+        >
+          {showBalances ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+          {showBalances ? "Yashirish" : "Balanslar"}
+        </Button>
+      </div>
 
-            <Select value={employmentTypeFilter} onValueChange={setEmploymentTypeFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Ish turi" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Barchasi</SelectItem>
-                <SelectItem value="full_time">{EMPLOYMENT_TYPE_LABELS.full_time}</SelectItem>
-                <SelectItem value="part_time">{EMPLOYMENT_TYPE_LABELS.part_time}</SelectItem>
-                <SelectItem value="contract">{EMPLOYMENT_TYPE_LABELS.contract}</SelectItem>
-                <SelectItem value="intern">{EMPLOYMENT_TYPE_LABELS.intern}</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Barchasi</SelectItem>
-                <SelectItem value="active">Faol</SelectItem>
-                <SelectItem value="terminated">Tugatilgan</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Staff Table */}
-      {staff.length === 0 ? (
+      {/* ── Table ──────────────────────────────────────────────────────────── */}
+      {staffList.length === 0 ? (
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <Users className="w-16 h-16 text-gray-300 mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Xodimlar topilmadi</h3>
-            <p className="text-gray-600 mb-6 text-center">
-              Yangi xodim qo&apos;shish uchun telefon raqam orqali<br/>
-              foydalanuvchi yarating yoki mavjudni ulang
-            </p>
-            <Button onClick={openCreateDialog} className="gap-2">
-              <Plus className="w-4 h-4" />
-              Xodim qo&apos;shish
-            </Button>
+          <CardContent className="py-16 flex flex-col items-center gap-3">
+            <Users className="w-12 h-12 text-gray-200" />
+            <p className="text-gray-500 text-sm">Xodimlar topilmadi</p>
+            {!search && !isLoading && (
+              <Button size="sm" onClick={openCreate} className="gap-2 mt-1">
+                <Plus className="w-4 h-4" />
+                Birinchi xodimni qo&apos;shish
+              </Button>
+            )}
           </CardContent>
         </Card>
       ) : (
         <Card>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Xodim</TableHead>
-                    <TableHead>Rol / Lavozim</TableHead>
-                    <TableHead>Ish turi</TableHead>
-                    <TableHead>Maosh</TableHead>
-                    <TableHead>Balans</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {staff.map((member) => (
-                    <TableRow 
-	                      key={member.id} 
-	                      className="cursor-pointer hover:bg-gray-50"
-	                      onClick={() => window.location.href = `/school/staff/${member.id}`}
-	                    >
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-full flex items-center justify-center flex-shrink-0">
-                            <User className="w-5 h-5 text-white" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="font-medium truncate">{member.full_name}</p>
-                            <p className="text-sm text-gray-500 truncate">{member.phone_number}</p>
-                          </div>
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-gray-50/70 hover:bg-gray-50/70">
+                  <TableHead className="text-xs font-medium text-gray-400 uppercase tracking-wide pl-5">Xodim</TableHead>
+                  <TableHead className="text-xs font-medium text-gray-400 uppercase tracking-wide">Rol</TableHead>
+                  <TableHead className="text-xs font-medium text-gray-400 uppercase tracking-wide hidden md:table-cell">Ish turi</TableHead>
+                  <TableHead className="text-xs font-medium text-gray-400 uppercase tracking-wide">Oylik maosh</TableHead>
+                  {showBalances && (
+                    <TableHead className="text-xs font-medium text-gray-400 uppercase tracking-wide">Balans</TableHead>
+                  )}
+                  <TableHead className="text-xs font-medium text-gray-400 uppercase tracking-wide text-right pr-5">Amallar</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {staffList.map((member) => (
+                  <TableRow
+                    key={member.id}
+                    className="hover:bg-gray-50/60 cursor-pointer"
+                    onClick={() => router.push(`/school/staff/${member.id}`)}
+                  >
+                    {/* Xodim */}
+                    <TableCell className="pl-5">
+                      <div className="flex items-center gap-3">
+                        <Avatar name={member.full_name} role={member.role} />
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm text-gray-900 truncate">{member.full_name}</p>
+                          <p className="text-xs text-gray-400 truncate">{member.phone_number}</p>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <Badge variant="outline" className="mb-1">{member.role_display}</Badge>
-                          {member.role_ref_name ? (
-                            <p className="text-sm font-medium text-gray-700 truncate">{member.role_ref_name}</p>
-                          ) : member.title ? (
-                            <p className="text-sm text-gray-600 truncate">{member.title}</p>
-                          ) : null}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm">
-                          {member.employment_type 
-                            ? EMPLOYMENT_TYPE_LABELS[member.employment_type] 
-                            : "-"}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <span className="font-medium whitespace-nowrap">
-                          {formatCurrency(member.monthly_salary)}
-                        </span>
-                      </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-2">
-                          {isBalanceVisible(member.id) ? (
-                            <>
-                              <span className={`font-medium whitespace-nowrap ${
-                                member.balance < 0 ? "text-red-600" : "text-green-600"
-                              }`}>
-                                {formatCurrency(member.balance)}
-                              </span>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={(e) => toggleBalanceVisibility(e, member.id)}
-                                className="h-7 w-7 p-0 hover:bg-gray-100"
-                              >
-                                <EyeOff className="w-3.5 h-3.5 text-gray-500" />
-                              </Button>
-                            </>
-                          ) : (
-                            <>
-                              <span className="font-medium text-gray-400 select-none">
-                                •••••••
-                              </span>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={(e) => toggleBalanceVisibility(e, member.id)}
-                                className="h-7 w-7 p-0 hover:bg-gray-100"
-                              >
-                                <Eye className="w-3.5 h-3.5 text-gray-500" />
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={member.is_active ? "default" : "secondary"}>
-                          {member.is_active ? "Faol" : "Faol emas"}
+                      </div>
+                    </TableCell>
+
+                    {/* Rol */}
+                    <TableCell>
+                      <div className="space-y-0.5">
+                        <Badge variant="secondary" className="text-xs px-2 py-0 h-5">
+                          {member.role_display}
                         </Badge>
+                        {member.role_ref_name && (
+                          <p className="text-xs text-gray-400 truncate max-w-[110px]">
+                            {member.role_ref_name}
+                          </p>
+                        )}
+                      </div>
+                    </TableCell>
+
+                    {/* Ish turi */}
+                    <TableCell className="hidden md:table-cell">
+                      <span className="text-xs text-gray-500">
+                        {member.employment_type
+                          ? EMPLOYMENT_TYPE_LABELS[member.employment_type]
+                          : "—"}
+                      </span>
+                    </TableCell>
+
+                    {/* Maosh */}
+                    <TableCell>
+                      <span className="text-sm font-medium tabular-nums">
+                        {formatCurrency(member.monthly_salary)}
+                      </span>
+                    </TableCell>
+
+                    {/* Balans (conditional) */}
+                    {showBalances && (
+                      <TableCell>
+                        <span
+                          className={`text-sm font-semibold tabular-nums ${
+                            member.balance < 0 ? "text-red-600" : "text-emerald-600"
+                          }`}
+                        >
+                          {formatCurrency(member.balance)}
+                        </span>
                       </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                    )}
+
+                    {/* Amallar */}
+                    <TableCell
+                      className="pr-5"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2.5 text-xs gap-1 border-blue-200 text-blue-600 hover:bg-blue-50"
+                          onClick={() => setTxSheet({ open: true, staff: member })}
+                        >
+                          <DollarSign className="w-3.5 h-3.5" />
+                          Hisob-kitob
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => openEdit(member)}
+                        >
+                          <Edit className="w-3.5 h-3.5 text-gray-400" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => router.push(`/school/staff/${member.id}`)}
+                        >
+                          <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}
 
-      {/* Create/Edit Staff Dialog */}
-      <Dialog
-        open={staffDialog.open}
-        onOpenChange={(open) => setStaffDialog({ ...staffDialog, open })}
+      {/* ── Staff Transaction Sheet ─────────────────────────────────────────── */}
+      {txSheet.staff && (
+        <StaffTransactionSheet
+          open={txSheet.open}
+          onClose={() => setTxSheet({ open: false })}
+          staff={txSheet.staff}
+          branchId={branchId}
+          onSuccess={() => queryClient.invalidateQueries({ queryKey: ["staff"] })}
+        />
+      )}
+
+      {/* ── Create / Edit Sheet ─────────────────────────────────────────────── */}
+      <Sheet
+        open={editSheet.open}
+        onOpenChange={(o) => setEditSheet({ ...editSheet, open: o })}
       >
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {staffDialog.mode === "create" ? "Yangi xodim qo'shish" : "Xodimni tahrirlash"}
-            </DialogTitle>
-            <DialogDescription>
-              {staffDialog.mode === "create" 
-                ? "Telefon raqam orqali foydalanuvchi yaratiladi yoki mavjudsi ulanadi"
-                : "Xodim ma'lumotlarini yangilash (foydalanuvchi va filial o'zgartirilmaydi)"}
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleStaffSubmit}>
-            <div className="space-y-6 py-4">
-              {/* User Information - Only for Create */}
-              {staffDialog.mode === "create" && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">Foydalanuvchi ma&apos;lumotlari</CardTitle>
-                    <CardDescription>Telefon raqam orqali yangi foydalanuvchi yaratiladi</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="phone_number">
-                          Telefon raqam <span className="text-red-500">*</span>
-                        </Label>
-                        <Input
-                          id="phone_number"
-                          value={staffForm.phone_number || ""}
-                          onChange={(e) => setStaffForm({ ...staffForm, phone_number: e.target.value })}
-                          placeholder="+998901234567"
-                          required
-                        />
-                      </div>
+        <SheetContent side="right" className="w-full sm:max-w-lg p-0 flex flex-col overflow-hidden">
+          {/* Colored header */}
+          <div
+            className={`px-6 pt-6 pb-5 shrink-0 ${
+              editSheet.mode === "create" ? "bg-blue-600" : "bg-indigo-600"
+            }`}
+          >
+            <SheetHeader>
+              <SheetTitle className="text-white font-semibold text-lg">
+                {editSheet.mode === "create" ? "Yangi xodim" : "Xodimni tahrirlash"}
+              </SheetTitle>
+              <SheetDescription className="text-white/60 text-sm">
+                {editSheet.mode === "create"
+                  ? "Telefon raqam orqali foydalanuvchi yaratiladi"
+                  : editSheet.data?.full_name}
+              </SheetDescription>
+            </SheetHeader>
+          </div>
 
-                      <div className="space-y-2">
-                        <Label htmlFor="email">Email</Label>
-                        <Input
-                          id="email"
-                          type="email"
-                          value={staffForm.email || ""}
-                          onChange={(e) => setStaffForm({ ...staffForm, email: e.target.value })}
-                          placeholder="email@example.com"
-                        />
-                      </div>
-                    </div>
+          <form onSubmit={handleFormSubmit} className="flex-1 overflow-y-auto">
+            <div className="px-6 py-5 space-y-5">
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="first_name">
-                          Ism <span className="text-red-500">*</span>
-                        </Label>
-                        <Input
-                          id="first_name"
-                          value={staffForm.first_name || ""}
-                          onChange={(e) => setStaffForm({ ...staffForm, first_name: e.target.value })}
-                          placeholder="Ali"
-                          required
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="last_name">
-                          Familiya <span className="text-red-500">*</span>
-                        </Label>
-                        <Input
-                          id="last_name"
-                          value={staffForm.last_name || ""}
-                          onChange={(e) => setStaffForm({ ...staffForm, last_name: e.target.value })}
-                          placeholder="Valiyev"
-                          required
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="password">Parol (ixtiyoriy)</Label>
-                      <Input
-                        id="password"
-                        type="password"
-                        value={staffForm.password || ""}
-                        onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })}
-                        placeholder="Bo'sh qoldirilsa avtomatik yaratiladi"
-                      />
-                      <p className="text-xs text-gray-500">
-                        Parol kiritilmasa, tizim avtomatik yaratadi
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Role & Employment */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Rol va ish turi</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="role">
-                        BranchRole <span className="text-red-500">*</span>
-                      </Label>
-                      <Select
-                        value={staffForm.role}
-                        onValueChange={(value) => setStaffForm({ ...staffForm, role: value })}
-                      >
-                        <SelectTrigger id="role">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {BRANCH_ROLE_OPTIONS.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="role_ref_id">
-                        Maxsus rol {staffForm.role === "other" && <span className="text-red-500">*</span>}
-                      </Label>
-                      <Select
-                        value={staffForm.role_ref_id}
-                        onValueChange={(value) => setStaffForm({ ...staffForm, role_ref_id: value })}
-                      >
-                        <SelectTrigger id="role_ref_id">
-                          <SelectValue placeholder="Tanlang" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">Yo'q</SelectItem>
-                          {roles.map((role) => (
-                            <SelectItem key={role.id} value={role.id}>
-                              {role.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {staffForm.role === "other" && !staffForm.role_ref_id && (
-                        <p className="text-xs text-red-600">
-                          &quot;Boshqa xodim&quot; turi uchun maxsus rol tanlash majburiy
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="title">Lavozim</Label>
-                      <Input
-                        id="title"
-                        value={staffForm.title || ""}
-                        onChange={(e) => setStaffForm({ ...staffForm, title: e.target.value })}
-                        placeholder="Masalan: Katta o'qituvchi"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="employment_type">Ish turi</Label>
-                      <Select
-                        value={staffForm.employment_type}
-                        onValueChange={(value) =>
-                          setStaffForm({ ...staffForm, employment_type: value as EmploymentType })
-                        }
-                      >
-                        <SelectTrigger id="employment_type">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="full_time">{EMPLOYMENT_TYPE_LABELS.full_time}</SelectItem>
-                          <SelectItem value="part_time">{EMPLOYMENT_TYPE_LABELS.part_time}</SelectItem>
-                          <SelectItem value="contract">{EMPLOYMENT_TYPE_LABELS.contract}</SelectItem>
-                          <SelectItem value="intern">{EMPLOYMENT_TYPE_LABELS.intern}</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Salary Information */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Maosh ma&apos;lumotlari</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="monthly_salary">Oylik maosh (so&apos;m)</Label>
-                      <Input
-                        id="monthly_salary"
-                        type="number"
-                        value={staffForm.monthly_salary}
-                        onChange={(e) =>
-                          setStaffForm({ ...staffForm, monthly_salary: parseInt(e.target.value) || 0 })
-                        }
-                        placeholder="5000000"
-                        step="100000"
-                      />
-                    </div>
-
-                    {staffDialog.mode === "create" && (
-                      <div className="space-y-2">
-                        <Label htmlFor="hire_date">Ishga qabul qilingan sana</Label>
-                        <Input
-                          id="hire_date"
-                          type="date"
-                          value={staffForm.hire_date || ""}
-                          onChange={(e) => setStaffForm({ ...staffForm, hire_date: e.target.value })}
-                        />
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Personal Information */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Shaxsiy ma&apos;lumotlar</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="passport_serial">Pasport seriyasi</Label>
-                      <Input
-                        id="passport_serial"
-                        value={staffForm.passport_serial || ""}
-                        onChange={(e) =>
-                          setStaffForm({ ...staffForm, passport_serial: e.target.value.toUpperCase() })
-                        }
-                        placeholder="AA"
-                        maxLength={2}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="passport_number">Pasport raqami</Label>
-                      <Input
-                        id="passport_number"
-                        value={staffForm.passport_number || ""}
-                        onChange={(e) =>
-                          setStaffForm({ ...staffForm, passport_number: e.target.value })
-                        }
-                        placeholder="1234567"
-                        maxLength={7}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="address">Manzil</Label>
-                    <Textarea
-                      id="address"
-                      value={staffForm.address || ""}
-                      onChange={(e) => setStaffForm({ ...staffForm, address: e.target.value })}
-                      placeholder="To'liq yashash manzili"
-                      rows={2}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="emergency_contact">Favqulodda aloqa</Label>
-                    <Input
-                      id="emergency_contact"
-                      value={staffForm.emergency_contact || ""}
-                      onChange={(e) =>
-                        setStaffForm({ ...staffForm, emergency_contact: e.target.value })
-                      }
-                      placeholder="+998901234567"
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setStaffDialog({ ...staffDialog, open: false })}
-              >
-                Bekor qilish
-              </Button>
-              <Button
-                type="submit"
-                disabled={createStaffMutation.isPending || updateStaffMutation.isPending}
-              >
-                {(createStaffMutation.isPending || updateStaffMutation.isPending) && (
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                )}
-                {staffDialog.mode === "create" ? "Yaratish" : "Saqlash"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Balance Transaction Dialog */}
-      <Dialog open={balanceDialog.open} onOpenChange={(open) => setBalanceDialog({ open })}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Balans tranzaksiyasi</DialogTitle>
-            <DialogDescription>
-              {balanceDialog.data && (
-                <>
-                  <span className="font-medium">{balanceDialog.data.full_name}</span>
-                  <br />
-                  Joriy balans: <span className={balanceDialog.data.balance < 0 ? "text-red-600 font-medium" : "font-medium"}>
-                    {formatCurrency(balanceDialog.data.balance)}
-                  </span>
-                </>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleBalanceSubmit}>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="transaction_type">
-                  Tranzaksiya turi <span className="text-red-500">*</span>
-                </Label>
-                <Select
-                  value={balanceForm.transaction_type}
-                  onValueChange={(value) =>
-                    setBalanceForm({ ...balanceForm, transaction_type: value as TransactionType })
-                  }
-                >
-                  <SelectTrigger id="transaction_type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="salary">{transactionTypeLabels.salary}</SelectItem>
-                    <SelectItem value="bonus">{transactionTypeLabels.bonus}</SelectItem>
-                    <SelectItem value="deduction">{transactionTypeLabels.deduction}</SelectItem>
-                    <SelectItem value="advance">{transactionTypeLabels.advance}</SelectItem>
-                    <SelectItem value="fine">{transactionTypeLabels.fine}</SelectItem>
-                    <SelectItem value="refund">{transactionTypeLabels.refund}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="amount">
-                  Miqdor (so&apos;m) <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="amount"
-                  type="number"
-                  value={balanceForm.amount}
-                  onChange={(e) =>
-                    setBalanceForm({ ...balanceForm, amount: parseInt(e.target.value) || 0 })
-                  }
-                  placeholder="500000"
-                  step="10000"
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="description">Izoh</Label>
-                <Textarea
-                  id="description"
-                  value={balanceForm.description}
-                  onChange={(e) =>
-                    setBalanceForm({ ...balanceForm, description: e.target.value })
-                  }
-                  placeholder="Tranzaksiya haqida ma'lumot"
-                  rows={2}
-                />
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setBalanceDialog({ open: false })}
-              >
-                Bekor qilish
-              </Button>
-              <Button type="submit" disabled={addBalanceMutation.isPending}>
-                {addBalanceMutation.isPending && (
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                )}
-                Saqlash
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Salary Payment Dialog */}
-      <Dialog open={salaryDialog.open} onOpenChange={(open) => setSalaryDialog({ open })}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Wallet className="w-5 h-5" />
-              Maosh To&apos;lash
-            </DialogTitle>
-            <DialogDescription>
-              {salaryDialog.data && (
-                <div className="space-y-1 mt-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Xodim:</span>
-                    <span className="font-medium text-gray-900">{salaryDialog.data.full_name}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Oylik maosh:</span>
-                    <span className="font-semibold text-blue-600">{formatCurrency(salaryDialog.data.monthly_salary)}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Joriy balans:</span>
-                    <span className={`font-medium ${
-                      salaryDialog.data.balance < 0 ? 'text-red-600' : 'text-green-600'
-                    }`}>
-                      {formatCurrency(salaryDialog.data.balance)}
-                    </span>
-                  </div>
-                </div>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleSalarySubmit}>
-            <div className="space-y-4 py-4">
-              <Card className="bg-yellow-50 border-yellow-200">
-                <CardContent className="pt-4 pb-3">
-                  <div className="flex gap-2 text-sm text-yellow-800">
-                    <CreditCard className="w-4 h-4 mt-0.5 shrink-0" />
-                    <div>
-                      <p className="font-medium mb-1">Maosh to&apos;lash - Kassa chiqimi</p>
-                      <p className="text-xs">
-                        Bu operatsiya xodim balansini kamaytiradi va tanlangan kassadan pul chiqimini qayd qiladi.
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="cash_register_id">
-                    Kassa <span className="text-red-500">*</span>
-                  </Label>
-                  <Select
-                    value={salaryForm.cash_register_id}
-                    onValueChange={(value) =>
-                      setSalaryForm({ ...salaryForm, cash_register_id: value })
-                    }
-                  >
-                    <SelectTrigger id="cash_register_id">
-                      <SelectValue placeholder="Kassani tanlang" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {cashRegisters.length === 0 ? (
-                        <div className="p-2 text-sm text-gray-500 text-center">
-                          Kassalar topilmadi
-                        </div>
-                      ) : (
-                        cashRegisters.map((register) => (
-                          <SelectItem key={register.id} value={register.id}>
-                            {register.name} ({formatCurrency(register.balance)})
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="category_id">
-                    Kategoriya <span className="text-red-500">*</span>
-                  </Label>
-                  <Select
-                    value={salaryForm.category_id}
-                    onValueChange={(value) =>
-                      setSalaryForm({ ...salaryForm, category_id: value })
-                    }
-                  >
-                    <SelectTrigger id="category_id">
-                      <SelectValue placeholder="Kategoriyani tanlang" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {expenseCategories.length === 0 ? (
-                        <div className="p-2 text-sm text-gray-500 text-center">
-                          Kategoriyalar topilmadi
-                        </div>
-                      ) : (
-                        expenseCategories.map((category) => (
-                          <SelectItem key={category.id} value={category.id}>
-                            {category.name}
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-gray-500">
-                    Chiqim kategoriyasi (masalan: Xodim maoshi)
+              {/* User info — create only */}
+              {editSheet.mode === "create" && (
+                <section className="space-y-3">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                    Foydalanuvchi
                   </p>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="payment_method">
-                  To&apos;lov usuli <span className="text-red-500">*</span>
-                </Label>
-                <Select
-                  value={salaryForm.payment_method}
-                  onValueChange={(value) =>
-                    setSalaryForm({ ...salaryForm, payment_method: value as PaymentMethod })
-                  }
-                >
-                  <SelectTrigger id="payment_method">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="cash">{paymentMethodLabels.cash}</SelectItem>
-                    <SelectItem value="card">{paymentMethodLabels.card}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="salary_amount">
-                  Miqdor (so&apos;m) <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="salary_amount"
-                  type="number"
-                  value={salaryForm.amount}
-                  onChange={(e) =>
-                    setSalaryForm({ ...salaryForm, amount: parseInt(e.target.value) || 0 })
-                  }
-                  placeholder="4000000"
-                  step="100000"
-                  min="0"
-                  required
-                />
-                {salaryDialog.data && salaryDialog.data.monthly_salary > 0 && (
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-gray-500">Oylik maosh:</span>
-                    <Button
-                      type="button"
-                      variant="link"
-                      size="sm"
-                      className="h-auto p-0 text-blue-600"
-                      onClick={() => setSalaryForm({ ...salaryForm, amount: salaryDialog.data!.monthly_salary })}
-                    >
-                      {formatCurrency(salaryDialog.data.monthly_salary)} dan foydalanish
-                    </Button>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-gray-500">Ism <span className="text-red-500">*</span></Label>
+                      <Input
+                        value={form.first_name ?? ""}
+                        onChange={(e) => setForm({ ...form, first_name: e.target.value })}
+                        placeholder="Ali"
+                        className="h-9 text-sm"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-gray-500">Familiya <span className="text-red-500">*</span></Label>
+                      <Input
+                        value={form.last_name ?? ""}
+                        onChange={(e) => setForm({ ...form, last_name: e.target.value })}
+                        placeholder="Valiyev"
+                        className="h-9 text-sm"
+                        required
+                      />
+                    </div>
                   </div>
-                )}
-              </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500">Telefon <span className="text-red-500">*</span></Label>
+                    <Input
+                      value={form.phone_number ?? ""}
+                      onChange={(e) => setForm({ ...form, phone_number: e.target.value })}
+                      placeholder="+998 90 123 45 67"
+                      className="h-9 text-sm"
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-gray-500">Email</Label>
+                      <Input
+                        type="email"
+                        value={form.email ?? ""}
+                        onChange={(e) => setForm({ ...form, email: e.target.value })}
+                        placeholder="email@example.com"
+                        className="h-9 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-gray-500">Parol</Label>
+                      <Input
+                        type="password"
+                        value={form.password ?? ""}
+                        onChange={(e) => setForm({ ...form, password: e.target.value })}
+                        placeholder="Avtomatik"
+                        className="h-9 text-sm"
+                      />
+                    </div>
+                  </div>
+                </section>
+              )}
 
-              <div className="space-y-2">
-                <Label htmlFor="salary_notes">Izoh</Label>
-                <Textarea
-                  id="salary_notes"
-                  value={salaryForm.notes}
-                  onChange={(e) => setSalaryForm({ ...salaryForm, notes: e.target.value })}
-                  placeholder="To'lov haqida qo'shimcha ma'lumot (ixtiyoriy)"
-                  rows={2}
-                />
-              </div>
+              {/* Role */}
+              <section className="space-y-3">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                  Rol va lavozim
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500">Rol turi <span className="text-red-500">*</span></Label>
+                    <Select
+                      value={form.role}
+                      onValueChange={(v) => setForm({ ...form, role: v })}
+                    >
+                      <SelectTrigger className="h-9 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ROLES.map((r) => (
+                          <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500">
+                      Maxsus rol {form.role === "other" && <span className="text-red-500">*</span>}
+                    </Label>
+                    <Select
+                      value={form.role_ref_id ?? "none"}
+                      onValueChange={(v) =>
+                        setForm({ ...form, role_ref_id: v === "none" ? undefined : v })
+                      }
+                    >
+                      <SelectTrigger className="h-9 text-sm">
+                        <SelectValue placeholder="Tanlang" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Yo&apos;q</SelectItem>
+                        {rolesData.map((r) => (
+                          <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500">Lavozim</Label>
+                    <Input
+                      value={form.title ?? ""}
+                      onChange={(e) => setForm({ ...form, title: e.target.value })}
+                      placeholder="Katta o'qituvchi"
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500">Ish turi</Label>
+                    <Select
+                      value={form.employment_type}
+                      onValueChange={(v) =>
+                        setForm({ ...form, employment_type: v as EmploymentType })
+                      }
+                    >
+                      <SelectTrigger className="h-9 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(EMPLOYMENT_TYPE_LABELS).map(([k, l]) => (
+                          <SelectItem key={k} value={k}>{l}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </section>
+
+              {/* Salary */}
+              <section className="space-y-3">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                  Maosh
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500">Oylik maosh (so&apos;m)</Label>
+                    <Input
+                      type="number"
+                      value={form.monthly_salary ?? ""}
+                      onChange={(e) =>
+                        setForm({ ...form, monthly_salary: parseInt(e.target.value) || 0 })
+                      }
+                      placeholder="5 000 000"
+                      step="100000"
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                  {editSheet.mode === "create" && (
+                    <div className="space-y-1">
+                      <Label className="text-xs text-gray-500">Ishga kirgan sana</Label>
+                      <Input
+                        type="date"
+                        value={form.hire_date ?? ""}
+                        onChange={(e) => setForm({ ...form, hire_date: e.target.value })}
+                        className="h-9 text-sm"
+                      />
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              {/* Personal */}
+              <section className="space-y-3">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                  Shaxsiy ma&apos;lumotlar
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500">Pasport ser.</Label>
+                    <Input
+                      value={form.passport_serial ?? ""}
+                      onChange={(e) =>
+                        setForm({ ...form, passport_serial: e.target.value.toUpperCase() })
+                      }
+                      placeholder="AA"
+                      maxLength={2}
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500">Pasport raqami</Label>
+                    <Input
+                      value={form.passport_number ?? ""}
+                      onChange={(e) => setForm({ ...form, passport_number: e.target.value })}
+                      placeholder="1234567"
+                      maxLength={7}
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-gray-500">Manzil</Label>
+                  <Textarea
+                    value={form.address ?? ""}
+                    onChange={(e) => setForm({ ...form, address: e.target.value })}
+                    placeholder="Yashash manzili"
+                    rows={2}
+                    className="text-sm resize-none"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-gray-500">Favqulodda aloqa</Label>
+                  <Input
+                    value={form.emergency_contact ?? ""}
+                    onChange={(e) => setForm({ ...form, emergency_contact: e.target.value })}
+                    placeholder="+998 90 000 00 00"
+                    className="h-9 text-sm"
+                  />
+                </div>
+              </section>
             </div>
 
-            <DialogFooter>
+            {/* Footer */}
+            <div className="border-t px-6 py-4 flex items-center justify-end gap-2 bg-gray-50 shrink-0">
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setSalaryDialog({ open: false })}
+                size="sm"
+                onClick={() => setEditSheet({ ...editSheet, open: false })}
               >
                 Bekor qilish
               </Button>
-              <Button 
-                type="submit" 
-                disabled={paySalaryMutation.isPending || !salaryForm.cash_register_id || !salaryForm.category_id}
-              >
-                {paySalaryMutation.isPending && (
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                )}
-                <CheckCircle className="w-4 h-4 mr-2" />
-                Maosh To&apos;lash
+              <Button type="submit" size="sm" disabled={isPending}>
+                {isPending && <Loader2 className="w-4 h-4 animate-spin mr-1.5" />}
+                {editSheet.mode === "create" ? "Yaratish" : "Saqlash"}
               </Button>
-            </DialogFooter>
+            </div>
           </form>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
