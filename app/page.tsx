@@ -8,7 +8,7 @@ import type { BranchType } from "@/types/auth";
 
 export default function Home() {
   const router = useRouter();
-  const { isAuthenticated, isLoading, currentBranch } = useAuth();
+  const { isAuthenticated, isLoading, currentBranch, loadUser } = useAuth();
 
   useEffect(() => {
     if (isLoading) return;
@@ -19,9 +19,11 @@ export default function Home() {
     if (currentBranch) {
       const rolePath = roleToPath(currentBranch.role, currentBranch.branch_type as BranchType);
       router.replace(`/${rolePath}`);
+      return;
     }
-    // currentBranch not yet loaded — layout will handle redirect
-  }, [isAuthenticated, isLoading, currentBranch, router]);
+    // Authenticated but no branch data — fetch from API
+    loadUser();
+  }, [isAuthenticated, isLoading, currentBranch, router, loadUser]);
 
   return (
     <div className="flex min-h-screen items-center justify-center">

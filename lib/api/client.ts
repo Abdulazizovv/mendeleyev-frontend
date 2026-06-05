@@ -1,6 +1,7 @@
 import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from "axios";
 import { API_CONFIG, getApiUrl, STORAGE_KEYS } from "@/lib/config";
 import type { ApiError } from "@/types";
+import { useAuthStore } from "@/lib/stores/auth";
 
 /**
  * Axios instance with base configuration
@@ -27,28 +28,16 @@ apiClient.interceptors.request.use(
 
       // Add X-Branch-Id header from current branch
       const currentBranchStr = localStorage.getItem(STORAGE_KEYS.CURRENT_BRANCH);
-      console.log('🔍 CURRENT_BRANCH from localStorage:', currentBranchStr);
-      
       if (currentBranchStr) {
         try {
           const currentBranch = JSON.parse(currentBranchStr);
-          console.log('📦 Parsed currentBranch:', currentBranch);
-          
-          // branch_id is a UUID string in currentBranch object
           const branchId = currentBranch?.branch_id;
-          console.log('🆔 Extracted branch_id:', branchId);
-          
           if (branchId && config.headers) {
             config.headers['X-Branch-Id'] = String(branchId);
-            console.log('🏢 Adding X-Branch-Id header:', branchId);
-          } else {
-            console.warn('⚠️ branch_id not found in currentBranch:', currentBranch);
           }
-        } catch (error) {
-          console.error('❌ Error parsing current branch:', error);
+        } catch {
+          // ignore parse errors
         }
-      } else {
-        console.warn('⚠️ CURRENT_BRANCH not found in localStorage');
       }
     }
     return config;
@@ -116,10 +105,7 @@ apiClient.interceptors.response.use(
 
         if (authLikeUrl || hasRevocationHint) {
           if (typeof window !== "undefined") {
-            localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
-            localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
-            localStorage.removeItem(STORAGE_KEYS.USER);
-            localStorage.removeItem(STORAGE_KEYS.CURRENT_BRANCH);
+            useAuthStore.getState().logout();
             window.location.href = "/login";
           }
         }
@@ -154,9 +140,9 @@ apiClient.interceptors.response.use(
         const refreshToken = localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
 
         if (!refreshToken) {
-          // No refresh token, redirect to login
           processQueue(new Error("No refresh token"), null);
           isRefreshing = false;
+          useAuthStore.getState().logout();
           window.location.href = "/login";
           return Promise.reject(error);
         }
@@ -186,13 +172,7 @@ apiClient.interceptors.response.use(
         } catch (refreshError) {
           processQueue(refreshError as Error, null);
           isRefreshing = false;
-
-          // Clear tokens and redirect to login
-          localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
-          localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
-          localStorage.removeItem(STORAGE_KEYS.USER);
-          localStorage.removeItem(STORAGE_KEYS.CURRENT_BRANCH);
-
+          useAuthStore.getState().logout();
           window.location.href = "/login";
           return Promise.reject(refreshError);
         }

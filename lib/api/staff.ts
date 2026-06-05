@@ -188,6 +188,30 @@ export const staffApi = {
   },
 
   /**
+   * Terminate staff (archive)
+   * POST /api/v1/branches/staff/{id}/terminate/
+   */
+  terminateStaff: async (id: string, terminationDate?: string): Promise<StaffMemberDetail> => {
+    const response = await apiClient.post<StaffMemberDetail>(
+      `branches/staff/${id}/terminate/`,
+      terminationDate ? { termination_date: terminationDate } : {}
+    );
+    return response.data;
+  },
+
+  /**
+   * Reactivate staff
+   * POST /api/v1/branches/staff/{id}/reactivate/
+   */
+  reactivateStaff: async (id: string): Promise<StaffMemberDetail> => {
+    const response = await apiClient.post<StaffMemberDetail>(
+      `branches/staff/${id}/reactivate/`,
+      {}
+    );
+    return response.data;
+  },
+
+  /**
    * Change balance (New API with cash register integration)
    * POST /api/v1/branches/staff/{id}/change-balance/
    * 

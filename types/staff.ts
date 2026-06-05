@@ -48,18 +48,23 @@ export interface Role {
  */
 export interface StaffMember {
   id: string; // UUID
+  first_name: string;
+  last_name: string;
   full_name: string;
   phone_number: string;
+  email?: string;
   role: string; // BranchRole CharField: teacher, branch_admin, other, etc.
   role_display: string;
+  role_ref_id?: string; // UUID
   role_ref_name?: string; // Custom Role name
   title?: string;
   employment_type?: EmploymentType;
   employment_type_display?: string;
   hire_date?: string;
+  termination_date?: string | null;
   balance: number; // Integer, so'm
   monthly_salary: number; // Integer, so'm
-  is_active: boolean; // Active employment status
+  is_active: boolean; // termination_date is null
 }
 
 /**
@@ -69,25 +74,20 @@ export interface StaffMember {
  */
 export interface StaffMemberDetail extends StaffMember {
   user_id: string;
-  first_name: string;
-  last_name: string;
-  email?: string;
-  
+
   branch: string; // UUID
   branch_name: string;
   branch_type?: string;
-  
+
   role_ref?: string; // UUID (nullable)
-  role_ref_id?: string; // UUID (nullable)
-  role_ref_permissions?: Record<string, string[]>; // {"academic": ["view_grades", "edit_grades"]}
-  
+  role_ref_permissions?: Record<string, string[]>;
+
   balance_status: BalanceStatus;
   salary: number;
   salary_type: string; // "monthly", "hourly", "per_lesson"
   hourly_rate?: number | null;
   per_lesson_rate?: number | null;
-  
-  termination_date?: string | null;
+
   days_employed: number;
   years_employed: number;
   is_active_employment: boolean;
@@ -213,25 +213,31 @@ export interface CreateStaffRequest {
  * v2: Cannot change user or branch
  */
 export interface UpdateStaffRequest {
+  // User fields (can be updated)
+  first_name?: string;
+  last_name?: string;
+  phone_number?: string;
+  email?: string;
+
   // Role fields
-  role?: string; // BranchRole
-  role_ref_id?: string; // UUID
+  role?: string;
+  role_ref_id?: string;
   title?: string;
-  
+
   // Salary fields
   monthly_salary?: number;
   salary_type?: string;
   employment_type?: EmploymentType;
-  
+
   // Personal info
   passport_serial?: string;
   passport_number?: string;
   address?: string;
   emergency_contact?: string;
   notes?: Record<string, any>;
-  
+
   // Termination
-  termination_date?: string | null; // ISO date for termination
+  termination_date?: string | null;
 }
 
 /**

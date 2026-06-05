@@ -64,15 +64,10 @@ export const useAuth = () => {
           setTokens(response.access, response.refresh);
           setUser(response.user);
 
-          if (response.br) {
-            // Find the current branch from memberships if available
-            const meData = await authApi.getMe();
-            
-            // Save to cache
-            setCache(CACHE_KEYS.USER_DATA, meData, CACHE_EXPIRY.USER_PROFILE);
-            
-            setMeData(meData);
-          }
+          // Always fetch full user data after login to populate currentBranch and memberships
+          const meData = await authApi.getMe();
+          setCache(CACHE_KEYS.USER_DATA, meData, CACHE_EXPIRY.USER_PROFILE);
+          setMeData(meData);
 
           return { success: true, data: response };
         } else {
@@ -136,31 +131,23 @@ export const useAuth = () => {
    * Load user data with smart caching
    */
   const loadUser = useCallback(async (forceRefresh = false) => {
+    // Check cache first (no spinner for cache hits)
+    if (!forceRefresh && isCacheValid(CACHE_KEYS.USER_DATA)) {
+      const cachedData = getCache<MeResponse>(CACHE_KEYS.USER_DATA);
+      if (cachedData) {
+        setMeData(cachedData);
+        return;
+      }
+    }
+
+    // Cache miss or force refresh — fetch from API
     try {
       setLoading(true);
-      
-      // Check if cache is valid and not forcing refresh
-      if (!forceRefresh && isCacheValid(CACHE_KEYS.USER_DATA)) {
-        const cachedData = getCache<MeResponse>(CACHE_KEYS.USER_DATA);
-        if (cachedData) {
-          // Use cached data
-          setMeData(cachedData);
-          setLoading(false);
-          return;
-        }
-      }
-      
-      // Cache expired or force refresh - fetch from API
       const data = await authApi.getMe();
-      
-      // Save to cache
       setCache(CACHE_KEYS.USER_DATA, data, CACHE_EXPIRY.USER_PROFILE);
-      
-      // Update store
       setMeData(data);
     } catch (error) {
       console.error("Load user error:", error);
-      // Clear cache on error
       clearCache(CACHE_KEYS.USER_DATA);
       storeLogout();
     } finally {
@@ -181,11 +168,13 @@ export const useAuth = () => {
   );
 
   /**
-   * Check if user is super admin
+   * Check if user is super admin.
+   * Checks ALL memberships — not just currentBranch — so a user with super_admin
+   * in any branch is treated as superadmin regardless of which branch is active.
    */
   const isSuperAdmin = useCallback(() => {
-    return hasRole("super_admin");
-  }, [hasRole]);
+    return memberships?.some((m) => m.role === "super_admin") ?? false;
+  }, [memberships]);
 
   /**
    * Check if user is branch admin

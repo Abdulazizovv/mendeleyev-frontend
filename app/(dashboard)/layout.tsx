@@ -76,6 +76,7 @@ const iconMap: Record<string, React.ElementType> = {
   "/homework": FileText,
   "/schedule": Calendar,
   "/academic-years": BookOpen,
+
 };
 
 function getIconForRoute(href: string): React.ElementType {
@@ -204,30 +205,39 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   }, [user, isLoading, router]);
 
   useEffect(() => {
-    if (user && !isLoading) {
-      loadUser();
-    }
+    loadUser();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Har qanday membershipda super_admin roli bo'lsa — superadmin hisoblanadi
+  const userIsSuperAdmin = memberships?.some((m) => m.role === "super_admin") ?? false;
+
   useEffect(() => {
-    if (!isLoading && user && currentBranch) {
+    if (!isLoading && user) {
       const currentPath = window.location.pathname;
-      const role = currentBranch.role;
-      const branchType = currentBranch.branch_type as BranchType;
-      const rolePath = roleToPath(role, branchType);
-      if (!currentPath.startsWith(`/${rolePath}`) && !currentPath.startsWith("/dashboard")) {
-        router.push(`/${rolePath}`);
+      if (userIsSuperAdmin) {
+        if (!currentPath.startsWith("/super-admin") && !currentPath.startsWith("/dashboard")) {
+          router.push("/super-admin");
+        }
+        return;
+      }
+      if (currentBranch) {
+        const branchType = currentBranch.branch_type as BranchType;
+        const rolePath = roleToPath(currentBranch.role, branchType);
+        if (!currentPath.startsWith(`/${rolePath}`) && !currentPath.startsWith("/dashboard")) {
+          router.push(`/${rolePath}`);
+        }
       }
     }
-  }, [user, currentBranch, isLoading, router]);
+  }, [user, currentBranch, isLoading, router, userIsSuperAdmin]);
 
   const handleLogout = useCallback(async () => {
     logout();
     router.push("/login");
   }, [logout, router]);
 
-  const role = currentBranch?.role ?? "branch_admin";
+  // Superadmin uchun role "super_admin" sifatida ishlatiladi
+  const role = userIsSuperAdmin ? "super_admin" : (currentBranch?.role ?? "branch_admin");
   const branchType = (currentBranch?.branch_type ?? "school") as BranchType;
   const rolePath = currentBranch ? roleToPath(role, branchType) : "";
 
@@ -237,6 +247,17 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   ].includes(role);
 
   const navigationItems: NavItem[] = useMemo(() => {
+    // Superadmin alohida nav items — currentBranch talab etilmaydi
+    if (role === "super_admin") {
+      return [
+        { name: "Dashboard", href: "/super-admin", icon: LayoutDashboard },
+        { name: "Filiallar", href: "/super-admin/branches", icon: Building2 },
+        { name: "Foydalanuvchilar", href: "/super-admin/users", icon: Users },
+        { name: "Moliya", href: "/super-admin/finance", icon: DollarSign },
+        { name: "Statistika", href: "/super-admin/statistics", icon: ClipboardList },
+      ];
+    }
+
     if (!currentBranch) return [];
 
     const baseItems: NavItem[] = [
@@ -338,7 +359,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     );
   }
 
-  if (!user || !currentBranch) return null;
+  if (!user) return null;
+  if (!userIsSuperAdmin && !currentBranch) return null;
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -511,17 +533,19 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           })}
         </nav>
 
-        {/* Branch Switcher */}
-        <div className="pt-1 pb-2 border-t border-gray-100">
-          <p className="px-5 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-            Joriy filial
-          </p>
-          <BranchSwitcher
-            currentBranch={currentBranch}
-            memberships={memberships ?? []}
-            onSwitch={switchBranch}
-          />
-        </div>
+        {/* Branch Switcher — faqat superadmin bo'lmaganda */}
+        {!userIsSuperAdmin && currentBranch && (
+          <div className="pt-1 pb-2 border-t border-gray-100">
+            <p className="px-5 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+              Joriy filial
+            </p>
+            <BranchSwitcher
+              currentBranch={currentBranch}
+              memberships={memberships ?? []}
+              onSwitch={switchBranch}
+            />
+          </div>
+        )}
 
         {/* Logout */}
         <div className="px-3 pb-3 border-t border-gray-100 pt-2">
@@ -548,7 +572,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             </button>
             {/* Breadcrumb */}
             <div className="flex items-center gap-1.5 text-sm">
-              <span className="text-gray-400 hidden sm:inline">{currentBranch.branch_name}</span>
+              {userIsSuperAdmin ? (
+                <span className="text-gray-400 hidden sm:inline">Super Admin</span>
+              ) : (
+                <span className="text-gray-400 hidden sm:inline">{currentBranch?.branch_name}</span>
+              )}
               <ChevronRight className="w-3.5 h-3.5 text-gray-300 hidden sm:block" />
               <span className="font-semibold text-gray-800">{currentPageName}</span>
             </div>
@@ -585,12 +613,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   <p className="text-xs text-gray-500 mt-0.5">{user.phone_number}</p>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href={`/${rolePath}/settings`} className="cursor-pointer">
-                    <Settings className="w-4 h-4 mr-2" />
-                    Sozlamalar
-                  </Link>
-                </DropdownMenuItem>
+                {!userIsSuperAdmin && (
+                  <DropdownMenuItem asChild>
+                    <Link href={`/${rolePath}/settings`} className="cursor-pointer">
+                      <Settings className="w-4 h-4 mr-2" />
+                      Sozlamalar
+                    </Link>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} className="text-red-600 cursor-pointer">
                   <LogOut className="w-4 h-4 mr-2" />

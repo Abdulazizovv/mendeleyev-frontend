@@ -65,9 +65,110 @@ import {
   Mail,
   Briefcase,
   MapPin,
+  Info,
+  Archive,
+  RotateCcw,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CurrencyInput } from "@/components/ui/currency-input";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+
+// ── FieldLabel ────────────────────────────────────────────────────────────────
+function FieldLabel({ label, required, tip }: { label: string; required?: boolean; tip: string }) {
+  return (
+    <div className="flex items-center gap-1">
+      <Label className="text-xs text-gray-500">
+        {label}
+        {required && <span className="text-red-500 ml-0.5">*</span>}
+      </Label>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Info className="w-3 h-3 text-gray-300 cursor-help hover:text-gray-400 transition-colors" />
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-[220px] text-xs leading-relaxed">
+          {tip}
+        </TooltipContent>
+      </Tooltip>
+    </div>
+  );
+}
+
+function formatPhoneDigits(d: string) {
+  const s = d.slice(0, 9);
+  if (s.length <= 2) return s;
+  if (s.length <= 5) return `${s.slice(0, 2)} ${s.slice(2)}`;
+  if (s.length <= 7) return `${s.slice(0, 2)} ${s.slice(2, 5)} ${s.slice(5)}`;
+  return `${s.slice(0, 2)} ${s.slice(2, 5)} ${s.slice(5, 7)} ${s.slice(7)}`;
+}
+
+function PhoneInput({ value, onChange }: { value: string; onChange: (val: string) => void }) {
+  const prefix = "+998";
+  const raw = value.startsWith(prefix) ? value.slice(prefix.length) : "";
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const digits = e.target.value.replace(/\D/g, "").slice(0, 9);
+    onChange(prefix + digits);
+  };
+  return (
+    <div className="flex h-9 rounded-md border border-input bg-background text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 overflow-hidden">
+      <span className="flex items-center px-3 text-gray-600 font-medium border-r border-input bg-muted/50 select-none shrink-0">+998</span>
+      <input value={formatPhoneDigits(raw)} onChange={handleChange} placeholder="90 123 45 67" inputMode="numeric" className="flex-1 bg-transparent px-3 outline-none placeholder:text-muted-foreground" />
+    </div>
+  );
+}
+
+function formatSalary(n: number | undefined) {
+  if (!n) return "";
+  return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+}
+
+function SalaryInput({ value, onChange }: { value: number | undefined; onChange: (val: number) => void }) {
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const el = e.target;
+    const cursorPos = el.selectionStart ?? 0;
+    const oldVal = el.value;
+    const digitsBeforeCursor = oldVal.slice(0, cursorPos).replace(/\D/g, "").length;
+    const rawDigits = el.value.replace(/\D/g, "");
+    const num = rawDigits ? parseInt(rawDigits, 10) : 0;
+    onChange(num);
+    requestAnimationFrame(() => {
+      if (!inputRef.current) return;
+      const newFormatted = formatSalary(num);
+      let digitCount = 0;
+      let newPos = newFormatted.length;
+      for (let i = 0; i < newFormatted.length; i++) {
+        if (/\d/.test(newFormatted[i])) digitCount++;
+        if (digitCount === digitsBeforeCursor) { newPos = i + 1; break; }
+      }
+      inputRef.current.setSelectionRange(newPos, newPos);
+    });
+  };
+  return (
+    <div className="relative">
+      <input ref={inputRef} type="text" inputMode="numeric" value={formatSalary(value)} onChange={handleChange} placeholder="5 000 000" className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 pr-14 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" />
+      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none select-none">so&apos;m</span>
+    </div>
+  );
+}
+
+const ROLES_CONFIG = [
+  { value: "teacher", label: "O'qituvchi" },
+  { value: "branch_admin", label: "Filial admini" },
+  { value: "other", label: "Boshqa" },
+];
 
 export default function StaffDetailPage() {
   const params = useParams();
@@ -80,6 +181,7 @@ export default function StaffDetailPage() {
 
   // Dialog States
   const [editDialog, setEditDialog] = React.useState(false);
+  const [terminateDialog, setTerminateDialog] = React.useState(false);
   const [balanceDialog, setBalanceDialog] = React.useState(false);
   const [salaryAccrualDialog, setSalaryAccrualDialog] = React.useState(false);
   const [paySalaryDialog, setPaySalaryDialog] = React.useState(false);
@@ -163,6 +265,12 @@ export default function StaffDetailPage() {
     enabled: !!staff?.branch,
   });
 
+  const { data: rolesData = [] } = useQuery({
+    queryKey: ["roles", staff?.branch],
+    queryFn: () => staffApi.getRoles(staff!.branch),
+    enabled: !!staff?.branch,
+  });
+
 	const cashRegisters = cashRegistersData?.results || [];
 	const selectedCashRegister = React.useMemo(
 		() => cashRegisters.find((r: CashRegister) => r.id === paySalaryForm.cash_register_id),
@@ -233,6 +341,26 @@ export default function StaffDetailPage() {
 			toast.error("Xodimni o'chirishda xatolik");
 		},
 	});
+
+  const terminateMutation = useMutation({
+    mutationFn: () => staffApi.terminateStaff(staffId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["staff", staffId] });
+      queryClient.invalidateQueries({ queryKey: ["staff"] });
+      toast.success("Xodim arxivlandi");
+    },
+    onError: () => toast.error("Arxivlashda xatolik yuz berdi"),
+  });
+
+  const reactivateMutation = useMutation({
+    mutationFn: () => staffApi.reactivateStaff(staffId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["staff", staffId] });
+      queryClient.invalidateQueries({ queryKey: ["staff"] });
+      toast.success("Xodim qayta faollashtirildi");
+    },
+    onError: () => toast.error("Faollashtirishda xatolik yuz berdi"),
+  });
 
   const addBalanceMutation = useMutation({
     mutationFn: (data: ChangeBalanceRequest) => staffApi.changeBalance(staffId, data),
@@ -341,11 +469,21 @@ export default function StaffDetailPage() {
 	});
 
 	// Handlers
-	const openEditDialog = () => {
+  const openEditDialog = () => {
     if (staff) {
       setEditForm({
-        monthly_salary: staff.monthly_salary,
+        first_name: staff.first_name,
+        last_name: staff.last_name,
+        email: staff.email ?? "",
+        role: staff.role,
+        role_ref_id: staff.role_ref_id,
+        title: staff.title ?? "",
         employment_type: staff.employment_type,
+        monthly_salary: staff.monthly_salary,
+        passport_serial: staff.passport_serial ?? "",
+        passport_number: staff.passport_number ?? "",
+        address: staff.address ?? "",
+        emergency_contact: staff.emergency_contact ?? "",
       });
       setEditDialog(true);
     }
@@ -383,6 +521,15 @@ export default function StaffDetailPage() {
     if (window.confirm("Rostdan ham bu xodimni o'chirmoqchimisiz?")) {
       deleteStaffMutation.mutate();
     }
+  };
+
+  const handleTerminate = () => setTerminateDialog(true);
+  const confirmTerminate = () => {
+    terminateMutation.mutate(undefined, { onSuccess: () => setTerminateDialog(false) });
+  };
+
+  const handleReactivate = () => {
+    reactivateMutation.mutate();
   };
 
   const handleEditSubmit = (e: React.FormEvent) => {
@@ -543,208 +690,252 @@ export default function StaffDetailPage() {
     );
   }
 
+  const isArchived = !!staff.termination_date;
+  const avatarLetters = staff.full_name
+    .split(" ").slice(0, 2).map((w) => w[0] ?? "").join("").toUpperCase() || "?";
+  const roleColorMap: Record<string, string> = {
+    teacher: "bg-blue-100 text-blue-700",
+    branch_admin: "bg-purple-100 text-purple-700",
+    other: "bg-slate-100 text-slate-600",
+  };
+  const avatarColor = roleColorMap[staff.role] ?? "bg-indigo-100 text-indigo-700";
+
   return (
-    <div className="container mx-auto py-4 sm:py-6 px-4 sm:px-6 lg:px-8 max-w-7xl space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-        <div className="flex items-start gap-4">
-			<Button
-				variant="outline"
-				size="icon"
-				onClick={() => router.push("/school/staff")}
-				className="shrink-0"
-			>
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{staff.full_name}</h1>
-            <p className="text-gray-600 mt-1 text-sm sm:text-base">
-              {staff.role_display}
-              {staff.role_ref_name && ` • ${staff.role_ref_name}`}
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-			<Button
-				variant="outline"
-				onClick={() => router.push(`/school/staff/${staffId}/transactions`)}
-				className="gap-2"
-				size="sm"
-			>
-            <FileText className="w-4 h-4" />
-            <span className="hidden sm:inline">Tranzaksiyalar</span>
-          </Button>
-          <Button variant="outline" onClick={openMonthlySummaryDialog} className="gap-2" size="sm">
-            <Calendar className="w-4 h-4" />
-            <span className="hidden sm:inline">Xulosa</span>
-          </Button>
-          <Button onClick={openPaySalaryDialog} className="gap-2 bg-green-600 hover:bg-green-700" size="sm">
-            <CreditCard className="w-4 h-4" />
-            <span className="hidden sm:inline">To&apos;lash</span>
-          </Button>
-          <Button variant="outline" onClick={openEditDialog} className="gap-2" size="sm">
-            <Edit className="w-4 h-4" />
+    <div className="max-w-5xl mx-auto py-4 sm:py-6 px-4 sm:px-6 space-y-4">
+
+      {/* ── Top navigation bar ─────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between gap-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => router.push("/school/staff")}
+          className="gap-1.5 text-gray-500 -ml-2 h-8"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Xodimlar
+        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="gap-1.5 h-8" onClick={openEditDialog}>
+            <Edit className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Tahrirlash</span>
           </Button>
-          <Button
-            variant="destructive"
-            onClick={handleDelete}
-            className="gap-2"
-            disabled={deleteStaffMutation.isPending}
-            size="sm"
-          >
-            <Trash2 className="w-4 h-4" />
-            <span className="hidden sm:inline">O&apos;chirish</span>
+          <Button variant="outline" size="sm" className="gap-1.5 h-8" onClick={openMonthlySummaryDialog}>
+            <Calendar className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Xulosa</span>
           </Button>
+          <Button size="sm" className="bg-green-600 hover:bg-green-700 gap-1.5 h-8" onClick={openPaySalaryDialog}>
+            <CreditCard className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Maosh to&apos;lash</span>
+          </Button>
+          {isArchived ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 h-8 border-green-200 text-green-700 hover:bg-green-50"
+              onClick={handleReactivate}
+              disabled={reactivateMutation.isPending}
+            >
+              {reactivateMutation.isPending
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                : <RotateCcw className="w-3.5 h-3.5" />}
+              <span className="hidden sm:inline">Qaytarish</span>
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 h-8 border-orange-200 text-orange-700 hover:bg-orange-50"
+              onClick={handleTerminate}
+              disabled={terminateMutation.isPending}
+            >
+              <Archive className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Arxivlash</span>
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Status Badge */}
-      {staff.balance < 0 && (
-        <div className="flex items-center gap-2">
-          <Badge variant="destructive" className="text-sm">
-            Qarzdor: {formatCurrency(Math.abs(staff.balance))}
-          </Badge>
-        </div>
-      )}
-
-      {/* Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Balance Card */}
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                staff.balance >= 0 ? "bg-green-100" : "bg-red-100"
-              }`}>
-                {staff.balance >= 0 ? (
-                  <TrendingUp className="w-6 h-6 text-green-600" />
-                ) : (
-                  <TrendingDown className="w-6 h-6 text-red-600" />
+      {/* ── Profile card ───────────────────────────────────────────────────── */}
+      <Card>
+        <CardContent className="p-5">
+          <div className="flex items-start gap-4">
+            <div className={`w-14 h-14 rounded-2xl ${avatarColor} flex items-center justify-center text-lg font-bold shrink-0`}>
+              {avatarLetters}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start gap-3 justify-between flex-wrap">
+                <div>
+                  <h1 className="text-xl font-bold text-gray-900">{staff.full_name}</h1>
+                  <p className="text-sm text-gray-500 mt-0.5">
+                    {staff.role_display}
+                    {staff.role_ref_name && ` · ${staff.role_ref_name}`}
+                    {staff.title && ` · ${staff.title}`}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {isArchived ? (
+                    <Badge className="bg-orange-50 text-orange-700 border border-orange-200 font-medium text-xs">
+                      Arxivlangan
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-green-50 text-green-700 border border-green-200 font-medium text-xs">
+                      Faol
+                    </Badge>
+                  )}
+                  {staff.balance < 0 && (
+                    <Badge variant="destructive" className="text-xs">Qarzdor</Badge>
+                  )}
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2.5 text-sm text-gray-500">
+                <span className="flex items-center gap-1.5">
+                  <Phone className="w-3.5 h-3.5 text-gray-400" />
+                  {staff.phone_number}
+                </span>
+                {staff.email && (
+                  <span className="flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5 text-gray-400" />
+                    {staff.email}
+                  </span>
+                )}
+                {staff.hire_date && (
+                  <span className="flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                    {new Date(staff.hire_date).toLocaleDateString("uz-UZ")} dan
+                  </span>
                 )}
               </div>
-              <div>
-                <p className={`text-2xl font-bold ${staff.balance < 0 ? "text-red-600" : ""}`}>
-                  {formatCurrency(staff.balance)}
-                </p>
-                <p className="text-sm text-gray-600">Joriy balans</p>
-              </div>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Key metrics ────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs text-gray-400 mb-1">Joriy balans</p>
+            <p className={`text-lg font-bold tabular-nums ${staff.balance < 0 ? "text-red-600" : "text-gray-900"}`}>
+              {formatCurrency(staff.balance)}
+            </p>
           </CardContent>
         </Card>
-
-        {/* Monthly Salary Card */}
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <DollarSign className="w-6 h-6 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">
-                  {formatCurrency(staff.monthly_salary || 0)}
-                </p>
-                <p className="text-sm text-gray-600">Oylik maosh</p>
-              </div>
-            </div>
+          <CardContent className="p-4">
+            <p className="text-xs text-gray-400 mb-1">Oylik maosh</p>
+            <p className="text-lg font-bold text-gray-900 tabular-nums">
+              {formatCurrency(staff.monthly_salary || 0)}
+            </p>
           </CardContent>
         </Card>
-
-        {/* Employment Type Card */}
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                <Briefcase className="w-6 h-6 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-lg font-semibold">
-                  {staff.employment_type ? EMPLOYMENT_TYPE_LABELS[staff.employment_type] : "Belgilanmagan"}
-                </p>
-                <p className="text-sm text-gray-600">Ish turi</p>
-              </div>
-            </div>
+          <CardContent className="p-4">
+            <p className="text-xs text-gray-400 mb-1">Ish turi</p>
+            <p className="text-sm font-semibold text-gray-900">
+              {staff.employment_type ? EMPLOYMENT_TYPE_LABELS[staff.employment_type] : "—"}
+            </p>
           </CardContent>
         </Card>
-
-        {/* Hire Date Card */}
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center">
-                <Calendar className="w-6 h-6 text-indigo-600" />
-              </div>
-              <div>
-                <p className="text-lg font-semibold">
-                  {staff.hire_date ? new Date(staff.hire_date).toLocaleDateString("uz-UZ") : "Belgilanmagan"}
-                </p>
-                <p className="text-sm text-gray-600">Ish boshlagan sana</p>
-              </div>
-            </div>
+          <CardContent className="p-4">
+            <p className="text-xs text-gray-400 mb-1">Ish muddati</p>
+            <p className="text-sm font-semibold text-gray-900">
+              {staff.days_employed != null ? `${staff.days_employed} kun` : "—"}
+            </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Details Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Contact Info */}
-        <div className="lg:col-span-1 space-y-6">
+      {/* ── Details Grid ────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+        {/* Left column */}
+        <div className="space-y-5">
+
+          {/* Ma'lumotlar kartasi */}
           <Card>
-            <CardHeader>
-              <CardTitle>Aloqa ma&apos;lumotlari</CardTitle>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold text-gray-700">Ma&apos;lumotlar</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center gap-3">
-                <Phone className="w-5 h-5 text-gray-400" />
-                <div>
-                  <p className="text-sm text-gray-600">Telefon</p>
-                  <p className="font-medium">{staff.phone_number}</p>
+            <CardContent className="space-y-3 pt-0">
+              <div className="flex items-center gap-2.5">
+                <Phone className="w-4 h-4 text-gray-400 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-xs text-gray-400">Telefon</p>
+                  <p className="text-sm font-medium truncate">{staff.phone_number}</p>
                 </div>
               </div>
               {staff.email && (
-                <div className="flex items-center gap-3">
-                  <Mail className="w-5 h-5 text-gray-400" />
-                  <div>
-                    <p className="text-sm text-gray-600">Email</p>
-                    <p className="font-medium">{staff.email}</p>
+                <div className="flex items-center gap-2.5">
+                  <Mail className="w-4 h-4 text-gray-400 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-400">Email</p>
+                    <p className="text-sm font-medium truncate">{staff.email}</p>
                   </div>
                 </div>
               )}
               {staff.address && (
-                <div className="flex items-center gap-3">
-                  <MapPin className="w-5 h-5 text-gray-400" />
-                  <div>
-                    <p className="text-sm text-gray-600">Manzil</p>
-                    <p className="font-medium">{staff.address}</p>
+                <div className="flex items-center gap-2.5">
+                  <MapPin className="w-4 h-4 text-gray-400 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-400">Manzil</p>
+                    <p className="text-sm font-medium">{staff.address}</p>
+                  </div>
+                </div>
+              )}
+              {staff.emergency_contact && (
+                <div className="flex items-center gap-2.5">
+                  <Phone className="w-4 h-4 text-gray-400 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-400">Favqulodda aloqa</p>
+                    <p className="text-sm font-medium">{staff.emergency_contact}</p>
+                  </div>
+                </div>
+              )}
+              {(staff.passport_serial || staff.passport_number) && (
+                <div className="flex items-center gap-2.5">
+                  <Briefcase className="w-4 h-4 text-gray-400 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-400">Pasport</p>
+                    <p className="text-sm font-medium">
+                      {staff.passport_serial} {staff.passport_number}
+                    </p>
+                  </div>
+                </div>
+              )}
+              {staff.termination_date && (
+                <div className="flex items-center gap-2.5">
+                  <Archive className="w-4 h-4 text-orange-400 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-400">Arxivlangan sana</p>
+                    <p className="text-sm font-medium text-orange-600">
+                      {new Date(staff.termination_date).toLocaleDateString("uz-UZ")}
+                    </p>
                   </div>
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {/* Financial Summary */}
+          {/* Moliya */}
           <Card>
-            <CardHeader>
-              <CardTitle>Moliyaviy xulosa</CardTitle>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold text-gray-700">Moliya</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Oylik maosh:</span>
-                <span className="font-medium">{formatCurrency(staff.monthly_salary || 0)}</span>
+            <CardContent className="space-y-2 pt-0">
+              <div className="flex justify-between items-center py-1.5 border-b">
+                <span className="text-sm text-gray-500">Oylik maosh</span>
+                <span className="text-sm font-semibold">{formatCurrency(staff.monthly_salary || 0)}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Joriy balans:</span>
-                <span className={`font-medium ${staff.balance < 0 ? "text-red-600" : ""}`}>
+              <div className="flex justify-between items-center py-1.5">
+                <span className="text-sm text-gray-500">Joriy balans</span>
+                <span className={`text-sm font-semibold ${staff.balance < 0 ? "text-red-600" : "text-green-600"}`}>
                   {formatCurrency(staff.balance)}
                 </span>
               </div>
-              <div className="pt-3 border-t">
-                <Button
-                  variant="outline"
-                  onClick={openBalanceDialog}
-                  className="w-full gap-2"
-                >
-                  <Wallet className="w-4 h-4" />
+              <div className="pt-2">
+                <Button variant="outline" size="sm" onClick={openBalanceDialog} className="w-full gap-2 h-8 text-xs">
+                  <Wallet className="w-3.5 h-3.5" />
                   Tranzaksiya qo&apos;shish
                 </Button>
               </div>
@@ -752,34 +943,37 @@ export default function StaffDetailPage() {
           </Card>
         </div>
 
-        {/* Recent Transactions */}
+        {/* Right: Transactions */}
         <div className="lg:col-span-2">
           <Card>
-            <CardHeader>
+            <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle>Oxirgi tranzaksiyalar</CardTitle>
-					<Button
-						variant="link"
-						onClick={() => router.push(`/school/staff/${staffId}/transactions`)}
-					>
-						Barchasini ko&apos;rish
-					</Button>
+                <CardTitle className="text-sm font-semibold text-gray-700">Oxirgi tranzaksiyalar</CardTitle>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs gap-1 text-blue-600"
+                  onClick={() => router.push(`/school/staff/${staffId}/transactions`)}
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  Barchasini ko&apos;rish
+                </Button>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-0">
               {staff.recent_transactions && staff.recent_transactions.length > 0 ? (
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
-                      <TableRow>
-                        <TableHead>Sana</TableHead>
-                        <TableHead>Turi</TableHead>
-                        <TableHead className="text-right">Miqdor</TableHead>
-                        <TableHead className="text-right">Balans</TableHead>
+                      <TableRow className="bg-gray-50/60">
+                        <TableHead className="text-xs">Sana</TableHead>
+                        <TableHead className="text-xs">Turi</TableHead>
+                        <TableHead className="text-xs text-right">Miqdor</TableHead>
+                        <TableHead className="text-xs text-right">Balans</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {staff.recent_transactions.slice(0, 5).map((transaction) => (
+                      {staff.recent_transactions.slice(0, 8).map((transaction) => (
                         <TableRow
                           key={transaction.id}
                           className="cursor-pointer hover:bg-muted/50 transition-colors"
@@ -788,21 +982,21 @@ export default function StaffDetailPage() {
                             setTransactionDetailDialog(true);
                           }}
                         >
-                          <TableCell className="whitespace-nowrap text-sm">
+                          <TableCell className="whitespace-nowrap text-xs text-gray-500">
                             {formatRelativeDateTime(transaction.created_at)}
                           </TableCell>
                           <TableCell>
-                            <Badge variant="outline" className="text-xs">
+                            <Badge variant="outline" className="text-xs px-1.5 py-0 h-5">
                               {transaction.transaction_type_display}
                             </Badge>
                           </TableCell>
-                          <TableCell className={`text-right font-medium ${
+                          <TableCell className={`text-right text-sm font-semibold tabular-nums ${
                             transaction.balance_change >= 0 ? "text-green-600" : "text-red-600"
                           }`}>
                             {transaction.balance_change >= 0 ? "+" : ""}
                             {formatCurrency(transaction.balance_change)}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-right text-sm tabular-nums text-gray-600">
                             {formatCurrency(transaction.new_balance)}
                           </TableCell>
                         </TableRow>
@@ -811,78 +1005,172 @@ export default function StaffDetailPage() {
                   </Table>
                 </div>
               ) : (
-                <p className="text-center text-gray-500 py-8">Tranzaksiyalar yo&apos;q</p>
+                <div className="py-12 text-center">
+                  <DollarSign className="w-8 h-8 text-gray-200 mx-auto mb-2" />
+                  <p className="text-sm text-gray-400">Tranzaksiyalar yo&apos;q</p>
+                </div>
               )}
             </CardContent>
           </Card>
         </div>
       </div>
 
-      {/* Dialogs - Part 1: Edit Dialog */}
-      <Dialog open={editDialog} onOpenChange={setEditDialog}>
-        <DialogContent>
+      {/* Arxivlash tasdiqlash dialogi */}
+      <Dialog open={terminateDialog} onOpenChange={setTerminateDialog}>
+        <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Xodimni tahrirlash</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Archive className="w-5 h-5 text-orange-500" />
+              Xodimni arxivlash
+            </DialogTitle>
             <DialogDescription>
-              Xodim ma&apos;lumotlarini yangilash
+              <span className="font-medium text-gray-900">{staff?.full_name}</span> ni
+              arxivlamoqchimisiz? Arxivlangan xodim asosiy ro&apos;yxatda ko&apos;rsatilmaydi,
+              lekin ma&apos;lumotlar saqlanib qoladi.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleEditSubmit}>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="monthly_salary">
-                  Oylik maosh (so&apos;m) <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="monthly_salary"
-                  type="number"
-                  value={editForm.monthly_salary || 0}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, monthly_salary: parseInt(e.target.value) || 0 })
-                  }
-                  step="100000"
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="employment_type">
-                  Ish turi <span className="text-red-500">*</span>
-                </Label>
-                <Select
-                  value={editForm.employment_type}
-                  onValueChange={(value) =>
-                    setEditForm({ ...editForm, employment_type: value as EmploymentType })
-                  }
-                >
-                  <SelectTrigger id="employment_type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(EMPLOYMENT_TYPE_LABELS).map(([key, label]) => (
-                      <SelectItem key={key} value={key}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setEditDialog(false)}>
-                Bekor qilish
-              </Button>
-              <Button type="submit" disabled={updateStaffMutation.isPending}>
-                {updateStaffMutation.isPending && (
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                )}
-                Saqlash
-              </Button>
-            </DialogFooter>
-          </form>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setTerminateDialog(false)}>
+              Bekor qilish
+            </Button>
+            <Button
+              className="bg-orange-600 hover:bg-orange-700 text-white"
+              onClick={confirmTerminate}
+              disabled={terminateMutation.isPending}
+            >
+              {terminateMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-1.5" />}
+              Ha, arxivlash
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Sheet */}
+      <Sheet open={editDialog} onOpenChange={setEditDialog}>
+        <SheetContent side="right" className="w-full sm:max-w-lg p-0 flex flex-col overflow-hidden">
+          <div className="px-6 pt-6 pb-5 shrink-0 bg-indigo-600">
+            <SheetHeader>
+              <SheetTitle className="text-white font-semibold text-lg">Xodimni tahrirlash</SheetTitle>
+              <SheetDescription className="text-white/60 text-sm">{staff?.full_name}</SheetDescription>
+            </SheetHeader>
+          </div>
+
+          <TooltipProvider delayDuration={300}>
+            <form onSubmit={handleEditSubmit} className="flex-1 overflow-y-auto">
+              <div className="px-6 py-5 space-y-5">
+
+                {/* Foydalanuvchi */}
+                <section className="space-y-3">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Foydalanuvchi</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <FieldLabel label="Ism" required tip="Xodimning ismi." />
+                      <Input value={editForm.first_name ?? ""} onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })} placeholder="Ali" className="h-9 text-sm" />
+                    </div>
+                    <div className="space-y-1">
+                      <FieldLabel label="Familiya" required tip="Xodimning familiyasi." />
+                      <Input value={editForm.last_name ?? ""} onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })} placeholder="Valiyev" className="h-9 text-sm" />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <FieldLabel label="Email" tip="Ixtiyoriy. Xodimning elektron pochta manzili." />
+                    <Input type="email" value={editForm.email ?? ""} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} placeholder="email@example.com" className="h-9 text-sm" />
+                  </div>
+                  <div className="rounded-md bg-gray-50 border px-3 py-2.5 flex items-center gap-2">
+                    <Phone className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                    <div>
+                      <p className="text-xs text-gray-400">Telefon (o&apos;zgartirib bo&apos;lmaydi)</p>
+                      <p className="text-sm font-medium text-gray-700">{staff?.phone_number}</p>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Rol va lavozim */}
+                <section className="space-y-3">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Rol va lavozim</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <FieldLabel label="Rol turi" required tip="Xodimning tizimda bajaradigan asosiy vazifasi." />
+                      <Select value={editForm.role} onValueChange={(v) => setEditForm({ ...editForm, role: v })}>
+                        <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {ROLES_CONFIG.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <FieldLabel label="Maxsus rol" required={editForm.role === "other"} tip={`"Boshqa" xodim uchun maxsus rol. Sozlamalar > Rollar bo'limida boshqariladi.`} />
+                      <Select value={editForm.role_ref_id ?? "none"} onValueChange={(v) => setEditForm({ ...editForm, role_ref_id: v === "none" ? undefined : v })}>
+                        <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Tanlang" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Yo&apos;q</SelectItem>
+                          {rolesData.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <FieldLabel label="Lavozim" tip="Xodimning rasmiy lavozimi. Masalan: Katta o'qituvchi." />
+                      <Input value={editForm.title ?? ""} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} placeholder="Katta o'qituvchi" className="h-9 text-sm" />
+                    </div>
+                    <div className="space-y-1">
+                      <FieldLabel label="Ish turi" tip="To'liq stavka, yarim stavka yoki soatlik ish tartibi." />
+                      <Select value={editForm.employment_type} onValueChange={(v) => setEditForm({ ...editForm, employment_type: v as EmploymentType })}>
+                        <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(EMPLOYMENT_TYPE_LABELS).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Maosh */}
+                <section className="space-y-3">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Maosh</p>
+                  <div className="space-y-1">
+                    <FieldLabel label="Oylik maosh (so'm)" tip="Xodimning asosiy oylik maoshi so'mda. Moliya hisobotlarida ishlatiladi." />
+                    <SalaryInput value={editForm.monthly_salary} onChange={(val) => setEditForm({ ...editForm, monthly_salary: val })} />
+                  </div>
+                </section>
+
+                {/* Shaxsiy ma'lumotlar */}
+                <section className="space-y-3">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Shaxsiy ma&apos;lumotlar</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <FieldLabel label="Pasport ser." tip="O'zbekiston pasportining 2 ta seriya harfi. Masalan: AA, AB." />
+                      <Input value={editForm.passport_serial ?? ""} onChange={(e) => setEditForm({ ...editForm, passport_serial: e.target.value.toUpperCase() })} placeholder="AA" maxLength={2} className="h-9 text-sm" />
+                    </div>
+                    <div className="space-y-1">
+                      <FieldLabel label="Pasport raqami" tip="Pasportning 7 xonali raqami." />
+                      <Input value={editForm.passport_number ?? ""} onChange={(e) => setEditForm({ ...editForm, passport_number: e.target.value })} placeholder="1234567" maxLength={7} className="h-9 text-sm" />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <FieldLabel label="Manzil" tip="Xodimning yashash manzili. Ixtiyoriy." />
+                    <Textarea value={editForm.address ?? ""} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} placeholder="Yashash manzili" rows={2} className="text-sm resize-none" />
+                  </div>
+                  <div className="space-y-1">
+                    <FieldLabel label="Favqulodda aloqa" tip="Favqulodda holatlarda bog'lanish uchun aloqa raqami." />
+                    <Input value={editForm.emergency_contact ?? ""} onChange={(e) => setEditForm({ ...editForm, emergency_contact: e.target.value })} placeholder="+998 90 000 00 00" className="h-9 text-sm" />
+                  </div>
+                </section>
+              </div>
+
+              {/* Footer */}
+              <div className="border-t px-6 py-4 flex items-center justify-end gap-2 bg-gray-50 shrink-0">
+                <Button type="button" variant="outline" size="sm" onClick={() => setEditDialog(false)}>Bekor qilish</Button>
+                <Button type="submit" size="sm" disabled={updateStaffMutation.isPending}>
+                  {updateStaffMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-1.5" />}
+                  Saqlash
+                </Button>
+              </div>
+            </form>
+          </TooltipProvider>
+        </SheetContent>
+      </Sheet>
 
       {/* Part 2: Balance Dialog */}
       <Dialog open={balanceDialog} onOpenChange={setBalanceDialog}>
@@ -1332,12 +1620,20 @@ export default function StaffDetailPage() {
 							Filialda faol kassa topilmadi. Avval kassa yarating.
 						</p>
 					)}
-					{selectedCashRegister && (
+					{selectedCashRegister && paySalaryForm.amount > selectedCashRegister.balance ? (
+						<div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+							<p className="font-medium">Kassa balansi yetarli emas</p>
+							<p className="mt-0.5">
+								Kassada: {formatCurrency(selectedCashRegister.balance)} • Yetishmaydi:{" "}
+								{formatCurrency(paySalaryForm.amount - selectedCashRegister.balance)}
+							</p>
+						</div>
+					) : selectedCashRegister ? (
 						<p className="text-xs text-muted-foreground">
 							Kassadan chiqim: {formatCurrency(paySalaryForm.amount)} • Qoladi:{" "}
 							{formatCurrency(selectedCashRegister.balance - paySalaryForm.amount)}
 						</p>
-					)}
+					) : null}
 				</div>
 
               {/* Payment Date */}
@@ -1458,7 +1754,8 @@ export default function StaffDetailPage() {
 	                    createSalaryCashOutMutation.isPending ||
 	                    staff.balance <= 0 ||
 	                    cashRegisters.length === 0 ||
-	                    !paySalaryForm.cash_register_id
+	                    !paySalaryForm.cash_register_id ||
+	                    (!!selectedCashRegister && paySalaryForm.amount > selectedCashRegister.balance)
 	                  }
 	                >
 	                  {paySalaryNewMutation.isPending && (

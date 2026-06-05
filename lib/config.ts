@@ -8,14 +8,6 @@ export const API_CONFIG = {
   TIMEOUT: 30000, // 30 seconds
 } as const;
 
-// Debug log to verify environment variables
-if (typeof window !== 'undefined') {
-  console.log('🔧 API_CONFIG:', {
-    BASE_URL: API_CONFIG.BASE_URL,
-    VERSION: API_CONFIG.VERSION,
-    ENV_BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL,
-  });
-}
 
 export const API_ENDPOINTS = {
   // Auth endpoints
@@ -47,6 +39,26 @@ export const API_ENDPOINTS = {
     MEMBERSHIPS: (branchId: string) => `/branches/${branchId}/memberships/`,
     BALANCE_UPDATE: (branchId: string, membershipId: string) =>
       `/branches/${branchId}/memberships/${membershipId}/balance/`,
+  },
+  // Superadmin endpoints
+  SUPERADMIN: {
+    BRANCHES: "/superadmin/branches/",
+    BRANCH: (id: string) => `/superadmin/branches/${id}/`,
+    BRANCH_ACTION: (id: string, action: string) => `/superadmin/branches/${id}/${action}/`,
+    BRANCH_SETTINGS: (id: string) => `/superadmin/branches/${id}/settings/`,
+    BRANCH_ADMINS: (id: string) => `/superadmin/branches/${id}/admins/`,
+    ASSIGN_ADMIN: (id: string) => `/superadmin/branches/${id}/assign-admin/`,
+    REMOVE_ADMIN: (id: string) => `/superadmin/branches/${id}/remove-admin/`,
+    USERS: "/superadmin/users/",
+    USER: (id: string) => `/superadmin/users/${id}/`,
+    TOGGLE_SUPERUSER: (id: string) => `/superadmin/users/${id}/toggle-superuser/`,
+    STATISTICS: "/superadmin/statistics/",
+    FINANCE: "/superadmin/finance/",
+    BRANCH_STUDENTS: (id: string) => `/superadmin/branches/${id}/students/`,
+    BRANCH_STAFF: (id: string) => `/superadmin/branches/${id}/staff/`,
+    BRANCH_FINANCE: (id: string) => `/superadmin/branches/${id}/finance/`,
+    BRANCH_CLASSES: (id: string) => `/superadmin/branches/${id}/classes/`,
+    SEARCH: "/superadmin/search/",
   },
 } as const;
 
