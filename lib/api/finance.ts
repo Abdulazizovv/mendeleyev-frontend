@@ -45,6 +45,8 @@ export const financeApi = {
     is_global?: boolean;
     parent?: string;
     search?: string;
+    page?: number;
+    page_size?: number;
   }): Promise<PaginatedResponse<FinanceCategory>> => {
     const response = await apiClient.get<PaginatedResponse<FinanceCategory>>(
       `/school/finance/categories/`,
@@ -231,6 +233,7 @@ export const financeApi = {
    */
   getStudentBalances: async (params?: {
     branch_id?: string;
+    student_profile?: string;
     search?: string;
     ordering?: string;
   }): Promise<PaginatedResponse<StudentBalance>> => {

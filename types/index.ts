@@ -86,4 +86,9 @@ export type {
 	HomeworkSubmission,
 	CreateHomeworkRequest,
 	GradeSubmissionRequest,
+	SubjectLevel,
+	CreateSubjectLevelRequest,
+	Group,
+	CreateGroupRequest,
+	GroupMembership,
 } from "./school";

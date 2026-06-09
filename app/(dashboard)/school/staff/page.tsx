@@ -345,6 +345,8 @@ export default function StaffPage() {
       role_ref_id: m.role_ref_id,
       employment_type: m.employment_type ?? "full_time",
       monthly_salary: m.monthly_salary,
+      salary_type: m.salary_type ?? "monthly",
+      salary_percentage: m.salary_percentage ?? 0,
       title: m.title ?? "",
     });
     setEditSheet({ open: true, mode: "edit", data: m });
@@ -378,6 +380,7 @@ export default function StaffPage() {
         title: form.title,
         monthly_salary: form.monthly_salary ?? 0,
         salary_type: form.salary_type ?? "monthly",
+        salary_percentage: form.salary_percentage ?? 0,
         hire_date: form.hire_date,
         employment_type: form.employment_type,
         passport_serial: form.passport_serial,
@@ -399,6 +402,7 @@ export default function StaffPage() {
           employment_type: form.employment_type,
           monthly_salary: form.monthly_salary,
           salary_type: form.salary_type,
+          salary_percentage: form.salary_percentage,
           passport_serial: form.passport_serial,
           passport_number: form.passport_number,
           address: form.address,
@@ -950,14 +954,54 @@ export default function StaffPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <FieldLabel
-                        label="Oylik maosh (so'm)"
-                        tip="Xodimning asosiy oylik maoshi so'mda. Moliya hisobotlari va balans hisob-kitobida ishlatiladi."
+                        label="Maosh turi"
+                        tip="Oylik — barqaror oylik to'lov. Foizga — har bir dars narxidan foiz oladi."
                       />
-                      <SalaryInput
-                        value={form.monthly_salary}
-                        onChange={(val) => setForm({ ...form, monthly_salary: val })}
-                      />
+                      <Select
+                        value={form.salary_type ?? "monthly"}
+                        onValueChange={(v) => setForm({ ...form, salary_type: v })}
+                      >
+                        <SelectTrigger className="h-9 text-sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="monthly">Oylik (Oklad)</SelectItem>
+                          <SelectItem value="hourly">Soatlik</SelectItem>
+                          <SelectItem value="per_lesson">Dars uchun</SelectItem>
+                          <SelectItem value="percentage">Foizga ishlash</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
+                    {form.salary_type === "percentage" ? (
+                      <div className="space-y-1">
+                        <FieldLabel
+                          label="Foiz (0-100)"
+                          tip="Har bir darsdan o'quvchi to'lovining qancha foizi o'qituvchiga tushadi."
+                        />
+                        <Input
+                          type="number"
+                          min={0}
+                          max={100}
+                          placeholder="0"
+                          value={form.salary_percentage ?? 0}
+                          onChange={(e) =>
+                            setForm({ ...form, salary_percentage: parseInt(e.target.value) || 0 })
+                          }
+                          className="h-9 text-sm"
+                        />
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <FieldLabel
+                          label="Oylik maosh (so'm)"
+                          tip="Xodimning asosiy oylik maoshi so'mda."
+                        />
+                        <SalaryInput
+                          value={form.monthly_salary}
+                          onChange={(val) => setForm({ ...form, monthly_salary: val })}
+                        />
+                      </div>
+                    )}
                     {editSheet.mode === "create" && (
                       <div className="space-y-1">
                         <FieldLabel

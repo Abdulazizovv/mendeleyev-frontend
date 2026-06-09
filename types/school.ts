@@ -87,6 +87,64 @@ export interface Subject {
   updated_at: string;
   created_by?: string | null;
   updated_by?: string | null;
+  // SubjectDetailSerializer qo'shimcha maydonlari
+  total_classes?: number;
+  active_classes?: number;
+  teachers?: { id: string; phone_number: string; full_name: string }[];
+}
+
+export interface SubjectLevel {
+  id: string;
+  subject: string;
+  subject_name: string;
+  name: string;
+  lesson_price: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateSubjectLevelRequest {
+  name: string;
+  lesson_price: number;
+  is_active?: boolean;
+}
+
+// Group Types
+export interface Group {
+  id: string;
+  branch: string;
+  name: string;
+  subject_level: string | null;
+  subject_level_detail: SubjectLevel | null;
+  teacher: string | null;
+  teacher_name: string | null;
+  description?: string;
+  max_students: number;
+  is_active: boolean;
+  members_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateGroupRequest {
+  name: string;
+  subject_level?: string | null;
+  teacher?: string | null;
+  description?: string;
+  max_students?: number;
+  is_active?: boolean;
+}
+
+export interface GroupMembership {
+  id: string;
+  group: string;
+  student: string;
+  student_name: string;
+  student_personal_number?: string;
+  enrollment_date: string;
+  is_active: boolean;
+  created_at: string;
 }
 
 export interface ClassSubject {

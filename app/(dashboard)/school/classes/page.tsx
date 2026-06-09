@@ -7,16 +7,17 @@ import { schoolApi } from "@/lib/api/school";
 import type { Class, CreateClassRequest, AcademicYear, Room } from "@/types";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2, Eye, Search, Users, GraduationCap, Building2, FilterX, AlertTriangle } from "lucide-react";
+import { Plus, Pencil, Trash2, Eye, Search, Users, GraduationCap, BookOpen, X } from "lucide-react";
 
 function ClassForm({
 	initial,
@@ -59,150 +60,101 @@ function ClassForm({
 					is_active: Boolean(form.is_active ?? true),
 				});
 			}}
-			className="space-y-6"
+			className="space-y-4"
 		>
-			{/* Asosiy ma'lumotlar */}
-			<div className="space-y-4">
-				<div>
-					<h3 className="text-sm font-semibold text-foreground mb-3">Asosiy ma'lumotlar</h3>
-					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-						<div className="space-y-2">
-							<Label htmlFor="name" className="text-sm font-medium">
-								Sinf nomi <span className="text-red-500">*</span>
-							</Label>
-							<Input
-								id="name"
-								placeholder="Masalan: 5-A sinf"
-								className="h-10"
-								value={form.name || ""}
-								onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))}
-								required
-							/>
-							<p className="text-xs text-muted-foreground">Sinfning to'liq nomini kiriting</p>
-						</div>
-
-						<div className="space-y-2">
-							<Label htmlFor="academic_year" className="text-sm font-medium">
-								Akademik yil <span className="text-red-500">*</span>
-							</Label>
-							<Select
-								value={String(form.academic_year || "")}
-								onValueChange={(v) => setForm((s) => ({ ...s, academic_year: v }))}
-							>
-								<SelectTrigger id="academic_year" className="h-10">
-									<SelectValue placeholder="O'quv yilini tanlang" />
-								</SelectTrigger>
-								<SelectContent>
-									{years.map((y) => (
-										<SelectItem key={y.id} value={y.id}>
-											{y.name}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-							<p className="text-xs text-muted-foreground">Joriy o'quv yilini belgilang</p>
-						</div>
-					</div>
+			<div className="grid grid-cols-2 gap-4">
+				<div className="space-y-2">
+					<Label htmlFor="name">
+						Sinf nomi <span className="text-red-500">*</span>
+					</Label>
+					<Input
+						id="name"
+						placeholder="5-A sinf"
+						value={form.name || ""}
+						onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))}
+						required
+					/>
 				</div>
-			</div>
-
-			<Separator />
-
-			{/* Sinf tuzilmasi */}
-			<div className="space-y-4">
-				<div>
-					<h3 className="text-sm font-semibold text-foreground mb-3">Sinf tuzilmasi</h3>
-					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-						<div className="space-y-2">
-							<Label htmlFor="grade_level" className="text-sm font-medium">
-								Sinf darajasi <span className="text-red-500">*</span>
-							</Label>
-							<Input
-								id="grade_level"
-								type="number"
-								placeholder="1-11"
-								className="h-10"
-								value={String(form.grade_level ?? "")}
-								onChange={(e) => setForm((s) => ({ ...s, grade_level: Number(e.target.value) }))}
-								min={1}
-								max={11}
-								required
-							/>
-							<p className="text-xs text-muted-foreground">1 dan 11 gacha (masalan: 5)</p>
-						</div>
-
-						<div className="space-y-2">
-							<Label htmlFor="max_students" className="text-sm font-medium">
-								Maksimal o'quvchilar <span className="text-red-500">*</span>
-							</Label>
-							<Input
-								id="max_students"
-								type="number"
-								placeholder="20-40"
-								className="h-10"
-								value={String(form.max_students ?? "")}
-								onChange={(e) => setForm((s) => ({ ...s, max_students: Number(e.target.value) }))}
-								min={1}
-								max={100}
-								required
-							/>
-							<p className="text-xs text-muted-foreground">Sinfga qabul qilinadigan maksimal o'quvchilar soni</p>
-						</div>
-					</div>
+				<div className="space-y-2">
+					<Label htmlFor="academic_year">
+						Akademik yil <span className="text-red-500">*</span>
+					</Label>
+					<Select
+						value={String(form.academic_year || "")}
+						onValueChange={(v) => setForm((s) => ({ ...s, academic_year: v }))}
+					>
+						<SelectTrigger id="academic_year">
+							<SelectValue placeholder="O'quv yilini tanlang" />
+						</SelectTrigger>
+						<SelectContent>
+							{years.map((y) => (
+								<SelectItem key={y.id} value={y.id}>
+									{y.name}
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
 				</div>
-			</div>
-
-			<Separator />
-
-			{/* Xona va holat */}
-			<div className="space-y-4">
-				<div>
-					<h3 className="text-sm font-semibold text-foreground mb-3">Xona va holat</h3>
-					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-						<div className="space-y-2">
-							<Label htmlFor="room" className="text-sm font-medium">
-								Dars xonasi
-							</Label>
-							{rooms.length === 0 && (
-								<div className="bg-orange-50 border border-orange-200 rounded-md p-2 mb-2">
-									<p className="text-xs text-orange-800">
-										⚠️ Hozircha xonalar mavjud emas. Iltimos, avval xona qo'shing.
-									</p>
-								</div>
-							)}
-							<Select
-								value={String(form.room || "")}
-								onValueChange={(v) => setForm((s) => ({ ...s, room: v }))}
-								disabled={rooms.length === 0}
-							>
-								<SelectTrigger id="room" className="h-10">
-									<SelectValue placeholder={rooms.length === 0 ? "Xonalar yo'q" : "Xonani tanlang"} />
-								</SelectTrigger>
-								<SelectContent>
-									{rooms.map((r) => (
-										<SelectItem key={r.id} value={r.id}>
-											{r.name}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-							<p className="text-xs text-muted-foreground">Darslar o'tkaziladigan xonani belgilang</p>
-						</div>
-
-						<div className="space-y-2">
-							<Label className="text-sm font-medium">Holat</Label>
-							<div className="flex items-center space-x-2 h-10">
-								<Checkbox
-									id="is_active"
-									checked={!!form.is_active}
-									onCheckedChange={(v) => setForm((s) => ({ ...s, is_active: Boolean(v) }))}
-								/>
-								<Label htmlFor="is_active" className="text-sm font-normal cursor-pointer">
-									Sinf faol holda
-								</Label>
-							</div>
-							<p className="text-xs text-muted-foreground">Nofaol sinflar tizimda ko'rinmaydi</p>
-						</div>
+				<div className="space-y-2">
+					<Label htmlFor="grade_level">
+						Sinf darajasi <span className="text-red-500">*</span>
+					</Label>
+					<Input
+						id="grade_level"
+						type="number"
+						placeholder="1–11"
+						value={String(form.grade_level ?? "")}
+						onChange={(e) => setForm((s) => ({ ...s, grade_level: Number(e.target.value) }))}
+						min={1}
+						max={11}
+						required
+					/>
+				</div>
+				<div className="space-y-2">
+					<Label htmlFor="max_students">
+						Maks. o'quvchilar <span className="text-red-500">*</span>
+					</Label>
+					<Input
+						id="max_students"
+						type="number"
+						placeholder="30"
+						value={String(form.max_students ?? "")}
+						onChange={(e) => setForm((s) => ({ ...s, max_students: Number(e.target.value) }))}
+						min={1}
+						max={100}
+						required
+					/>
+				</div>
+				<div className="space-y-2">
+					<Label htmlFor="room">Dars xonasi</Label>
+					<Select
+						value={String(form.room || "")}
+						onValueChange={(v) => setForm((s) => ({ ...s, room: v }))}
+						disabled={rooms.length === 0}
+					>
+						<SelectTrigger id="room">
+							<SelectValue placeholder={rooms.length === 0 ? "Xonalar yo'q" : "Xonani tanlang"} />
+						</SelectTrigger>
+						<SelectContent>
+							{rooms.map((r) => (
+								<SelectItem key={r.id} value={r.id}>
+									{r.name}
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
+				</div>
+				<div className="space-y-2">
+					<Label>Holat</Label>
+					<div className="flex items-center gap-2 h-10">
+						<Checkbox
+							id="is_active"
+							checked={!!form.is_active}
+							onCheckedChange={(v) => setForm((s) => ({ ...s, is_active: Boolean(v) }))}
+						/>
+						<Label htmlFor="is_active" className="font-normal cursor-pointer">
+							Faol sinf
+						</Label>
 					</div>
 				</div>
 			</div>
@@ -210,7 +162,7 @@ function ClassForm({
 			<Separator />
 
 			<DialogFooter>
-				<Button type="submit" disabled={submitting} className="min-w-[120px]">
+				<Button type="submit" disabled={submitting}>
 					{submitting ? (
 						<span className="flex items-center gap-2">
 							<span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -230,30 +182,38 @@ export default function ClassesPage() {
 	const branchId = currentBranch?.branch_id;
 	const qc = useQueryClient();
 
-	// Filters and search state
-	const [searchQuery, setSearchQuery] = React.useState("");
+	const [search, setSearch] = React.useState("");
 	const [selectedYear, setSelectedYear] = React.useState<string>("all");
 	const [selectedGrade, setSelectedGrade] = React.useState<string>("all");
+	const [open, setOpen] = React.useState(false);
+	const [editId, setEditId] = React.useState<string | null>(null);
+	const [deleteConfirm, setDeleteConfirm] = React.useState<{
+		open: boolean;
+		id?: string;
+		name?: string;
+		studentsCount?: number;
+	}>({ open: false });
 
-	const { data: years = [], isLoading: yearsLoading, error: yearsError } = useQuery<AcademicYear[]>({
+	const { data: years = [], isLoading: yearsLoading } = useQuery<AcademicYear[]>({
 		queryKey: ["academicYears", branchId],
 		queryFn: () => schoolApi.getAcademicYears(branchId!),
 		enabled: !!branchId,
 	});
 
-	const { data: rooms = [], isLoading: roomsLoading, error: roomsError } = useQuery<Room[]>({
+	const { data: rooms = [], isLoading: roomsLoading } = useQuery<Room[]>({
 		queryKey: ["rooms", branchId],
 		queryFn: () => schoolApi.getRooms(branchId!),
 		enabled: !!branchId,
 	});
 
 	const { data: classes = [], isLoading, error } = useQuery<Class[]>({
-		queryKey: ["classes", branchId, searchQuery, selectedYear, selectedGrade],
-		queryFn: () => schoolApi.getClasses(branchId!, {
-			search: searchQuery || undefined,
-			academic_year_id: selectedYear !== "all" ? selectedYear : undefined,
-			grade_level: selectedGrade !== "all" ? Number(selectedGrade) : undefined,
-		}),
+		queryKey: ["classes", branchId, search, selectedYear, selectedGrade],
+		queryFn: () =>
+			schoolApi.getClasses(branchId!, {
+				search: search || undefined,
+				academic_year_id: selectedYear !== "all" ? selectedYear : undefined,
+				grade_level: selectedGrade !== "all" ? Number(selectedGrade) : undefined,
+			}),
 		enabled: !!branchId,
 	});
 
@@ -273,52 +233,38 @@ export default function ClassesPage() {
 		onSuccess: () => qc.invalidateQueries({ queryKey: ["classes", branchId] }),
 	});
 
-	const [open, setOpen] = React.useState(false);
-	const [editId, setEditId] = React.useState<string | null>(null);
-	const [deleteConfirm, setDeleteConfirm] = React.useState<{ open: boolean; id?: string; name?: string; studentsCount?: number }>({ open: false });
-
 	const editing = editId ? classes.find((c) => c.id === editId) : undefined;
 
-	// Calculate stats
-	const stats = React.useMemo(() => {
-		const totalClasses = classes.length;
-		const activeClasses = classes.filter(c => c.is_active).length;
-		const totalStudents = classes.reduce((sum, c) => sum + (c.current_students_count || 0), 0);
-		const totalCapacity = classes.reduce((sum, c) => sum + (c.max_students || 0), 0);
-		return { totalClasses, activeClasses, totalStudents, totalCapacity };
-	}, [classes]);
+	const stats = React.useMemo(() => ({
+		total: classes.length,
+		active: classes.filter((c) => c.is_active).length,
+		students: classes.reduce((s, c) => s + (c.current_students_count || 0), 0),
+		capacity: classes.reduce((s, c) => s + (c.max_students || 0), 0),
+	}), [classes]);
 
-	const hasActiveFilters = searchQuery || selectedYear !== "all" || selectedGrade !== "all";
+	const hasFilters = search || selectedYear !== "all" || selectedGrade !== "all";
 
 	return (
-		<div className="space-y-6">
+		<div className="space-y-5">
 			{/* Header */}
-			<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+			<div className="flex items-center justify-between">
 				<div>
-					<h1 className="text-3xl font-bold tracking-tight">Sinflar</h1>
-					<p className="text-muted-foreground mt-1">Barcha sinflarni boshqaring va monitoring qiling</p>
+					<h1 className="text-2xl font-bold">Sinflar</h1>
+					<p className="text-sm text-muted-foreground mt-0.5">Barcha sinflar va o'quvchilar</p>
 				</div>
 				<Dialog open={open} onOpenChange={setOpen}>
 					<DialogTrigger asChild>
-						<Button onClick={() => setEditId(null)} size="lg">
+						<Button onClick={() => setEditId(null)}>
 							<Plus className="w-4 h-4 mr-2" /> Yangi sinf
 						</Button>
 					</DialogTrigger>
-					<DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+					<DialogContent className="max-w-lg">
 						<DialogHeader>
-							<DialogTitle className="text-xl">{editId ? "Sinfni tahrirlash" : "Yangi sinf yaratish"}</DialogTitle>
-							<p className="text-sm text-muted-foreground">Sinf ma'lumotlarini to'ldiring</p>
+							<DialogTitle>{editId ? "Sinfni tahrirlash" : "Yangi sinf"}</DialogTitle>
 						</DialogHeader>
-						<Separator className="my-2" />
+						<Separator />
 						{yearsLoading || roomsLoading ? (
-							<div className="p-8 text-center">
-								<div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-								<p className="text-sm text-muted-foreground">Yuklanmoqda...</p>
-							</div>
-						) : yearsError || roomsError ? (
-							<div className="p-8 text-center text-red-600">
-								<p className="text-sm">Ma'lumotlarni yuklashda xatolik. Iltimos, keyinroq qayta urinib ko'ring.</p>
-							</div>
+							<div className="py-8 text-center text-sm text-muted-foreground">Yuklanmoqda...</div>
 						) : (
 							<ClassForm
 								branchId={branchId!}
@@ -357,299 +303,268 @@ export default function ClassesPage() {
 				</Dialog>
 			</div>
 
-			{/* Stats Cards */}
-			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+			{/* Stats Strip */}
+			<div className="grid grid-cols-2 md:grid-cols-4 gap-3">
 				<Card>
-					<CardHeader className="flex flex-row items-center justify-between pb-2">
-						<CardTitle className="text-sm font-medium text-muted-foreground">Jami Sinflar</CardTitle>
-						<GraduationCap className="w-4 h-4 text-muted-foreground" />
-					</CardHeader>
-					<CardContent>
-						<div className="text-2xl font-bold">{stats.totalClasses}</div>
-						<p className="text-xs text-muted-foreground mt-1">{stats.activeClasses} faol</p>
-					</CardContent>
-				</Card>
-				<Card>
-					<CardHeader className="flex flex-row items-center justify-between pb-2">
-						<CardTitle className="text-sm font-medium text-muted-foreground">Jami O'quvchilar</CardTitle>
-						<Users className="w-4 h-4 text-muted-foreground" />
-					</CardHeader>
-					<CardContent>
-						<div className="text-2xl font-bold">{stats.totalStudents}</div>
-						<p className="text-xs text-muted-foreground mt-1">Barcha sinflarda</p>
-					</CardContent>
-				</Card>
-				<Card>
-					<CardHeader className="flex flex-row items-center justify-between pb-2">
-						<CardTitle className="text-sm font-medium text-muted-foreground">O'rtacha To'ldirilish</CardTitle>
-						<Building2 className="w-4 h-4 text-muted-foreground" />
-					</CardHeader>
-					<CardContent>
-						<div className="text-2xl font-bold">
-							{stats.totalCapacity > 0 ? Math.round((stats.totalStudents / stats.totalCapacity) * 100) : 0}%
+					<CardContent className="p-4">
+						<div className="flex items-center justify-between">
+							<div>
+								<p className="text-xs text-muted-foreground">Jami sinflar</p>
+								<p className="text-2xl font-bold mt-1">{stats.total}</p>
+								<p className="text-xs text-muted-foreground">{stats.active} faol</p>
+							</div>
+							<GraduationCap className="w-8 h-8 text-muted-foreground/40" />
 						</div>
-						<p className="text-xs text-muted-foreground mt-1">{stats.totalStudents}/{stats.totalCapacity} joy</p>
 					</CardContent>
 				</Card>
 				<Card>
-					<CardHeader className="flex flex-row items-center justify-between pb-2">
-						<CardTitle className="text-sm font-medium text-muted-foreground">Akademik Yillar</CardTitle>
-						<GraduationCap className="w-4 h-4 text-muted-foreground" />
-					</CardHeader>
-					<CardContent>
-						<div className="text-2xl font-bold">{years.length}</div>
-						<p className="text-xs text-muted-foreground mt-1">Registrlangan</p>
+					<CardContent className="p-4">
+						<div className="flex items-center justify-between">
+							<div>
+								<p className="text-xs text-muted-foreground">O'quvchilar</p>
+								<p className="text-2xl font-bold mt-1">{stats.students}</p>
+								<p className="text-xs text-muted-foreground">{stats.capacity} joy</p>
+							</div>
+							<Users className="w-8 h-8 text-muted-foreground/40" />
+						</div>
+					</CardContent>
+				</Card>
+				<Card>
+					<CardContent className="p-4">
+						<div className="flex items-center justify-between">
+							<div>
+								<p className="text-xs text-muted-foreground">To'ldirilish</p>
+								<p className="text-2xl font-bold mt-1">
+									{stats.capacity > 0 ? Math.round((stats.students / stats.capacity) * 100) : 0}%
+								</p>
+								<p className="text-xs text-muted-foreground">{stats.students}/{stats.capacity}</p>
+							</div>
+							<BookOpen className="w-8 h-8 text-muted-foreground/40" />
+						</div>
+					</CardContent>
+				</Card>
+				<Card>
+					<CardContent className="p-4">
+						<div className="flex items-center justify-between">
+							<div>
+								<p className="text-xs text-muted-foreground">Akademik yillar</p>
+								<p className="text-2xl font-bold mt-1">{years.length}</p>
+								<p className="text-xs text-muted-foreground">Faol yillar</p>
+							</div>
+							<GraduationCap className="w-8 h-8 text-muted-foreground/40" />
+						</div>
 					</CardContent>
 				</Card>
 			</div>
 
 			{/* Filters */}
-			<Card>
-				<CardHeader>
-					<CardTitle className="text-lg">Filter va Qidiruv</CardTitle>
-				</CardHeader>
-				<CardContent>
-					<div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-						<div className="md:col-span-2">
-							<Label className="text-xs text-muted-foreground">Qidiruv</Label>
-							<div className="relative mt-1">
-								<Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-								<Input
-									className="pl-10"
-									placeholder="Sinf nomi, o'qituvchi..."
-									value={searchQuery}
-									onChange={(e) => setSearchQuery(e.target.value)}
-								/>
-							</div>
-						</div>
-						<div>
-							<Label className="text-xs text-muted-foreground">Akademik Yil</Label>
-							<Select value={selectedYear} onValueChange={setSelectedYear}>
-								<SelectTrigger className="mt-1">
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="all">Barchasi</SelectItem>
-									{years.map((y) => (
-										<SelectItem key={y.id} value={y.id}>
-											{y.name}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-						</div>
-						<div>
-							<Label className="text-xs text-muted-foreground">Sinf Darajasi</Label>
-							<Select value={selectedGrade} onValueChange={setSelectedGrade}>
-								<SelectTrigger className="mt-1">
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="all">Barchasi</SelectItem>
-									{[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((g) => (
-										<SelectItem key={g} value={String(g)}>
-											{g}-sinf
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-						</div>
-					</div>
-					{hasActiveFilters && (
-						<Button
-							variant="outline"
-							size="sm"
-							className="mt-4"
-							onClick={() => {
-								setSearchQuery("");
-								setSelectedYear("all");
-								setSelectedGrade("all");
-							}}
-						>
-							<FilterX className="w-4 h-4 mr-2" />
-							Filterlarni tozalash
-						</Button>
-					)}
-				</CardContent>
-			</Card>
+			<div className="flex flex-wrap items-center gap-3">
+				<div className="relative flex-1 min-w-[200px]">
+					<Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+					<Input
+						className="pl-9"
+						placeholder="Sinf nomini qidiring..."
+						value={search}
+						onChange={(e) => setSearch(e.target.value)}
+					/>
+				</div>
+				<Select value={selectedYear} onValueChange={setSelectedYear}>
+					<SelectTrigger className="w-44">
+						<SelectValue placeholder="O'quv yili" />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value="all">Barcha yillar</SelectItem>
+						{years.map((y) => (
+							<SelectItem key={y.id} value={y.id}>
+								{y.name}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+				<Select value={selectedGrade} onValueChange={setSelectedGrade}>
+					<SelectTrigger className="w-36">
+						<SelectValue placeholder="Daraja" />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value="all">Barcha daraja</SelectItem>
+						{[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((g) => (
+							<SelectItem key={g} value={String(g)}>
+								{g}-sinf
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+				{hasFilters && (
+					<Button
+						variant="ghost"
+						size="sm"
+						onClick={() => {
+							setSearch("");
+							setSelectedYear("all");
+							setSelectedGrade("all");
+						}}
+					>
+						<X className="w-4 h-4 mr-1" /> Tozalash
+					</Button>
+				)}
+			</div>
 
-			{/* Classes Grid */}
+			{/* Table */}
 			{isLoading ? (
-				<div className="flex items-center justify-center py-12">
-					<div className="flex flex-col items-center gap-3">
-						<div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-						<p className="text-sm text-muted-foreground">Sinflar yuklanmoqda...</p>
-					</div>
+				<div className="flex items-center justify-center py-16">
+					<div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
 				</div>
 			) : error ? (
 				<Card>
-					<CardContent className="py-12 text-center">
-						<p className="text-red-600">Sinflarni yuklashda xatolik yoki ruxsat yo'q.</p>
+					<CardContent className="py-12 text-center text-sm text-red-600">
+						Sinflarni yuklashda xatolik yoki ruxsat yo'q.
 					</CardContent>
 				</Card>
 			) : classes.length === 0 ? (
 				<Card>
-					<CardContent className="py-12 text-center">
-						<GraduationCap className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-40" />
-						<h3 className="text-lg font-semibold mb-2">Hech qanday sinf topilmadi</h3>
-						<p className="text-sm text-muted-foreground mb-6">
-							{hasActiveFilters
-								? "Filter sozlamalarini o'zgartiring yoki yangisini qo'shing"
-								: "Birinchi sinfni yaratish uchun yuqoridagi tugmani bosing"}
+					<CardContent className="py-16 text-center">
+						<GraduationCap className="w-12 h-12 mx-auto mb-3 text-muted-foreground/40" />
+						<p className="font-medium mb-1">Sinflar topilmadi</p>
+						<p className="text-sm text-muted-foreground mb-4">
+							{hasFilters ? "Boshqa filter qiymatlarini sinab ko'ring" : "Yangi sinf yaratish uchun yuqoridagi tugmani bosing"}
 						</p>
-						{!hasActiveFilters && (
-							<Button onClick={() => setOpen(true)}>
-								<Plus className="w-4 h-4 mr-2" /> Yangi sinf yaratish
+						{!hasFilters && (
+							<Button size="sm" onClick={() => setOpen(true)}>
+								<Plus className="w-4 h-4 mr-2" /> Yangi sinf
 							</Button>
 						)}
 					</CardContent>
 				</Card>
 			) : (
-				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-					{classes.map((cls) => (
-						<Card key={cls.id} className="hover:shadow-lg transition-shadow duration-200">
-							<CardHeader className="pb-3">
-								<div className="flex items-start justify-between">
-									<div className="flex-1">
-										<CardTitle className="text-xl">{cls.name}</CardTitle>
-										<CardDescription className="mt-1">{cls.academic_year_name}</CardDescription>
-									</div>
-									<Badge variant={cls.is_active ? "default" : "secondary"}>
-										{cls.is_active ? "Faol" : "NoFaol"}
-									</Badge>
-								</div>
-							</CardHeader>
-							<CardContent className="space-y-3">
-								<div className="grid grid-cols-2 gap-3 text-sm">
-									<div>
-										<p className="text-muted-foreground text-xs">Daraja</p>
-										<p className="font-medium">{cls.grade_level}</p>
-									</div>
-									<div>
-										<p className="text-muted-foreground text-xs">Xona</p>
-										<p className="font-medium truncate">{cls.room_name || "-"}</p>
-									</div>
-									<div>
-										<p className="text-muted-foreground text-xs">O'quvchilar</p>
-										<p className="font-medium">{cls.current_students_count || 0} / {cls.max_students}</p>
-									</div>
-									<div>
-										<p className="text-muted-foreground text-xs">To'ldirilish</p>
-										<div className="flex items-center gap-2">
-											<div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-												<div
-													className="h-full bg-blue-600 rounded-full transition-all"
-													style={{
-														width: `${cls.max_students > 0 ? ((cls.current_students_count || 0) / cls.max_students) * 100 : 0}%`,
-													}}
-												/>
-											</div>
-											<span className="text-xs font-medium">
-												{cls.max_students > 0 ? Math.round(((cls.current_students_count || 0) / cls.max_students) * 100) : 0}%
+				<Card>
+					<Table>
+						<TableHeader>
+							<TableRow>
+								<TableHead>Sinf nomi</TableHead>
+								<TableHead>O'quv yili</TableHead>
+								<TableHead className="w-20 text-center">Daraja</TableHead>
+								<TableHead>Xona</TableHead>
+								<TableHead>O'quvchilar</TableHead>
+								<TableHead>Sinf rahbari</TableHead>
+								<TableHead className="w-24 text-center">Holat</TableHead>
+								<TableHead className="w-32"></TableHead>
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{classes.map((cls) => {
+								const fill = cls.max_students > 0
+									? Math.round(((cls.current_students_count || 0) / cls.max_students) * 100)
+									: 0;
+								return (
+									<TableRow key={cls.id} className="group">
+										<TableCell className="font-medium">{cls.name}</TableCell>
+										<TableCell className="text-muted-foreground text-sm">{cls.academic_year_name}</TableCell>
+										<TableCell className="text-center">
+											<span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary text-sm font-semibold">
+												{cls.grade_level}
 											</span>
-										</div>
-									</div>
-								</div>
-								
-								{cls.class_teacher_name && (
-									<div className="pt-2 border-t">
-										<p className="text-xs text-muted-foreground">Sinf rahbari</p>
-										<p className="text-sm font-medium truncate">{cls.class_teacher_name}</p>
+										</TableCell>
+										<TableCell className="text-sm text-muted-foreground">{cls.room_name || "—"}</TableCell>
+										<TableCell>
+											<div className="flex items-center gap-2">
+												<span className="text-sm font-medium">
+													{cls.current_students_count || 0}/{cls.max_students}
+												</span>
+												<div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
+													<div
+														className={`h-full rounded-full ${fill >= 90 ? "bg-red-500" : fill >= 70 ? "bg-amber-500" : "bg-green-500"}`}
+														style={{ width: `${fill}%` }}
+													/>
+												</div>
+												<span className="text-xs text-muted-foreground">{fill}%</span>
+											</div>
+										</TableCell>
+										<TableCell className="text-sm">{cls.class_teacher_name || "—"}</TableCell>
+										<TableCell className="text-center">
+											<Badge variant={cls.is_active ? "default" : "secondary"} className="text-xs">
+												{cls.is_active ? "Faol" : "Nofaol"}
+											</Badge>
+										</TableCell>
+										<TableCell>
+											<div className="flex items-center gap-1 justify-end">
+												<Link href={`/school/classes/${cls.id}`}>
+													<Button variant="ghost" size="icon" className="h-8 w-8">
+														<Eye className="w-4 h-4" />
+													</Button>
+												</Link>
+												<Button
+													variant="ghost"
+													size="icon"
+													className="h-8 w-8"
+													onClick={() => {
+														setEditId(cls.id);
+														setOpen(true);
+													}}
+												>
+													<Pencil className="w-4 h-4" />
+												</Button>
+												<Button
+													variant="ghost"
+													size="icon"
+													className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+													onClick={() =>
+														setDeleteConfirm({
+															open: true,
+															id: cls.id,
+															name: cls.name,
+															studentsCount: cls.current_students_count || 0,
+														})
+													}
+												>
+													<Trash2 className="w-4 h-4" />
+												</Button>
+											</div>
+										</TableCell>
+									</TableRow>
+								);
+							})}
+						</TableBody>
+					</Table>
+				</Card>
+			)}
+
+			{/* Delete Confirmation */}
+			<AlertDialog
+				open={deleteConfirm.open}
+				onOpenChange={(open) => setDeleteConfirm((prev) => ({ ...prev, open }))}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>Sinfni o'chirish</AlertDialogTitle>
+						<AlertDialogDescription asChild>
+							<div className="space-y-2">
+								<p>
+									<span className="font-semibold text-foreground">"{deleteConfirm.name}"</span> sinfini o'chirmoqchimisiz?
+								</p>
+								{(deleteConfirm.studentsCount ?? 0) > 0 && (
+									<div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-800">
+										<span>⚠️ Ushbu sinfda <strong>{deleteConfirm.studentsCount}</strong> ta o'quvchi mavjud.</span>
 									</div>
 								)}
-
-								<Separator />
-								
-								<div className="flex items-center gap-2 pt-1">
-									<Link href={`/school/classes/${cls.id}`} className="flex-1">
-										<Button variant="outline" size="sm" className="w-full">
-											<Eye className="w-4 h-4 mr-2" />
-											Ko'rish
-										</Button>
-									</Link>
-									<Button
-										variant="outline"
-										size="sm"
-										onClick={() => {
-											setEditId(cls.id);
-											setOpen(true);
-										}}
-									>
-										<Pencil className="w-4 h-4" />
-									</Button>
-									<Button
-										variant="destructive"
-										size="sm"
-										onClick={() => setDeleteConfirm({ 
-											open: true, 
-											id: cls.id, 
-											name: cls.name,
-											studentsCount: cls.current_students_count || 0
-										})}
-									>
-										<Trash2 className="w-4 h-4" />
-									</Button>
-								</div>
-							</CardContent>
-						</Card>
-				))}
-			</div>
-		)}
-
-		{/* Delete Confirmation Dialog */}
-		<AlertDialog open={deleteConfirm.open} onOpenChange={(open) => setDeleteConfirm((prev) => ({ ...prev, open }))}>
-			<AlertDialogContent>
-				<AlertDialogHeader>
-					<div className="flex items-center gap-3 mb-2">
-						<div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
-							<AlertTriangle className="w-6 h-6 text-red-600" />
-						</div>
-						<div>
-							<AlertDialogTitle className="text-xl">Sinfni o'chirish</AlertDialogTitle>
-						</div>
-					</div>
-					<div className="space-y-3">
-						<AlertDialogDescription className="font-medium text-foreground text-base">
-							<span className="font-bold text-red-600">&quot;{deleteConfirm.name}&quot;</span> sinfni butunlay o'chirmoqchimisiz?
-						</AlertDialogDescription>
-						{(deleteConfirm.studentsCount ?? 0) > 0 && (
-							<div className="bg-orange-50 border border-orange-200 rounded-md p-3">
-								<span className="text-sm text-orange-800">
-									⚠️ <span className="font-semibold">Diqqat:</span> Ushbu sinfda <span className="font-bold">{deleteConfirm.studentsCount}</span> ta o'quvchi mavjud.
-								</span>
+								<p className="text-sm">Bu amal qaytarib bo'lmaydi.</p>
 							</div>
-						)}
-						<div className="text-sm text-muted-foreground">
-							Bu amal qaytarib bo&apos;lmaydi. Sinf bilan bog&apos;liq barcha ma&apos;lumotlar o&apos;chiriladi.
-						</div>
-					</div>
-				</AlertDialogHeader>
-				<AlertDialogFooter className="gap-2 sm:gap-0">
-					<AlertDialogCancel onClick={() => setDeleteConfirm((prev) => ({ ...prev, open: false }))}>
-						Bekor qilish
-					</AlertDialogCancel>
-					<AlertDialogAction
-						onClick={() => {
-							if (deleteConfirm.id) {
-								deleteMutation.mutate(deleteConfirm.id);
-							}
-							setDeleteConfirm((prev) => ({ ...prev, open: false }));
-						}}
-						className="bg-red-600 hover:bg-red-700 text-white"
-						disabled={deleteMutation.isPending}
-					>
-						{deleteMutation.isPending ? (
-							<span className="flex items-center gap-2">
-								<span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-								O&apos;chirilmoqda...
-							</span>
-						) : (
-							"Ha, o'chirish"
-						)}
-					</AlertDialogAction>
-				</AlertDialogFooter>
-			</AlertDialogContent>
-		</AlertDialog>
-	</div>
-);
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>Bekor qilish</AlertDialogCancel>
+						<AlertDialogAction
+							onClick={() => {
+								if (deleteConfirm.id) deleteMutation.mutate(deleteConfirm.id);
+								setDeleteConfirm({ open: false });
+							}}
+							className="bg-red-600 hover:bg-red-700 text-white"
+							disabled={deleteMutation.isPending}
+						>
+							{deleteMutation.isPending ? "O'chirilmoqda..." : "O'chirish"}
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
+		</div>
+	);
 }

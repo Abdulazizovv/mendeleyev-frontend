@@ -30,6 +30,8 @@ import {
   ChevronsUpDown,
   Check,
   Bell,
+  ArrowLeft,
+  TrendingUp,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -55,6 +57,7 @@ interface NavItem {
   href?: string;
   icon: React.ElementType;
   children?: NavItem[];
+  permission?: string; // "module.action" format, e.g. "finance.view"
 }
 
 const iconMap: Record<string, React.ElementType> = {
@@ -190,7 +193,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const router = useRouter();
   const pathname = usePathname();
   const queryClient = useQueryClient();
-  const { user, currentBranch, memberships, logout, isLoading, loadUser, switchBranch } = useAuth();
+  const { user, currentBranch, memberships, logout, isLoading, loadUser, switchBranch, hasPermission } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
@@ -265,6 +268,69 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     ];
 
     if (isBranchStaff) {
+      if (branchType === "school") {
+        const schoolNavItems: NavItem[] = [
+          { name: "Topshiriqlar", href: "/school/tasks", icon: CheckSquare },
+          { name: "Lidlar", href: "/school/leads", icon: Users },
+          { name: "Guruh", href: "/school/groups", icon: Users, permission: "groups.view" },
+          {
+            name: "O'quvchilar",
+            icon: GraduationCap,
+            permission: "students.view",
+            children: [
+              { name: "Barcha O'quvchilar", href: "/school/students", icon: GraduationCap },
+              { name: "Yangi O'quvchilar", href: "/school/students/new", icon: Users },
+              { name: "Arxiv", href: "/school/students/archive", icon: Award },
+            ],
+          },
+          {
+            name: "Boshqaruv",
+            icon: Building2,
+            permission: "staff.view",
+            children: [
+              { name: "Xodimlar", href: "/school/staff", icon: Users },
+              { name: "Sinflar", href: "/school/classes", icon: ClipboardList },
+              { name: "Fanlar", href: "/school/subjects", icon: BookOpen },
+              { name: "O'quv yili", href: "/school/academic-years", icon: Calendar },
+            ],
+          },
+          { name: "Nazorat", href: "/school/schedule", icon: Calendar, permission: "attendance.view" },
+          {
+            name: "Moliya",
+            icon: DollarSign,
+            permission: "finance.view",
+            children: [
+              { name: "Kassalar", href: "/school/finance", icon: DollarSign },
+              { name: "Abonementlar", href: "/school/finance/subscriptions", icon: FileText },
+              { name: "Sotuv va marketing", href: "/school/finance/sales", icon: TrendingUp },
+            ],
+          },
+          { name: "Hisobotlar", href: "/school/reports", icon: FileText, permission: "reports.view" },
+          { name: "Sozlamalar", href: "/school/settings", icon: Settings },
+        ];
+
+        // Filter items based on permissions (legacy users without permissions see everything)
+        return schoolNavItems.reduce<NavItem[]>((acc, item) => {
+          if (item.permission) {
+            const [mod, action] = item.permission.split(".");
+            if (!hasPermission(mod, action)) return acc;
+          }
+          if (item.children) {
+            const visible = item.children.filter((c) => {
+              if (!c.permission) return true;
+              const [m, a] = c.permission.split(".");
+              return hasPermission(m, a);
+            });
+            if (visible.length === 0) return acc;
+            acc.push({ ...item, children: visible });
+          } else {
+            acc.push(item);
+          }
+          return acc;
+        }, []);
+      }
+
+      // Training center: keep existing navigation
       const branchItems = getBranchNavigationItems(branchType);
       return [
         ...baseItems,
@@ -305,7 +371,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     }
     return baseItems;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [role, branchType, rolePath, currentBranch, isBranchStaff]);
+  }, [role, branchType, rolePath, currentBranch, isBranchStaff, hasPermission]);
 
   // Auto-expand groups that contain the active route
   useEffect(() => {
@@ -569,6 +635,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               className="lg:hidden p-2 rounded-lg text-gray-500 hover:bg-gray-100"
             >
               <Menu className="w-5 h-5" />
+            </button>
+            {/* Back button */}
+            <button
+              onClick={() => router.back()}
+              className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
+              title="Orqaga"
+            >
+              <ArrowLeft className="w-5 h-5" />
             </button>
             {/* Breadcrumb */}
             <div className="flex items-center gap-1.5 text-sm">

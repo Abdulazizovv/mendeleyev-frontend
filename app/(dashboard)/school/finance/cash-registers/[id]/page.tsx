@@ -1,409 +1,340 @@
 "use client";
 
-import { useMemo } from "react";
+import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Edit, Trash2, TrendingUp, TrendingDown, Wallet, MapPin, CheckCircle, XCircle, Calendar } from "lucide-react";
+import {
+  ArrowLeft,
+  TrendingUp,
+  TrendingDown,
+  ArrowRightLeft,
+  Wallet,
+  MapPin,
+  CheckCircle,
+  XCircle,
+  RefreshCw,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
 import { financeApi } from "@/lib/api";
+import { useAuth } from "@/lib/hooks";
+import UnifiedTransactionModal from "@/components/finance/UnifiedTransactionModal";
 import type { CashRegister, Transaction } from "@/types/finance";
 
-interface MonthlyData {
-  month: string;
-  income: number;
-  expense: number;
-}
+type ModalType = "income" | "expense" | "transfer" | null;
+
+const TYPE_ICON: Record<string, React.ReactNode> = {
+  income: <TrendingUp className="w-4 h-4 text-green-600" />,
+  expense: <TrendingDown className="w-4 h-4 text-red-600" />,
+  payment: <TrendingUp className="w-4 h-4 text-green-600" />,
+  salary: <TrendingDown className="w-4 h-4 text-orange-600" />,
+  transfer: <ArrowRightLeft className="w-4 h-4 text-blue-600" />,
+  refund: <TrendingDown className="w-4 h-4 text-yellow-600" />,
+};
+const TYPE_COLOR: Record<string, string> = {
+  income: "bg-green-50",
+  expense: "bg-red-50",
+  payment: "bg-green-50",
+  salary: "bg-orange-50",
+  transfer: "bg-blue-50",
+  refund: "bg-yellow-50",
+};
+const AMOUNT_COLOR: Record<string, string> = {
+  income: "text-green-600",
+  expense: "text-red-600",
+  payment: "text-green-600",
+  salary: "text-orange-600",
+  transfer: "text-blue-600",
+  refund: "text-yellow-600",
+};
+const AMOUNT_PREFIX: Record<string, string> = {
+  income: "+",
+  expense: "-",
+  payment: "+",
+  salary: "-",
+  transfer: "↔",
+  refund: "-",
+};
 
 export default function CashRegisterDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const { currentBranch } = useAuth();
   const registerId = params.id as string;
+  const branchId = currentBranch?.branch_id ?? "";
 
-  // Kassa ma'lumotlarini olish
-  const { data: cashRegister, isLoading: isLoadingRegister } = useQuery<CashRegister>({
+  const [modalType, setModalType] = useState<ModalType>(null);
+  const [txPage, setTxPage] = useState(1);
+
+  const { data: cashRegister, isLoading: loadingRegister, refetch: refetchRegister } = useQuery<CashRegister>({
     queryKey: ["cash-register", registerId],
     queryFn: () => financeApi.getCashRegister(registerId),
   });
 
-  // Oxirgi tranzaksiyalarni olish
-  const { data: transactionsData, isLoading: isLoadingTransactions } = useQuery({
-    queryKey: ["cash-register-transactions", registerId],
+  const { data: txData, isLoading: loadingTx, refetch: refetchTx } = useQuery({
+    queryKey: ["cash-register-transactions", registerId, txPage],
     queryFn: () => financeApi.getTransactions({
       cash_register: registerId,
       ordering: "-transaction_date",
+      page: txPage,
+      page_size: 20,
     }),
   });
 
-  // Oylik statistikani olish (demo uchun hisoblash) - useMemo bilan optimize qilish
-  const monthlyData: MonthlyData[] = useMemo(() => {
-    if (!transactionsData?.results || transactionsData.results.length === 0) return [];
-    
-    const dataByMonth: Record<string, { income: number; expense: number }> = {};
-    
-    transactionsData.results.forEach((transaction: Transaction) => {
-      const month = new Date(transaction.transaction_date).toLocaleDateString("uz-UZ", { 
-        month: "short",
-        year: "numeric" 
-      });
-      
-      if (!dataByMonth[month]) {
-        dataByMonth[month] = { income: 0, expense: 0 };
-      }
-      
-      if (transaction.transaction_type === "income") {
-        dataByMonth[month].income += parseFloat(transaction.amount.toString());
-      } else if (transaction.transaction_type === "expense") {
-        dataByMonth[month].expense += parseFloat(transaction.amount.toString());
-      }
-    });
-    
-    return Object.entries(dataByMonth).map(([month, data]) => ({
-      month,
-      income: data.income,
-      expense: data.expense,
-    }));
-  }, [transactionsData?.results]);
+  const transactions: Transaction[] = txData?.results ?? [];
+  const txTotal = txData?.count ?? 0;
+  const totalPages = Math.ceil(txTotal / 20);
 
-  // Umumiy kirim va chiqimni hisoblash - useMemo bilan
-  const { totalIncome, totalExpense } = useMemo(() => {
-    if (!transactionsData?.results) return { totalIncome: 0, totalExpense: 0 };
-    
-    const income = transactionsData.results
-      .filter((t: Transaction) => t.transaction_type === "income")
-      .reduce((sum: number, t: Transaction) => sum + parseFloat(t.amount.toString()), 0);
-    
-    const expense = transactionsData.results
-      .filter((t: Transaction) => t.transaction_type === "expense")
-      .reduce((sum: number, t: Transaction) => sum + parseFloat(t.amount.toString()), 0);
-    
-    return { totalIncome: income, totalExpense: expense };
-  }, [transactionsData?.results]);
+  function handleSuccess() {
+    refetchRegister();
+    refetchTx();
+  }
 
-  if (isLoadingRegister) {
+  if (loadingRegister) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Yuklanmoqda...</p>
-        </div>
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
       </div>
     );
   }
-
   if (!cashRegister) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Kassa topilmadi</h2>
-          <p className="text-gray-600 mb-4">Bunday kassa mavjud emas</p>
-          <Button onClick={() => router.push("/school/finance")}>
-            Orqaga qaytish
-          </Button>
-        </div>
+      <div className="flex items-center justify-center h-64 flex-col gap-3">
+        <p className="text-gray-500">Kassa topilmadi</p>
+        <Button variant="outline" onClick={() => router.push("/school/finance")}>Orqaga</Button>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => router.push("/school/finance")}
-            className="shrink-0"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </Button>
-          <div>
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">
-              {cashRegister.name}
-            </h1>
-            <p className="text-xs sm:text-sm text-gray-500 mt-1">
-              Kassa tafsilotlari
+    <>
+      {/* Back header */}
+      <div className="flex items-center gap-3 px-4 py-3 border-b bg-white sticky top-0 z-10">
+        <Button variant="ghost" size="sm" onClick={() => router.push("/school/finance")}>
+          <ArrowLeft className="w-4 h-4 mr-1" />
+          Orqaga
+        </Button>
+        <h1 className="text-lg font-semibold text-gray-900 truncate">{cashRegister.name}</h1>
+        <Button variant="ghost" size="icon" className="ml-auto" onClick={handleSuccess}>
+          <RefreshCw className="w-4 h-4" />
+        </Button>
+      </div>
+
+      {/* Main two-column layout */}
+      <div className="flex gap-0 h-[calc(100vh-120px)]">
+
+        {/* ─── LEFT PANEL ─── */}
+        <div className="w-72 shrink-0 border-r bg-white flex flex-col overflow-y-auto">
+          {/* Balance card */}
+          <div className="p-5 border-b">
+            <div className="flex items-center gap-2 mb-1">
+              <Wallet className="w-4 h-4 text-blue-600" />
+              <span className="text-xs text-gray-500 uppercase tracking-wide">Balans</span>
+            </div>
+            <p className="text-3xl font-bold text-gray-900">
+              {formatCurrency(cashRegister.balance)}
             </p>
-          </div>
-        </div>
-
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="flex-1 sm:flex-none">
-            <Edit className="w-4 h-4 mr-2" />
-            <span className="hidden sm:inline">Tahrirlash</span>
-            <span className="sm:hidden">Tahrirlash</span>
-          </Button>
-        </div>
-      </div>
-
-      {/* Main Info Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base sm:text-lg">Asosiy Ma'lumotlar</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Status */}
-            <div className="flex items-start gap-3">
-              <div className={`p-2 rounded-lg ${cashRegister.is_active ? "bg-green-100" : "bg-red-100"}`}>
+            <div className="flex items-center gap-2 mt-2">
+              <Badge variant={cashRegister.is_active ? "default" : "secondary"} className="text-xs">
                 {cashRegister.is_active ? (
-                  <CheckCircle className="w-5 h-5 text-green-600" />
+                  <><CheckCircle className="w-3 h-3 mr-1" />Faol</>
                 ) : (
-                  <XCircle className="w-5 h-5 text-red-600" />
+                  <><XCircle className="w-3 h-3 mr-1" />Nofaol</>
                 )}
-              </div>
-              <div>
-                <p className="text-xs sm:text-sm text-gray-500">Holat</p>
-                <Badge variant={cashRegister.is_active ? "default" : "destructive"} className="mt-1">
-                  {cashRegister.is_active ? "Faol" : "Nofaol"}
-                </Badge>
-              </div>
-            </div>
-
-            {/* Balance */}
-            <div className="flex items-start gap-3">
-              <div className="p-2 rounded-lg bg-blue-100">
-                <Wallet className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-xs sm:text-sm text-gray-500">Balans</p>
-                <p className="text-lg sm:text-xl font-bold text-gray-900 mt-1">
-                  {formatCurrency(cashRegister.balance)}
-                </p>
-              </div>
-            </div>
-
-            {/* Location */}
-            {cashRegister.location && (
-              <div className="flex items-start gap-3">
-                <div className="p-2 rounded-lg bg-purple-100">
-                  <MapPin className="w-5 h-5 text-purple-600" />
-                </div>
-                <div>
-                  <p className="text-xs sm:text-sm text-gray-500">Joylashuv</p>
-                  <p className="text-sm sm:text-base text-gray-900 mt-1">
-                    {cashRegister.location}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Created Date */}
-            <div className="flex items-start gap-3">
-              <div className="p-2 rounded-lg bg-orange-100">
-                <Calendar className="w-5 h-5 text-orange-600" />
-              </div>
-              <div>
-                <p className="text-xs sm:text-sm text-gray-500">Yaratilgan</p>
-                <p className="text-sm sm:text-base text-gray-900 mt-1">
-                  {new Date(cashRegister.created_at).toLocaleDateString("uz-UZ", {
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {new Date(cashRegister.created_at).toLocaleTimeString("uz-UZ", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </p>
-              </div>
+              </Badge>
+              {cashRegister.location && (
+                <span className="text-xs text-gray-400 flex items-center gap-1">
+                  <MapPin className="w-3 h-3" />{cashRegister.location}
+                </span>
+              )}
             </div>
           </div>
 
-          {/* Description */}
-          {cashRegister.description && (
-            <div className="pt-4 border-t">
-              <p className="text-xs sm:text-sm text-gray-500 mb-2">Ta'rif</p>
-              <p className="text-sm sm:text-base text-gray-700">
-                {cashRegister.description}
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          {/* Action buttons */}
+          <div className="p-4 space-y-2">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Amallar</p>
 
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-        <Card className="border-t-4 border-t-green-500">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
+            <button
+              onClick={() => setModalType("income")}
+              className="w-full flex items-center gap-3 rounded-xl border-2 border-green-200 bg-green-50 px-4 py-3.5 text-left hover:bg-green-100 hover:border-green-300 transition-all group"
+            >
+              <div className="p-2 rounded-lg bg-green-100 group-hover:bg-green-200 transition-colors">
+                <TrendingUp className="w-5 h-5 text-green-600" />
+              </div>
               <div>
-                <p className="text-xs sm:text-sm text-gray-500">Umumiy Kirim</p>
-                <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 mt-1">
-                  {formatCurrency(totalIncome)}
-                </p>
+                <p className="font-semibold text-green-800 text-sm">Kirim</p>
+                <p className="text-xs text-green-600">Pul qabul qilish</p>
               </div>
-              <div className="p-3 bg-green-100 rounded-lg">
-                <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </button>
 
-        <Card className="border-t-4 border-t-red-500">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
+            <button
+              onClick={() => setModalType("expense")}
+              className="w-full flex items-center gap-3 rounded-xl border-2 border-red-200 bg-red-50 px-4 py-3.5 text-left hover:bg-red-100 hover:border-red-300 transition-all group"
+            >
+              <div className="p-2 rounded-lg bg-red-100 group-hover:bg-red-200 transition-colors">
+                <TrendingDown className="w-5 h-5 text-red-600" />
+              </div>
               <div>
-                <p className="text-xs sm:text-sm text-gray-500">Umumiy Chiqim</p>
-                <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 mt-1">
-                  {formatCurrency(totalExpense)}
-                </p>
+                <p className="font-semibold text-red-800 text-sm">Chiqim</p>
+                <p className="text-xs text-red-600">Pul chiqarish</p>
               </div>
-              <div className="p-3 bg-red-100 rounded-lg">
-                <TrendingDown className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </button>
 
-        <Card className="border-t-4 border-t-blue-500">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
+            <button
+              onClick={() => setModalType("transfer")}
+              className="w-full flex items-center gap-3 rounded-xl border-2 border-blue-200 bg-blue-50 px-4 py-3.5 text-left hover:bg-blue-100 hover:border-blue-300 transition-all group"
+            >
+              <div className="p-2 rounded-lg bg-blue-100 group-hover:bg-blue-200 transition-colors">
+                <ArrowRightLeft className="w-5 h-5 text-blue-600" />
+              </div>
               <div>
-                <p className="text-xs sm:text-sm text-gray-500">Tranzaksiyalar</p>
-                <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 mt-1">
-                  {transactionsData?.count || 0}
-                </p>
+                <p className="font-semibold text-blue-800 text-sm">Transfer</p>
+                <p className="text-xs text-blue-600">Naqd ↔ Karta</p>
               </div>
-              <div className="p-3 bg-blue-100 rounded-lg">
-                <Wallet className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
+            </button>
+          </div>
+
+          {/* Summary numbers */}
+          <div className="p-4 border-t mt-auto space-y-3">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Statistika</p>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Tranzaksiyalar</span>
+              <span className="font-semibold">{txTotal}</span>
+            </div>
+            {cashRegister.description && (
+              <p className="text-xs text-gray-400 leading-relaxed">{cashRegister.description}</p>
+            )}
+          </div>
+        </div>
+
+        {/* ─── RIGHT PANEL ─── */}
+        <div className="flex-1 flex flex-col overflow-hidden bg-gray-50">
+          {/* List header */}
+          <div className="px-5 py-3 bg-white border-b flex items-center justify-between">
+            <h2 className="font-semibold text-gray-800 text-sm">Barcha tranzaksiyalar</h2>
+            <span className="text-xs text-gray-400">{txTotal} ta</span>
+          </div>
+
+          {/* Transaction list */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-2">
+            {loadingTx ? (
+              <div className="flex items-center justify-center h-40">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
               </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Monthly Statistics - Simple View */}
-      {monthlyData.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base sm:text-lg">Oylik Statistika</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-3 px-2 text-xs sm:text-sm font-semibold text-gray-600">Oy</th>
-                    <th className="text-right py-3 px-2 text-xs sm:text-sm font-semibold text-green-600">Kirim</th>
-                    <th className="text-right py-3 px-2 text-xs sm:text-sm font-semibold text-red-600">Chiqim</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {monthlyData.map((stat, index) => {
-                    // Format month from "2025 M12" to "Dekabr 2025"
-                    const monthParts = stat.month.split(' ');
-                    const formattedMonth = monthParts.length === 2 ? 
-                      new Date(parseInt(monthParts[0]), parseInt(monthParts[1].replace('M', '')) - 1).toLocaleDateString('uz-UZ', { month: 'long', year: 'numeric' }) : 
-                      stat.month;
-                    return (
-                    <tr key={index} className="border-b hover:bg-gray-50">
-                      <td className="py-3 px-2 text-xs sm:text-sm">{formattedMonth}</td>
-                      <td className="text-right py-3 px-2 text-xs sm:text-sm text-green-600 font-medium">
-                        {formatCurrency(stat.income)}
-                      </td>
-                      <td className="text-right py-3 px-2 text-xs sm:text-sm text-red-600 font-medium">
-                        {formatCurrency(stat.expense)}
-                      </td>
-                    </tr>
-                  );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Recent Transactions */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base sm:text-lg">Oxirgi Tranzaksiyalar</CardTitle>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => router.push(`/school/finance/transactions?cash_register=${registerId}`)}
-          >
-            Barchasi
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {isLoadingTransactions ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            </div>
-          ) : Array.isArray(transactionsData?.results) && transactionsData.results.length > 0 ? (
-            <div className="space-y-3">
-              {transactionsData.results.slice(0, 5).map((transaction: Transaction) => (
+            ) : transactions.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-40 text-gray-400">
+                <Wallet className="w-12 h-12 mb-3 text-gray-200" />
+                <p className="text-sm">Tranzaksiyalar mavjud emas</p>
+              </div>
+            ) : (
+              transactions.map((tx) => (
                 <div
-                  key={transaction.id}
-                  onClick={() => router.push(`/school/finance/transactions/${transaction.id}`)}
-                  className="flex items-center justify-between p-3 rounded-lg border hover:bg-gray-50 cursor-pointer transition-colors"
+                  key={tx.id}
+                  onClick={() => router.push(`/school/finance/transactions/${tx.id}`)}
+                  className="flex items-start gap-3 rounded-xl bg-white border border-gray-100 px-4 py-3 cursor-pointer hover:border-gray-200 hover:shadow-sm transition-all"
                 >
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className={`p-2 rounded-lg ${
-                      transaction.transaction_type === "income" ? "bg-green-100" : "bg-red-100"
-                    }`}>
-                      {transaction.transaction_type === "income" ? (
-                        <TrendingUp className="w-4 h-4 text-green-600" />
-                      ) : (
-                        <TrendingDown className="w-4 h-4 text-red-600" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {transaction.category_name || transaction.description || "Tranzaksiya"}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {new Date(transaction.transaction_date).toLocaleDateString("uz-UZ", {
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric",
-                        })}
-                        {" "}
-                        {new Date(transaction.transaction_date).toLocaleTimeString("uz-UZ", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                    </div>
+                  <div className={`p-2 rounded-lg mt-0.5 shrink-0 ${TYPE_COLOR[tx.transaction_type] ?? "bg-gray-50"}`}>
+                    {TYPE_ICON[tx.transaction_type] ?? <Wallet className="w-4 h-4 text-gray-500" />}
                   </div>
-                  <div className="text-right ml-3">
-                    <p className={`text-sm font-bold ${
-                      transaction.transaction_type === "income" ? "text-green-600" : "text-red-600"
-                    }`}>
-                      {transaction.transaction_type === "income" ? "+" : "-"}
-                      {formatCurrency(transaction.amount)}
-                    </p>
-                    <Badge
-                      variant={
-                        transaction.status === "completed"
-                          ? "default"
-                          : transaction.status === "pending"
-                          ? "secondary"
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {tx.category_name || tx.transaction_type_display || "Tranzaksiya"}
+                        </p>
+                        {tx.description && (
+                          <p className="text-xs text-gray-500 truncate mt-0.5">{tx.description}</p>
+                        )}
+                        {(tx.student || tx.employee) && (
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {tx.student?.full_name ?? tx.employee?.full_name}
+                          </p>
+                        )}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className={`text-sm font-bold ${AMOUNT_COLOR[tx.transaction_type] ?? "text-gray-700"}`}>
+                          {AMOUNT_PREFIX[tx.transaction_type] ?? ""}{formatCurrency(tx.amount)}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {new Date(tx.transaction_date).toLocaleDateString("uz-UZ", {
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <Badge
+                        variant={
+                          tx.status === "completed" ? "default"
+                          : tx.status === "pending" ? "secondary"
                           : "destructive"
-                      }
-                      className="text-xs mt-1"
-                    >
-                      {transaction.status_display}
-                    </Badge>
+                        }
+                        className="text-xs h-5"
+                      >
+                        {tx.status_display}
+                      </Badge>
+                      <span className="text-xs text-gray-400">
+                        {tx.payment_method_display}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-gray-500">
-              <Wallet className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-              <p className="text-sm">Tranzaksiyalar mavjud emas</p>
+              ))
+            )}
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 py-3 bg-white border-t">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setTxPage((p) => Math.max(1, p - 1))}
+                disabled={txPage === 1}
+              >
+                ‹ Oldingi
+              </Button>
+              <span className="text-sm text-gray-500">{txPage} / {totalPages}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setTxPage((p) => Math.min(totalPages, p + 1))}
+                disabled={txPage === totalPages}
+              >
+                Keyingi ›
+              </Button>
             </div>
           )}
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </div>
+
+      {/* Unified transaction modal */}
+      {modalType && modalType !== "transfer" && cashRegister && branchId && (
+        <UnifiedTransactionModal
+          type={modalType}
+          cashRegister={cashRegister}
+          branchId={branchId}
+          isOpen={true}
+          onClose={() => setModalType(null)}
+          onSuccess={handleSuccess}
+        />
+      )}
+      {modalType === "transfer" && cashRegister && branchId && (
+        <UnifiedTransactionModal
+          type="transfer"
+          cashRegister={cashRegister}
+          branchId={branchId}
+          isOpen={true}
+          onClose={() => setModalType(null)}
+          onSuccess={handleSuccess}
+        />
+      )}
+    </>
   );
 }

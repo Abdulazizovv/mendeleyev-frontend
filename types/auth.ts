@@ -75,6 +75,7 @@ export interface BranchMembership {
   balance?: number;
   effective_role?: UserRole;
   role_data?: TeacherProfile | StudentProfile | ParentProfile | AdminProfile | null;
+  permissions?: Record<string, Record<string, boolean>>;
 }
 
 export interface CurrentBranch extends BranchMembership {}

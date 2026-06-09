@@ -49,6 +49,11 @@ import type {
   HomeworkSubmission,
   CreateHomeworkRequest,
   GradeSubmissionRequest,
+  SubjectLevel,
+  CreateSubjectLevelRequest,
+  Group,
+  CreateGroupRequest,
+  GroupMembership,
 } from "@/types";
 import type { BranchMembership } from "@/types";
 import type { MembershipDetail } from "./branch";
@@ -1285,5 +1290,127 @@ export const schoolApi = {
       data
     );
     return response.data;
+  },
+
+  // ==================== SUBJECT LEVELS ====================
+
+  getSubjectLevels: async (branchId: string, subjectId: string): Promise<SubjectLevel[]> => {
+    const response = await apiClient.get<PaginatedResponse<SubjectLevel> | SubjectLevel[]>(
+      `/school/branches/${branchId}/subjects/${subjectId}/levels/`
+    );
+    return unwrapResults(response.data);
+  },
+
+  createSubjectLevel: async (
+    branchId: string,
+    subjectId: string,
+    data: CreateSubjectLevelRequest
+  ): Promise<SubjectLevel> => {
+    const response = await apiClient.post<SubjectLevel>(
+      `/school/branches/${branchId}/subjects/${subjectId}/levels/`,
+      data
+    );
+    return response.data;
+  },
+
+  updateSubjectLevel: async (
+    branchId: string,
+    subjectId: string,
+    levelId: string,
+    data: Partial<CreateSubjectLevelRequest>
+  ): Promise<SubjectLevel> => {
+    const response = await apiClient.patch<SubjectLevel>(
+      `/school/branches/${branchId}/subjects/${subjectId}/levels/${levelId}/`,
+      data
+    );
+    return response.data;
+  },
+
+  deleteSubjectLevel: async (
+    branchId: string,
+    subjectId: string,
+    levelId: string
+  ): Promise<void> => {
+    await apiClient.delete(
+      `/school/branches/${branchId}/subjects/${subjectId}/levels/${levelId}/`
+    );
+  },
+
+  // ==================== GROUPS ====================
+
+  getGroups: async (
+    branchId: string,
+    params?: { is_active?: boolean; search?: string }
+  ): Promise<Group[]> => {
+    const response = await apiClient.get<PaginatedResponse<Group> | Group[]>(
+      `/school/branches/${branchId}/groups/`,
+      { params }
+    );
+    return unwrapResults(response.data);
+  },
+
+  getGroup: async (branchId: string, groupId: string): Promise<Group> => {
+    const response = await apiClient.get<Group>(
+      `/school/branches/${branchId}/groups/${groupId}/`
+    );
+    return response.data;
+  },
+
+  createGroup: async (branchId: string, data: CreateGroupRequest): Promise<Group> => {
+    const response = await apiClient.post<Group>(
+      `/school/branches/${branchId}/groups/`,
+      data
+    );
+    return response.data;
+  },
+
+  updateGroup: async (
+    branchId: string,
+    groupId: string,
+    data: Partial<CreateGroupRequest>
+  ): Promise<Group> => {
+    const response = await apiClient.patch<Group>(
+      `/school/branches/${branchId}/groups/${groupId}/`,
+      data
+    );
+    return response.data;
+  },
+
+  deleteGroup: async (branchId: string, groupId: string): Promise<void> => {
+    await apiClient.delete(`/school/branches/${branchId}/groups/${groupId}/`);
+  },
+
+  // ==================== GROUP MEMBERS ====================
+
+  getGroupMembers: async (
+    branchId: string,
+    groupId: string
+  ): Promise<GroupMembership[]> => {
+    const response = await apiClient.get<PaginatedResponse<GroupMembership> | GroupMembership[]>(
+      `/school/branches/${branchId}/groups/${groupId}/members/`
+    );
+    return unwrapResults(response.data);
+  },
+
+  addGroupMember: async (
+    branchId: string,
+    groupId: string,
+    studentId: string
+  ): Promise<GroupMembership> => {
+    const response = await apiClient.post<GroupMembership>(
+      `/school/branches/${branchId}/groups/${groupId}/members/`,
+      { student: studentId }
+    );
+    return response.data;
+  },
+
+  removeGroupMember: async (
+    branchId: string,
+    groupId: string,
+    memberId: string
+  ): Promise<void> => {
+    await apiClient.delete(
+      `/school/branches/${branchId}/groups/${groupId}/members/${memberId}/`
+    );
   },
 };

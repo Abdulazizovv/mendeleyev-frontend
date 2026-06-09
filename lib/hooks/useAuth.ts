@@ -156,6 +156,21 @@ export const useAuth = () => {
   }, [setMeData, setLoading, storeLogout]);
 
   /**
+   * Check if user has a specific module-level permission.
+   * Super admins always pass. Legacy users (no permissions set) always pass.
+   */
+  const hasPermission = useCallback(
+    (module: string, action: string): boolean => {
+      if (memberships?.some((m) => m.role === "super_admin")) return true;
+      if (!currentBranch) return false;
+      const perms = currentBranch.permissions;
+      if (!perms || Object.keys(perms).length === 0) return true;
+      return perms[module]?.[action] ?? false;
+    },
+    [currentBranch, memberships]
+  );
+
+  /**
    * Check if user has specific role
    */
   const hasRole = useCallback(
@@ -215,6 +230,7 @@ export const useAuth = () => {
 
     // Helpers
     hasRole,
+    hasPermission,
     isSuperAdmin,
     isBranchAdmin,
     getCacheStatus,

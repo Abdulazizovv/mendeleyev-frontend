@@ -64,6 +64,8 @@ export interface StaffMember {
   termination_date?: string | null;
   balance: number; // Integer, so'm
   monthly_salary: number; // Integer, so'm
+  salary_type?: string; // "monthly", "hourly", "per_lesson", "percentage"
+  salary_percentage?: number; // 0-100
   is_active: boolean; // termination_date is null
 }
 
@@ -84,7 +86,8 @@ export interface StaffMemberDetail extends StaffMember {
 
   balance_status: BalanceStatus;
   salary: number;
-  salary_type: string; // "monthly", "hourly", "per_lesson"
+  salary_type: string; // "monthly", "hourly", "per_lesson", "percentage"
+  salary_percentage?: number; // 0-100, used when salary_type="percentage"
   hourly_rate?: number | null;
   per_lesson_rate?: number | null;
 
@@ -196,6 +199,7 @@ export interface CreateStaffRequest {
   // Salary fields
   monthly_salary?: number; // Default: 0
   salary_type?: string; // Default: "monthly"
+  salary_percentage?: number; // 0-100, used when salary_type="percentage"
   hire_date?: string; // ISO date
   employment_type?: EmploymentType; // Default: "full_time"
   
@@ -227,6 +231,7 @@ export interface UpdateStaffRequest {
   // Salary fields
   monthly_salary?: number;
   salary_type?: string;
+  salary_percentage?: number;
   employment_type?: EmploymentType;
 
   // Personal info

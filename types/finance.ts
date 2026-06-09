@@ -5,17 +5,25 @@
 
 // ==================== Finance Category ====================
 
+export type FinanceCategoryClientType = "student" | "employee" | "third_party" | "other";
+
+export const FINANCE_CATEGORY_CLIENT_TYPE_LABELS: Record<FinanceCategoryClientType, string> = {
+  student: "O'quvchi",
+  employee: "Xodim",
+  third_party: "Uchinchi shaxs",
+  other: "Boshqa",
+};
+
 export interface FinanceCategory {
   id: string;
   branch: string | null;
   branch_name: string;
   type: CategoryType;
-  code: string;
+  client_type: FinanceCategoryClientType;
+  client_type_display: string;
   name: string;
+  code?: string;
   description?: string;
-  parent: string | null;
-  parent_name: string | null;
-  subcategories_count: number;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -24,16 +32,15 @@ export interface FinanceCategory {
 export interface CreateFinanceCategoryRequest {
   name: string;
   type: CategoryType;
-  code: string;
+  client_type?: FinanceCategoryClientType;
   description?: string;
-  parent?: string | null;
   is_active?: boolean;
 }
 
 export interface UpdateFinanceCategoryRequest {
   name?: string;
+  client_type?: FinanceCategoryClientType;
   description?: string;
-  parent?: string | null;
   is_active?: boolean;
 }
 
@@ -106,6 +113,8 @@ export interface Transaction {
     avatar_url?: string;
   };
   transaction_date: string;
+  period_month?: string;
+  third_party_name?: string;
   metadata?: {
     balance_before?: number;
     balance_after?: number;
@@ -126,8 +135,11 @@ export interface CreateTransactionRequest {
   reference_number?: string;
   student_profile?: string;
   employee_membership?: string;
+  period_month?: string;
+  third_party_name?: string;
   transaction_date?: string;
   metadata?: Record<string, any>;
+  auto_approve?: boolean;
 }
 
 // ==================== Student Balance ====================
@@ -246,6 +258,8 @@ export interface Payment {
   period_start: string;
   period_end: string;
   transaction: string;
+  received_by?: string | null;
+  received_by_name?: string | null;
   notes?: string;
   created_at: string;
   updated_at: string;
@@ -515,6 +529,7 @@ export interface TransactionQueryParams extends BaseQueryParams {
   employee_membership?: string;
   date_from?: string;
   date_to?: string;
+  client_filter?: string;
 }
 
 export interface PaymentQueryParams extends BaseQueryParams {

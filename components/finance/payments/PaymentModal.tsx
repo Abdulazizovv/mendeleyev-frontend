@@ -11,7 +11,6 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -21,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { extractApiError } from "@/lib/error-messages";
 import {
@@ -29,18 +29,71 @@ import {
   CheckCircle,
   Loader2,
   ArrowRight,
+  User,
+  Calendar,
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
-import type { CreatePaymentRequest, PaymentMethod } from "@/types/finance";
+import type { CreatePaymentRequest, PaymentMethod, PeriodType } from "@/types/finance";
 
 const TODAY = new Date().toISOString().split("T")[0];
 
 function parseAmt(val: string): number {
   return parseInt(val.replace(/\D/g, ""), 10) || 0;
 }
-
 function displayAmt(n: number): string {
   return n ? n.toLocaleString("ru-RU") : "";
+}
+
+/** "2026-06-01" → { start: "2026-06-01", end: "2026-06-30" } */
+function monthBounds(yearMonth: string): { start: string; end: string } {
+  const [y, m] = yearMonth.split("-").map(Number);
+  const start = new Date(y, m - 1, 1);
+  const end = new Date(y, m, 0); // oxirgi kun
+  return {
+    start: start.toISOString().split("T")[0],
+    end: end.toISOString().split("T")[0],
+  };
+}
+
+/** period_start/end ni davr turiga qarab hisoblash */
+function periodBounds(
+  yearMonth: string,
+  period: PeriodType
+): { start: string; end: string } {
+  const [y, m] = yearMonth.split("-").map(Number);
+  const start = new Date(y, m - 1, 1);
+  let end: Date;
+  if (period === "quarterly") end = new Date(y, m + 2, 0);
+  else if (period === "semester") end = new Date(y, m + 5, 0);
+  else if (period === "yearly") end = new Date(y + 1, m - 1, 0);
+  else end = new Date(y, m, 0); // monthly default
+  return {
+    start: start.toISOString().split("T")[0],
+    end: end.toISOString().split("T")[0],
+  };
+}
+
+/** "2026-06-01" → "Iyun 2026" */
+const UZ_MONTHS = [
+  "Yanvar","Fevral","Mart","Aprel","May","Iyun",
+  "Iyul","Avgust","Sentabr","Oktabr","Noyabr","Dekabr",
+];
+function formatYearMonth(ym: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  return `${UZ_MONTHS[m - 1]} ${y}`;
+}
+
+/** Hozirgi oydan boshlab N ta oy ro'yxati */
+function buildMonthOptions(fromDate: string, count = 6): string[] {
+  const [y, m] = fromDate.split("-").map(Number);
+  const options: string[] = [];
+  for (let i = 0; i < count; i++) {
+    const d = new Date(y, m - 1 + i, 1);
+    options.push(
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+    );
+  }
+  return options;
 }
 
 interface Props {
@@ -50,9 +103,14 @@ interface Props {
 }
 
 export function PaymentModal({ open, onClose, onSuccess }: Props) {
-  const { currentBranch } = useAuth();
+  const { currentBranch, user } = useAuth();
   const branchId = currentBranch?.branch_id;
   const queryClient = useQueryClient();
+
+  const receivedByName =
+    user
+      ? `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim() || user.phone_number
+      : "";
 
   const [step, setStep] = useState<"student" | "form">("student");
   const [search, setSearch] = useState("");
@@ -62,7 +120,7 @@ export function PaymentModal({ open, onClose, onSuccess }: Props) {
   const [cashRegisterId, setCashRegisterId] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [discountId, setDiscountId] = useState("");
-  const [paymentDate, setPaymentDate] = useState(TODAY);
+  const [selectedMonth, setSelectedMonth] = useState(TODAY.slice(0, 7)); // "YYYY-MM"
   const [amountRaw, setAmountRaw] = useState("");
   const [isAmountEdited, setIsAmountEdited] = useState(false);
   const [notes, setNotes] = useState("");
@@ -76,7 +134,7 @@ export function PaymentModal({ open, onClose, onSuccess }: Props) {
     setAmountRaw("");
     setIsAmountEdited(false);
     setDiscountId("");
-    setPaymentDate(TODAY);
+    setSelectedMonth(TODAY.slice(0, 7));
     setNotes("");
   }, [open]);
 
@@ -126,6 +184,7 @@ export function PaymentModal({ open, onClose, onSuccess }: Props) {
     }
   }, [cashRegisters, cashRegisterId]);
 
+  // O'quvchi tanlanganda aktiv abonementdan avtomatik to'ldirish
   const lastFilledRef = useRef("");
   useEffect(() => {
     if (!selectedStudent) return;
@@ -135,14 +194,20 @@ export function PaymentModal({ open, onClose, onSuccess }: Props) {
     if (active) {
       setSubscriptionPlanId(String(active.subscription_plan.id));
       setDiscountId(active.discount ? String(active.discount.id) : "");
+      // Keyingi to'lov oyi — default qilib qo'yish
+      if (active.next_payment_date) {
+        setSelectedMonth(active.next_payment_date.slice(0, 7));
+      }
     } else {
       setSubscriptionPlanId("");
       setDiscountId("");
+      setSelectedMonth(TODAY.slice(0, 7));
     }
   }, [selectedStudent]);
 
   const selectedPlan = plans.find((p) => p.id === subscriptionPlanId);
   const planPrice = selectedPlan?.price ?? 0;
+  const period: PeriodType = (selectedPlan?.period as PeriodType) ?? "monthly";
   const baseAmount = isAmountEdited ? parseAmt(amountRaw) : planPrice;
 
   useEffect(() => {
@@ -162,12 +227,22 @@ export function PaymentModal({ open, onClose, onSuccess }: Props) {
   const bal = (selectedStudent as any)?.balance?.balance ?? 0;
   const balanceAfter = bal + finalAmount;
 
+  // Aktiv abonementning next_payment_date si yoki bugundan oy opsiyalari
+  const activeSubscription = (selectedStudent?.subscriptions as any[])?.find((s) => s.is_active);
+  const fromDate = activeSubscription?.next_payment_date
+    ? activeSubscription.next_payment_date.slice(0, 7)
+    : TODAY.slice(0, 7);
+  const monthOptions = buildMonthOptions(fromDate, 6);
+
+  const { start: periodStart, end: periodEnd } = periodBounds(selectedMonth, period);
+
   const mutation = useMutation({
     mutationFn: (data: CreatePaymentRequest) => financeApi.createPayment(data),
     onSuccess: () => {
       toast.success("To'lov muvaffaqiyatli saqlandi");
       queryClient.invalidateQueries({ queryKey: ["payments"] });
       queryClient.invalidateQueries({ queryKey: ["student-balances"] });
+      queryClient.invalidateQueries({ queryKey: ["student-payment-modal"] });
       queryClient.invalidateQueries({ queryKey: ["finance-statistics"] });
       onSuccess?.();
       onClose();
@@ -195,13 +270,6 @@ export function PaymentModal({ open, onClose, onSuccess }: Props) {
     if (!branchId) return toast.error("Filial topilmadi");
     if (finalAmount <= 0) return toast.error("Summa 0 dan katta bo'lishi kerak");
 
-    const period = selectedPlan?.period ?? "monthly";
-    const end = new Date(paymentDate);
-    if (period === "monthly") end.setMonth(end.getMonth() + 1);
-    else if (period === "quarterly") end.setMonth(end.getMonth() + 3);
-    else if (period === "yearly") end.setFullYear(end.getFullYear() + 1);
-    end.setDate(end.getDate() - 1);
-
     mutation.mutate({
       student_profile: selectedStudentId,
       branch: branchId,
@@ -210,9 +278,9 @@ export function PaymentModal({ open, onClose, onSuccess }: Props) {
       discount: discountId || undefined,
       payment_method: paymentMethod,
       period,
-      payment_date: paymentDate,
-      period_start: paymentDate,
-      period_end: end.toISOString().split("T")[0],
+      payment_date: TODAY,
+      period_start: periodStart,
+      period_end: periodEnd,
       cash_register: cashRegisterId,
       notes: notes || undefined,
     });
@@ -231,7 +299,7 @@ export function PaymentModal({ open, onClose, onSuccess }: Props) {
         side="right"
         className="w-full sm:max-w-md p-0 flex flex-col overflow-hidden"
       >
-        {/* Colored header */}
+        {/* Header */}
         <div className="bg-blue-600 px-5 pt-6 pb-5 shrink-0">
           <SheetHeader className="mb-3">
             <SheetTitle className="text-white/70 text-sm font-medium">
@@ -275,7 +343,7 @@ export function PaymentModal({ open, onClose, onSuccess }: Props) {
           )}
         </div>
 
-        {/* Step 1: Student search */}
+        {/* Step 1: O'quvchi qidirish */}
         {step === "student" && (
           <div className="flex-1 flex flex-col overflow-hidden px-5 py-4">
             <div className="relative mb-3">
@@ -335,10 +403,10 @@ export function PaymentModal({ open, onClose, onSuccess }: Props) {
           </div>
         )}
 
-        {/* Step 2: Payment form */}
+        {/* Step 2: To'lov formasi */}
         {step === "form" && (
           <>
-            {/* Balance preview */}
+            {/* Balans ko'rinishi */}
             <div className="mx-5 mt-4 rounded-xl bg-gray-50 border border-gray-100 px-4 py-3 shrink-0">
               <p className="text-xs text-gray-400 mb-1.5 font-medium">O&apos;quvchi balansi</p>
               <div className="flex items-center gap-2 text-sm font-semibold">
@@ -383,6 +451,28 @@ export function PaymentModal({ open, onClose, onSuccess }: Props) {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              {/* Qaysi oyga to'lov */}
+              <div className="space-y-1">
+                <Label className="text-xs text-gray-500 flex items-center gap-1">
+                  <Calendar className="w-3 h-3" /> Qaysi oyga to&apos;lov <span className="text-red-500">*</span>
+                </Label>
+                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {monthOptions.map((ym) => (
+                      <SelectItem key={ym} value={ym}>
+                        {formatYearMonth(ym)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-gray-400">
+                  Davr: {periodStart} — {periodEnd}
+                </p>
               </div>
 
               {/* Summa + Chegirma */}
@@ -476,15 +566,22 @@ export function PaymentModal({ open, onClose, onSuccess }: Props) {
                 </div>
               </div>
 
-              {/* Sana */}
-              <div className="space-y-1">
-                <Label className="text-xs text-gray-500">To&apos;lov sanasi</Label>
-                <Input
-                  type="date"
-                  value={paymentDate}
-                  onChange={(e) => setPaymentDate(e.target.value)}
-                  className="h-9 text-sm"
-                />
+              {/* Qabul qiluvchi (avtomatik) + To'lov sanasi */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs text-gray-500 flex items-center gap-1">
+                    <User className="w-3 h-3" /> Qabul qiluvchi
+                  </Label>
+                  <div className="h-9 px-3 rounded-md border border-gray-200 bg-gray-50 flex items-center text-sm text-gray-700 truncate">
+                    {receivedByName || "—"}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-gray-500">To&apos;lov sanasi</Label>
+                  <div className="h-9 px-3 rounded-md border border-gray-200 bg-gray-50 flex items-center text-sm text-gray-700">
+                    {TODAY}
+                  </div>
+                </div>
               </div>
 
               {/* Izoh */}
@@ -498,7 +595,7 @@ export function PaymentModal({ open, onClose, onSuccess }: Props) {
                 />
               </div>
 
-              {/* Summary */}
+              {/* Xulosa */}
               {finalAmount > 0 && (
                 <div className="bg-blue-50 rounded-xl px-4 py-3 text-sm space-y-1.5">
                   <div className="flex justify-between text-gray-600">
@@ -518,7 +615,7 @@ export function PaymentModal({ open, onClose, onSuccess }: Props) {
                 </div>
               )}
 
-              {/* Submit */}
+              {/* Saqlash */}
               <Button
                 type="submit"
                 disabled={!canSubmit}
