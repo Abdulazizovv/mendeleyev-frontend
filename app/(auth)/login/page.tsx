@@ -15,10 +15,11 @@ import { OTPInput } from "@/components/auth/OTPInput";
 import { useAuth } from "@/lib/hooks";
 import { authApi } from "@/lib/api";
 import { roleToPath } from "@/lib/utils/roleMapping";
+import { useAuthStore } from "@/lib/stores";
 import { parseBackendError, SUCCESS_MESSAGES } from "@/lib/error-messages";
 import { translateBranchType, translateRole } from "@/lib/translations";
 import { toast } from "sonner";
-import type { AuthState } from "@/types";
+import type { AuthState, BranchType } from "@/types";
 import { 
   Loader2, 
   ArrowLeft, 
@@ -82,6 +83,23 @@ export default function LoginPage() {
     resolver: zodResolver(loginSchema),
     defaultValues: { phone_number: "", password: "" },
   });
+
+  // Already authenticated — redirect to dashboard
+  React.useEffect(() => {
+    const check = () => {
+      const { isAuthenticated, currentBranch } = useAuthStore.getState();
+      if (isAuthenticated && currentBranch) {
+        router.replace(
+          `/${roleToPath(currentBranch.role, currentBranch.branch_type as BranchType)}`
+        );
+      }
+    };
+    if (useAuthStore.persist.hasHydrated()) {
+      check();
+    } else {
+      const unsub = useAuthStore.persist.onFinishHydration(() => { check(); unsub(); });
+    }
+  }, [router]);
 
   React.useEffect(() => {
     if (otpCooldown > 0) {

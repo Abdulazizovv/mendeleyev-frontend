@@ -25,12 +25,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Plus, Edit, Trash2, Wallet, MapPin,
+  Plus, Edit, Wallet, MapPin,
   TrendingUp, TrendingDown, ArrowRightLeft,
   Banknote, CreditCard, RefreshCw,
   MoreHorizontal, Star, ArrowUpRight, ArrowDownRight,
   Building2, SlidersHorizontal, ChevronLeft, ChevronRight,
-  MessageSquare, ChevronDown,
+  MessageSquare, ChevronDown, Archive, ArchiveRestore,
 } from "lucide-react";
 import { toast } from "sonner";
 import { extractApiError } from "@/lib/error-messages";
@@ -49,7 +49,6 @@ const SUMMARY_PAGE_SIZE = 500;
 
 const UZ_MONTHS_SHORT = ["Yan","Fev","Mar","Apr","May","Iyn","Iyl","Avg","Sen","Okt","Noy","Dek"];
 
-// arrow for type column: ↓ = money coming IN (income), ↑ = money going OUT (expense)
 const TX_ARROW: Record<string, { arrow: string; cls: string }> = {
   income:   { arrow: "↓", cls: "text-emerald-600 font-bold" },
   payment:  { arrow: "↓", cls: "text-emerald-600 font-bold" },
@@ -101,6 +100,7 @@ export default function CashRegistersPage() {
 
   const [selectedRegister, setSelectedRegister] = useState<CashRegister | null>(null);
   const [primaryId, setPrimaryId] = useState<string>("");
+  const [showArchived, setShowArchived] = useState(false);
   const [txModal, setTxModal] = useState<FlowType | null>(null);
   const [registerDialog, setRegisterDialog] = useState<"create" | "edit" | null>(null);
   const [editingRegister, setEditingRegister] = useState<CashRegister | null>(null);
@@ -122,16 +122,19 @@ export default function CashRegistersPage() {
   }, [branchId]);
 
   const { data: registersData, isLoading: registersLoading } = useQuery({
-    queryKey: ["cash-registers", branchId],
-    queryFn: () => financeApi.getCashRegisters({ branch_id: branchId, ordering: "name" }),
+    queryKey: ["cash-registers", branchId, showArchived],
+    queryFn: () => financeApi.getCashRegisters({ branch_id: branchId, ordering: "name", is_active: !showArchived }),
     enabled: !!branchId,
   });
   const registers = registersData?.results ?? [];
 
   useEffect(() => {
+    setSelectedRegister(null);
+  }, [showArchived]);
+
+  useEffect(() => {
     if (registers.length === 0 || selectedRegister) return;
-    const r = registers.find((x) => x.id === primaryId)
-      ?? registers.find((x) => x.is_active) ?? registers[0];
+    const r = registers.find((x) => x.id === primaryId) ?? registers[0];
     setSelectedRegister(r);
   }, [registers, primaryId]);
 
@@ -197,16 +200,22 @@ export default function CashRegistersPage() {
     onSuccess: (updated) => { queryClient.invalidateQueries({ queryKey: ["cash-registers"] }); toast.success("Kassa yangilandi"); setRegisterDialog(null); if (selectedRegister?.id === updated.id) setSelectedRegister(updated); },
     onError: (e: unknown) => toast.error(extractApiError(e)),
   });
-  const deleteMutation = useMutation({
-    mutationFn: financeApi.deleteCashRegister,
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["cash-registers"] }); toast.success("Kassa o'chirildi"); setSelectedRegister(null); },
+  const archiveMutation = useMutation({
+    mutationFn: (id: string) => financeApi.updateCashRegister(id, { is_active: false }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["cash-registers"] }); toast.success("Kassa arxivlandi"); setSelectedRegister(null); },
+    onError: (e: unknown) => toast.error(extractApiError(e)),
+  });
+  const restoreMutation = useMutation({
+    mutationFn: (id: string) => financeApi.updateCashRegister(id, { is_active: true }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["cash-registers"] }); toast.success("Kassa tiklandi"); setSelectedRegister(null); },
     onError: (e: unknown) => toast.error(extractApiError(e)),
   });
 
   function markPrimary(id: string) { localStorage.setItem(primaryKey(branchId), id); setPrimaryId(id); toast.success("Asosiy kassa belgilandi"); }
   function openCreate() { setForm({ name: "", description: "", location: "", is_active: true }); setEditingRegister(null); setRegisterDialog("create"); }
   function openEdit(r: CashRegister) { setForm({ name: r.name, description: r.description ?? "", location: r.location ?? "", is_active: r.is_active }); setEditingRegister(r); setRegisterDialog("edit"); }
-  function handleDelete(r: CashRegister) { if (!confirm(`"${r.name}" kassasini o'chirishni tasdiqlaysizmi?`)) return; deleteMutation.mutate(r.id); }
+  function handleArchive(r: CashRegister) { if (!confirm(`"${r.name}" kassasini arxivlashni tasdiqlaysizmi?`)) return; archiveMutation.mutate(r.id); }
+  function handleRestore(r: CashRegister) { restoreMutation.mutate(r.id); }
   function handleSave() {
     if (!form.name.trim()) return;
     if (registerDialog === "edit" && editingRegister) updateMutation.mutate({ id: editingRegister.id, data: { ...form, branch: branchId } });
@@ -227,16 +236,32 @@ export default function CashRegistersPage() {
         <div className="px-4 pt-4 pb-3 border-b border-slate-100">
           <div className="flex items-center justify-between mb-0.5">
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-slate-900 flex items-center justify-center">
+              <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center">
                 <Building2 className="w-3.5 h-3.5 text-white" />
               </div>
-              <span className="text-sm font-semibold text-slate-800">Kassalar</span>
+              <span className="text-sm font-semibold text-slate-800">
+                {showArchived ? "Arxiv kassalar" : "Kassalar"}
+              </span>
             </div>
-            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1 text-slate-500 hover:text-slate-900" onClick={openCreate}>
-              <Plus className="w-3.5 h-3.5" />Yangi
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                size="sm" variant="ghost"
+                className={cn("h-7 px-2 text-xs gap-1", showArchived ? "text-blue-600 bg-blue-50 hover:bg-blue-100" : "text-slate-500 hover:text-slate-900")}
+                onClick={() => setShowArchived((v) => !v)}
+              >
+                <Archive className="w-3.5 h-3.5" />
+                {showArchived ? "Faol" : "Arxiv"}
+              </Button>
+              {!showArchived && (
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1 text-slate-500 hover:text-slate-900" onClick={openCreate}>
+                  <Plus className="w-3.5 h-3.5" />Yangi
+                </Button>
+              )}
+            </div>
           </div>
-          {!registersLoading && <p className="text-xs text-slate-400 ml-9">{registers.length} ta kassa</p>}
+          {!registersLoading && (
+            <p className="text-xs text-slate-400 ml-9">{registers.length} ta kassa</p>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto py-2 px-2 space-y-1.5">
@@ -247,10 +272,14 @@ export default function CashRegistersPage() {
               <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center mb-3">
                 <Wallet className="w-5 h-5 text-slate-300" />
               </div>
-              <p className="text-xs font-medium text-slate-500 mb-3">Kassalar yo'q</p>
-              <Button size="sm" variant="outline" className="text-xs h-7" onClick={openCreate}>
-                <Plus className="w-3 h-3 mr-1" />Kassa qo'shish
-              </Button>
+              <p className="text-xs font-medium text-slate-500 mb-3">
+                {showArchived ? "Arxiv kassalar yo'q" : "Kassalar yo'q"}
+              </p>
+              {!showArchived && (
+                <Button size="sm" variant="outline" className="text-xs h-7" onClick={openCreate}>
+                  <Plus className="w-3 h-3 mr-1" />Kassa qo'shish
+                </Button>
+              )}
             </div>
           ) : (
             registers.map((r) => (
@@ -258,7 +287,10 @@ export default function CashRegistersPage() {
                 key={r.id} register={r}
                 selected={selectedRegister?.id === r.id} primary={r.id === primaryId}
                 onSelect={() => setSelectedRegister(r)}
-                onEdit={() => openEdit(r)} onDelete={() => handleDelete(r)} onMarkPrimary={() => markPrimary(r.id)}
+                onEdit={() => openEdit(r)}
+                onArchive={() => handleArchive(r)}
+                onRestore={() => handleRestore(r)}
+                onMarkPrimary={() => markPrimary(r.id)}
               />
             ))
           )}
@@ -290,6 +322,11 @@ export default function CashRegistersPage() {
                         <MapPin className="w-3 h-3" />{selectedRegister.location}
                       </span>
                     )}
+                    {!selectedRegister.is_active && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200 font-medium">
+                        Arxiv
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-xl font-bold text-slate-900 tabular-nums">
@@ -307,17 +344,19 @@ export default function CashRegistersPage() {
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <Button onClick={() => setTxModal("income")} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 h-8 text-sm">
-                    <ArrowUpRight className="w-3.5 h-3.5" />Kirim
-                  </Button>
-                  <Button onClick={() => setTxModal("expense")} className="bg-rose-600 hover:bg-rose-700 text-white gap-1.5 h-8 text-sm">
-                    <ArrowDownRight className="w-3.5 h-3.5" />Chiqim
-                  </Button>
-                  <Button onClick={() => setTxModal("transfer")} variant="outline" className="border-slate-200 gap-1.5 h-8 text-sm text-slate-600">
-                    <ArrowRightLeft className="w-3.5 h-3.5" />Transfer
-                  </Button>
-                </div>
+                {selectedRegister.is_active && (
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button onClick={() => setTxModal("income")} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 h-8 text-sm">
+                      <ArrowUpRight className="w-3.5 h-3.5" />Kirim
+                    </Button>
+                    <Button onClick={() => setTxModal("expense")} className="bg-rose-600 hover:bg-rose-700 text-white gap-1.5 h-8 text-sm">
+                      <ArrowDownRight className="w-3.5 h-3.5" />Chiqim
+                    </Button>
+                    <Button onClick={() => setTxModal("transfer")} variant="outline" className="border-slate-200 gap-1.5 h-8 text-sm text-slate-600">
+                      <ArrowRightLeft className="w-3.5 h-3.5" />Transfer
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -431,7 +470,7 @@ export default function CashRegistersPage() {
                       ) : (
                         <button key={p} onClick={() => setServerPage(p as number)}
                           className={cn("w-7 h-7 rounded-lg text-xs font-medium transition-colors",
-                            serverPage === p ? "bg-slate-900 text-white" : "border border-slate-200 text-slate-500 hover:bg-slate-50")}>
+                            serverPage === p ? "bg-blue-600 text-white" : "border border-slate-200 text-slate-500 hover:bg-slate-50")}>
                           {p}
                         </button>
                       )
@@ -475,10 +514,6 @@ export default function CashRegistersPage() {
               <Label>Tavsif</Label>
               <Textarea placeholder="Qisqacha ma'lumot..." value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} className="resize-none" />
             </div>
-            <label className="flex items-center gap-2.5 cursor-pointer">
-              <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} className="w-4 h-4 rounded" />
-              <span className="text-sm text-slate-700">Faol kassa</span>
-            </label>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRegisterDialog(null)}>Bekor qilish</Button>
@@ -525,7 +560,7 @@ function FilterBar({
                 className={cn(
                   "px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all",
                   activePreset === p
-                    ? "bg-slate-900 text-white"
+                    ? "bg-blue-600 text-white"
                     : "text-slate-500 hover:text-slate-700 hover:bg-slate-100"
                 )}
               >
@@ -543,7 +578,7 @@ function FilterBar({
             onChange={(e) => onDateFrom(e.target.value)}
             className={cn(
               "h-7 text-xs border rounded-lg px-2 text-slate-700 bg-white focus:outline-none focus:ring-1 transition-colors cursor-pointer",
-              activePreset ? "border-slate-200" : "border-slate-400 ring-1 ring-slate-300"
+              activePreset ? "border-slate-200" : "border-blue-400 ring-1 ring-blue-200"
             )}
           />
           <span className="text-slate-300 text-xs select-none">—</span>
@@ -553,7 +588,7 @@ function FilterBar({
             onChange={(e) => onDateTo(e.target.value)}
             className={cn(
               "h-7 text-xs border rounded-lg px-2 text-slate-700 bg-white focus:outline-none focus:ring-1 transition-colors cursor-pointer",
-              activePreset ? "border-slate-200" : "border-slate-400 ring-1 ring-slate-300"
+              activePreset ? "border-slate-200" : "border-blue-400 ring-1 ring-blue-200"
             )}
           />
         </div>
@@ -563,7 +598,7 @@ function FilterBar({
           {(["all", "income", "expense", "transfer"] as TxTypeFilter[]).map((t) => {
             const labels: Record<TxTypeFilter, string> = { all: "Hammasi", income: "↓ Kirim", expense: "↑ Chiqim", transfer: "Transfer" };
             const activeColors: Record<TxTypeFilter, string> = {
-              all: "bg-slate-800 text-white",
+              all: "bg-blue-600 text-white",
               income: "bg-emerald-600 text-white",
               expense: "bg-rose-600 text-white",
               transfer: "bg-blue-600 text-white",
@@ -594,7 +629,7 @@ function FilterBar({
                 onClick={() => onMethod(m)}
                 className={cn(
                   "flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all",
-                  methodFilter === m ? "bg-slate-800 text-white" : "text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+                  methodFilter === m ? "bg-blue-600 text-white" : "text-slate-500 hover:text-slate-700 hover:bg-slate-100"
                 )}
               >
                 {MIcon && <MIcon className="w-3 h-3" />}
@@ -619,7 +654,7 @@ function FilterBar({
                 onClick={() => onClient(c)}
                 className={cn(
                   "px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all",
-                  clientFilter === c ? "bg-slate-800 text-white" : "text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+                  clientFilter === c ? "bg-blue-600 text-white" : "text-slate-500 hover:text-slate-700 hover:bg-slate-100"
                 )}
               >
                 {labels[c]}
@@ -645,34 +680,46 @@ function FilterBar({
 
 // ── Register Card ─────────────────────────────────────────────────────────────
 
-function RegisterCard({ register, selected, primary, onSelect, onEdit, onDelete, onMarkPrimary }: {
+function RegisterCard({ register, selected, primary, onSelect, onEdit, onArchive, onRestore, onMarkPrimary }: {
   register: CashRegister; selected: boolean; primary: boolean;
-  onSelect: () => void; onEdit: () => void; onDelete: () => void; onMarkPrimary: () => void;
+  onSelect: () => void; onEdit: () => void;
+  onArchive: () => void; onRestore: () => void;
+  onMarkPrimary: () => void;
 }) {
   return (
     <div
       onClick={onSelect}
       className={cn(
         "relative rounded-xl px-3.5 py-3 cursor-pointer transition-all duration-150 border group",
-        selected ? "bg-slate-900 border-slate-900 shadow-md shadow-slate-900/20" : "bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm"
+        selected
+          ? "bg-blue-600 border-blue-600 shadow-md shadow-blue-600/20"
+          : "bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm"
       )}
     >
       <div className="flex items-start justify-between gap-1.5 mb-1.5">
         <div className="flex items-center gap-2 min-w-0">
           {primary
-            ? <Star className={cn("w-3.5 h-3.5 shrink-0 fill-current", selected ? "text-amber-400" : "text-amber-500")} />
-            : <span className={cn("w-2 h-2 rounded-full shrink-0 mt-0.5", register.is_active ? (selected ? "bg-emerald-400" : "bg-emerald-500") : (selected ? "bg-slate-500" : "bg-slate-300"))} />
+            ? <Star className={cn("w-3.5 h-3.5 shrink-0 fill-current", selected ? "text-yellow-300" : "text-amber-500")} />
+            : <span className={cn(
+                "w-2 h-2 rounded-full shrink-0 mt-0.5",
+                register.is_active
+                  ? (selected ? "bg-white/70" : "bg-emerald-500")
+                  : (selected ? "bg-white/40" : "bg-slate-300")
+              )} />
           }
           <p className={cn("text-sm font-semibold truncate", selected ? "text-white" : "text-slate-800")}>{register.name}</p>
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-            <button className={cn("w-6 h-6 rounded-md flex items-center justify-center transition-colors shrink-0 opacity-0 group-hover:opacity-100", selected ? "text-slate-400 hover:text-white hover:bg-white/10" : "text-slate-400 hover:text-slate-700 hover:bg-slate-100")}>
+            <button className={cn(
+              "w-6 h-6 rounded-md flex items-center justify-center transition-colors shrink-0 opacity-0 group-hover:opacity-100",
+              selected ? "text-white/60 hover:text-white hover:bg-white/10" : "text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+            )}>
               <MoreHorizontal className="w-3.5 h-3.5" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48 text-sm">
-            {!primary && (
+            {register.is_active && !primary && (
               <>
                 <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onMarkPrimary(); }}>
                   <Star className="w-3.5 h-3.5 mr-2 text-amber-500" />Asosiy qilib belgilash
@@ -680,22 +727,40 @@ function RegisterCard({ register, selected, primary, onSelect, onEdit, onDelete,
                 <DropdownMenuSeparator />
               </>
             )}
-            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(); }}><Edit className="w-3.5 h-3.5 mr-2" />Tahrirlash</DropdownMenuItem>
-            <DropdownMenuItem className="text-rose-600 focus:text-rose-600 focus:bg-rose-50" onClick={(e) => { e.stopPropagation(); onDelete(); }}><Trash2 className="w-3.5 h-3.5 mr-2" />O'chirish</DropdownMenuItem>
+            {register.is_active && (
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(); }}>
+                <Edit className="w-3.5 h-3.5 mr-2" />Tahrirlash
+              </DropdownMenuItem>
+            )}
+            {register.is_active ? (
+              <DropdownMenuItem
+                className="text-amber-600 focus:text-amber-600 focus:bg-amber-50"
+                onClick={(e) => { e.stopPropagation(); onArchive(); }}
+              >
+                <Archive className="w-3.5 h-3.5 mr-2" />Arxivlash
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem
+                className="text-blue-600 focus:text-blue-600 focus:bg-blue-50"
+                onClick={(e) => { e.stopPropagation(); onRestore(); }}
+              >
+                <ArchiveRestore className="w-3.5 h-3.5 mr-2" />Tiklash
+              </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
       {register.location && (
-        <p className={cn("text-xs flex items-center gap-1 mb-2 truncate", selected ? "text-slate-500" : "text-slate-400")}>
+        <p className={cn("text-xs flex items-center gap-1 mb-2 truncate", selected ? "text-blue-200" : "text-slate-400")}>
           <MapPin className="w-3 h-3 shrink-0" />{register.location}
         </p>
       )}
-      <div className={cn("pt-2 border-t", selected ? "border-slate-700" : "border-slate-100")}>
+      <div className={cn("pt-2 border-t", selected ? "border-blue-500" : "border-slate-100")}>
         <p className={cn("text-base font-bold tabular-nums", selected ? "text-white" : "text-slate-900")}>{formatCurrency(register.balance)}</p>
         <div className="flex items-center justify-between mt-0.5">
-          <p className={cn("text-xs", selected ? "text-slate-500" : "text-slate-400")}>Umumiy balans</p>
+          <p className={cn("text-xs", selected ? "text-blue-200" : "text-slate-400")}>Umumiy balans</p>
           {primary && (
-            <span className={cn("text-xs px-1.5 py-0.5 rounded font-medium", selected ? "bg-amber-400/20 text-amber-300" : "bg-amber-50 text-amber-600")}>Asosiy</span>
+            <span className={cn("text-xs px-1.5 py-0.5 rounded font-medium", selected ? "bg-white/20 text-white" : "bg-amber-50 text-amber-600")}>Asosiy</span>
           )}
         </div>
       </div>
@@ -703,7 +768,7 @@ function RegisterCard({ register, selected, primary, onSelect, onEdit, onDelete,
   );
 }
 
-// ── Transaction Table Row — minimal ──────────────────────────────────────────
+// ── Transaction Table Row ─────────────────────────────────────────────────────
 
 function TransactionTableRow({ tx, isEven }: { tx: Transaction; isEven: boolean }) {
   const [expanded, setExpanded] = useState(false);
@@ -727,39 +792,28 @@ function TransactionTableRow({ tx, isEven }: { tx: Transaction; isEven: boolean 
           hasDescription ? "cursor-pointer hover:bg-blue-50/30" : "hover:bg-blue-50/20",
         )}
       >
-        {/* Sana */}
         <td className="py-3 px-4 whitespace-nowrap">
           <p className="text-sm font-medium text-slate-700">{date}</p>
           <p className="text-xs text-slate-400">{time}</p>
         </td>
-
-        {/* Tur — arrow + text */}
         <td className="py-3 px-4 whitespace-nowrap">
           <div className="flex items-center gap-1.5">
             <span className={cn("text-base leading-none", txArrow.cls)}>{txArrow.arrow}</span>
             <span className="text-sm text-slate-600">{label}</span>
           </div>
         </td>
-
-        {/* Kategoriya */}
         <td className="py-3 px-4 max-w-[160px]">
           <p className="text-sm text-slate-700 truncate">{tx.category_name ?? "—"}</p>
           {tx.period_month && <p className="text-xs text-slate-400">{tx.period_month}</p>}
         </td>
-
-        {/* Mijoz */}
         <td className="py-3 px-4 max-w-[160px]">
           <p className="text-sm text-slate-600 truncate">{whoLabel}</p>
         </td>
-
-        {/* Usul — plain text */}
         <td className="py-3 px-4 whitespace-nowrap">
           <span className="text-sm text-slate-500">
             {tx.payment_method === "card" ? "Plastik" : "Naqd"}
           </span>
         </td>
-
-        {/* Summa — only amount has color */}
         <td className="py-3 px-4 text-right whitespace-nowrap">
           <p className={cn(
             "text-sm font-semibold tabular-nums",
@@ -769,8 +823,6 @@ function TransactionTableRow({ tx, isEven }: { tx: Transaction; isEven: boolean 
             {isIncome ? "+" : isExpense ? "−" : ""}{formatCurrency(tx.amount)}
           </p>
         </td>
-
-        {/* Holat — dot + text + note indicator */}
         <td className="py-3 px-4 whitespace-nowrap">
           <div className="flex items-center justify-end gap-2">
             {hasDescription && (
@@ -789,7 +841,6 @@ function TransactionTableRow({ tx, isEven }: { tx: Transaction; isEven: boolean 
         </td>
       </tr>
 
-      {/* Description expand row */}
       {expanded && hasDescription && (
         <tr className={cn("border-b border-slate-200", isEven ? "bg-slate-50" : "bg-slate-100/50")}>
           <td colSpan={7} className="px-4 pb-3 pt-1">

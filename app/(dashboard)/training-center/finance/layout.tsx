@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Receipt, CreditCard, Users,
-  Building2, Package, BarChart3, BadgePercent, Settings2, ChevronDown,
+  Building2, Package, BarChart3, Settings2, ChevronDown,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -25,9 +25,8 @@ const operations = [
 
 const settingsItems = [
   { label: "Kassalar", href: `${BASE}/cash-registers`, icon: Building2 },
-  { label: "Abonement tariflari", href: `${BASE}/subscription-plans`, icon: Package },
+  { label: "Abonementlar & Chegirmalar", href: `${BASE}/subscription-plans`, icon: Package },
   { label: "Kategoriyalar", href: `${BASE}/categories`, icon: BarChart3 },
-  { label: "Chegirmalar", href: `${BASE}/discounts`, icon: BadgePercent },
 ];
 
 function isActive(pathname: string, href: string, exact?: boolean): boolean {

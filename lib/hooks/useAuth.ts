@@ -1,7 +1,9 @@
 import { useAuthStore } from "@/lib/stores";
 import { authApi } from "@/lib/api";
+import { roleToPath } from "@/lib/utils/roleMapping";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import type { BranchType } from "@/types/auth";
 import type { LoginRequest, BranchSwitchRequest } from "@/types";
 import { 
   getCache, 
@@ -23,7 +25,7 @@ export const useAuth = () => {
     currentBranch,
     memberships,
     isAuthenticated,
-    isLoading,
+    isLoading: storeIsLoading,
     setTokens,
     setUser,
     setCurrentBranch,
@@ -33,23 +35,15 @@ export const useAuth = () => {
     setLoading,
   } = useAuthStore();
 
-  // Handle hydration from localStorage
+  // Wait for Zustand persist to rehydrate from localStorage
   useEffect(() => {
-    const unsubscribe = useAuthStore.persist.onFinishHydration(() => {
-      setHydrated(true);
-      setLoading(false);
-    });
-    
-    // If already hydrated, set immediately
+    // Subscribe first to avoid race condition, then check synchronously
+    const unsub = useAuthStore.persist.onFinishHydration(() => setHydrated(true));
     if (useAuthStore.persist.hasHydrated()) {
       setHydrated(true);
-      setLoading(false);
     }
-
-    return () => {
-      unsubscribe();
-    };
-  }, [setLoading]);
+    return unsub;
+  }, []);
 
   /**
    * Login function
@@ -68,6 +62,13 @@ export const useAuth = () => {
           const meData = await authApi.getMe();
           setCache(CACHE_KEYS.USER_DATA, meData, CACHE_EXPIRY.USER_PROFILE);
           setMeData(meData);
+
+          // Set routing cookie so middleware can redirect / without JS
+          const branch = meData.current_branch;
+          if (branch && typeof document !== "undefined") {
+            const path = `/${roleToPath(branch.role, branch.branch_type as BranchType)}`;
+            document.cookie = `auth-role-path=${path}; path=/; max-age=2592000; SameSite=Lax`;
+          }
 
           return { success: true, data: response };
         } else {
@@ -115,8 +116,14 @@ export const useAuth = () => {
         
         // Save to cache
         setCache(CACHE_KEYS.USER_DATA, meData, CACHE_EXPIRY.USER_PROFILE);
-        
         setMeData(meData);
+
+        // Update routing cookie for the new branch
+        const branch = meData.current_branch;
+        if (branch && typeof document !== "undefined") {
+          const path = `/${roleToPath(branch.role, branch.branch_type as BranchType)}`;
+          document.cookie = `auth-role-path=${path}; path=/; max-age=2592000; SameSite=Lax`;
+        }
 
         return { success: true };
       } catch (error) {
@@ -161,9 +168,13 @@ export const useAuth = () => {
    */
   const hasPermission = useCallback(
     (module: string, action: string): boolean => {
+      // Super admin: doim ruxsat
       if (memberships?.some((m) => m.role === "super_admin")) return true;
       if (!currentBranch) return false;
+      // Branch admin: doim ruxsat
+      if (currentBranch.role === "branch_admin") return true;
       const perms = currentBranch.permissions;
+      // Eski foydalanuvchilar (permissions yo'q): ruxsat beriladi
       if (!perms || Object.keys(perms).length === 0) return true;
       return perms[module]?.[action] ?? false;
     },
@@ -219,7 +230,7 @@ export const useAuth = () => {
     currentBranch,
     memberships,
     isAuthenticated,
-    isLoading,
+    isLoading: !hydrated || storeIsLoading,
 
     // Actions
     login,

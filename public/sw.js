@@ -1,11 +1,10 @@
 // Service Worker
-const CACHE_NAME = 'mendeleyev-v1';
-const STATIC_CACHE = 'mendeleyev-static-v1';
-const DYNAMIC_CACHE = 'mendeleyev-dynamic-v1';
+const CACHE_NAME = 'mendeleyev-v3';
+const STATIC_CACHE = 'mendeleyev-static-v3';
+const DYNAMIC_CACHE = 'mendeleyev-dynamic-v3';
 
-// Static files to cache
+// Only cache true static assets — NOT HTML pages
 const STATIC_FILES = [
-  '/',
   '/manifest.json',
   '/favicon.ico',
   '/android-chrome-192x192.png',
@@ -14,19 +13,16 @@ const STATIC_FILES = [
 
 // Install event
 self.addEventListener('install', (event) => {
-  console.log('[SW] Installing Service Worker...');
   event.waitUntil(
     caches.open(STATIC_CACHE).then((cache) => {
-      console.log('[SW] Caching static files');
       return cache.addAll(STATIC_FILES);
     })
   );
   self.skipWaiting();
 });
 
-// Activate event
+// Activate event — clean up all old caches
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating Service Worker...');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
@@ -39,7 +35,7 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch event - Network first, falling back to cache
+// Fetch event
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
@@ -49,13 +45,20 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // API requests - network only
+  // API requests — network only, never cache
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(fetch(request));
     return;
   }
 
-  // Static files - cache first
+  // HTML navigation requests (pages) — network first, NO cache fallback
+  // This ensures users always get fresh page content
+  if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
+    event.respondWith(fetch(request));
+    return;
+  }
+
+  // Static assets (manifest, icons) — cache first
   if (STATIC_FILES.includes(url.pathname)) {
     event.respondWith(
       caches.match(request).then((response) => {
@@ -65,22 +68,17 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Other requests - network first, cache fallback
+  // JS/CSS/font bundles — network first, cache as fallback
   event.respondWith(
     fetch(request)
       .then((response) => {
-        // Clone the response
         const responseClone = response.clone();
-
-        // Cache the response
         caches.open(DYNAMIC_CACHE).then((cache) => {
           cache.put(request, responseClone);
         });
-
         return response;
       })
       .catch(() => {
-        // If network fails, try cache
         return caches.match(request);
       })
   );

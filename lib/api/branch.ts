@@ -52,9 +52,11 @@ export interface BalanceUpdateRequest {
  */
 export interface RoleRequest {
   name: string;
-  permissions: Record<string, string[]>;
+  permissions: PermissionsData;
   description: string;
   is_active: boolean;
+  salary_range_min?: number;
+  salary_range_max?: number;
 }
 
 /**
@@ -79,6 +81,50 @@ export interface BranchStatistics {
     id: string;
     name: string;
   };
+}
+
+// ── Permission Types ──────────────────────────────────────────────────────
+export type PermissionsData = Record<string, Record<string, boolean>>;
+
+export interface PermissionModuleInfo {
+  label: string;
+  actions: string[];
+}
+
+export interface PermissionGroup {
+  id: string;
+  name: string;
+  description: string;
+  permissions: PermissionsData;
+  member_count: number;
+  created_at?: string;
+}
+
+export interface StaffPermissionItem {
+  membership_id: string;
+  user_id: string;
+  full_name: string;
+  phone_number: string;
+  role: string;
+  title: string;
+  permissions: PermissionsData;
+  permission_group_id: string | null;
+  permission_group_name: string | null;
+}
+
+export interface BranchPermissionsResponse {
+  staff: StaffPermissionItem[];
+  groups: PermissionGroup[];
+  available_modules: Record<string, PermissionModuleInfo>;
+}
+
+export interface MembershipPermissionsResponse {
+  membership_id: string;
+  role: string;
+  permissions: PermissionsData;
+  permission_group_id: string | null;
+  permission_group_name: string | null;
+  available_modules?: Record<string, string[]>;
 }
 
 /**
@@ -254,5 +300,106 @@ export const branchApi = {
       data
     );
     return response.data;
+  },
+
+  // ==================== PERMISSIONS ====================
+
+  /**
+   * Filial barcha xodimlarining ruxsatlarini olish (permissions sahifasi uchun)
+   */
+  getBranchPermissions: async (branchId: string): Promise<BranchPermissionsResponse> => {
+    const response = await apiClient.get<BranchPermissionsResponse>(
+      `/branches/${branchId}/permissions/`
+    );
+    return response.data;
+  },
+
+  /**
+   * Bitta xodim ruxsatlarini olish
+   */
+  getMembershipPermissions: async (
+    branchId: string,
+    membershipId: string
+  ): Promise<MembershipPermissionsResponse> => {
+    const response = await apiClient.get<MembershipPermissionsResponse>(
+      `/branches/${branchId}/memberships/${membershipId}/permissions/`
+    );
+    return response.data;
+  },
+
+  /**
+   * Bitta xodim ruxsatlarini yangilash (shaxsiy, guruhni tozalaydi)
+   */
+  updateMembershipPermissions: async (
+    branchId: string,
+    membershipId: string,
+    permissions: PermissionsData
+  ): Promise<MembershipPermissionsResponse> => {
+    const response = await apiClient.put<MembershipPermissionsResponse>(
+      `/branches/${branchId}/memberships/${membershipId}/permissions/`,
+      { permissions }
+    );
+    return response.data;
+  },
+
+  /**
+   * Xodimga guruh ruxsatlarini qo'llash
+   */
+  applyPermissionGroup: async (
+    branchId: string,
+    membershipId: string,
+    groupId: string | null
+  ): Promise<MembershipPermissionsResponse> => {
+    const response = await apiClient.post<MembershipPermissionsResponse>(
+      `/branches/${branchId}/memberships/${membershipId}/apply-group/`,
+      { group_id: groupId }
+    );
+    return response.data;
+  },
+
+  /**
+   * Ruxsatlar guruhlarini olish
+   */
+  getPermissionGroups: async (branchId: string): Promise<PermissionGroup[]> => {
+    const response = await apiClient.get<PermissionGroup[]>(
+      `/branches/${branchId}/permission-groups/`
+    );
+    return response.data;
+  },
+
+  /**
+   * Yangi ruxsatlar guruhi yaratish
+   */
+  createPermissionGroup: async (
+    branchId: string,
+    data: { name: string; description: string; permissions: PermissionsData }
+  ): Promise<PermissionGroup> => {
+    const response = await apiClient.post<PermissionGroup>(
+      `/branches/${branchId}/permission-groups/`,
+      data
+    );
+    return response.data;
+  },
+
+  /**
+   * Ruxsatlar guruhini yangilash
+   */
+  updatePermissionGroup: async (
+    branchId: string,
+    groupId: string,
+    data: { name?: string; description?: string; permissions?: PermissionsData; apply_to_members?: boolean }
+  ): Promise<PermissionGroup> => {
+    const response = await apiClient.patch<PermissionGroup>(
+      `/branches/${branchId}/permission-groups/${groupId}/`,
+      data
+    );
+    return response.data;
+  },
+
+  /**
+   * Ruxsatlar guruhini o'chirish
+   */
+  deletePermissionGroup: async (branchId: string, groupId: string): Promise<void> => {
+    await apiClient.delete(`/branches/${branchId}/permission-groups/${groupId}/`);
   },
 };

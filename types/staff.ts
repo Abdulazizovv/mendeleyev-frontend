@@ -27,16 +27,17 @@ export type SalaryPaymentType = "advance" | "salary" | "bonus_payment" | "other"
  * Endpoint: /api/branches/{branch_id}/roles/
  */
 export interface Role {
-  id: string; // UUID
+  id: string;
   name: string;
   code: string;
-  branch: string; // UUID
+  branch: string;
   branch_name?: string;
-  permissions: Record<string, string[]>; // {"academic": ["view_grades", "edit_grades"]}
+  permissions: Record<string, Record<string, boolean>>; // {"students": {"view": true, "create": false}}
   description?: string;
   salary_range_min?: number;
   salary_range_max?: number;
   is_active: boolean;
+  members_count?: number;
   created_at: string;
   updated_at: string;
 }
@@ -170,7 +171,7 @@ export interface StaffStatistics {
 export interface CreateRoleRequest {
   name: string;
   code?: string;
-  permissions?: Record<string, string[]>;
+  permissions?: Record<string, Record<string, boolean>>;
   description?: string;
   salary_range_min?: number;
   salary_range_max?: number;

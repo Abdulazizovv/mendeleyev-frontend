@@ -33,7 +33,7 @@ export const useAuthStore = create<AuthState>()(
       accessToken: null,
       refreshToken: null,
       isAuthenticated: false,
-      isLoading: true, // Start with true until hydration completes
+      isLoading: false,
 
       // Actions
       setTokens: (access, refresh) => {
@@ -86,6 +86,8 @@ export const useAuthStore = create<AuthState>()(
           localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
           localStorage.removeItem(STORAGE_KEYS.USER);
           localStorage.removeItem(STORAGE_KEYS.CURRENT_BRANCH);
+          document.cookie =
+            "auth-role-path=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax";
         }
         set({
           user: null,
