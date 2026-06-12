@@ -239,7 +239,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   useEffect(() => {
     queryClient.invalidateQueries();
-  }, [pathname, queryClient]);
+    loadUser(); // background refresh — ruxsatlar o'zgarsa tez aks etsin
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
 
   useEffect(() => {
     if (!isLoading && !user) router.push("/login");
@@ -304,7 +306,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         const schoolNavItems: NavItem[] = [
           { name: "Topshiriqlar", href: "/school/tasks",  icon: CheckSquare },
           { name: "Lidlar",       href: "/school/leads",  icon: Target },
-          { name: "Guruh",        href: "/school/groups", icon: Users2, permission: "groups.view" },
+          { name: "Guruh",        href: "/school/groups", icon: Users2,      permission: "students.view" },
           {
             name: "O'quvchilar",
             icon: GraduationCap,
@@ -327,7 +329,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               { name: "O'quv yili", href: "/school/academic-years",  icon: Calendar },
             ],
           },
-          { name: "Nazorat",    href: "/school/schedule", icon: Shield,   permission: "attendance.view" },
+          { name: "Nazorat",    href: "/school/schedule", icon: Shield,   permission: "schedule.view" },
           {
             name: "Moliya",
             icon: Wallet,
@@ -340,7 +342,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             ],
           },
           { name: "Hisobotlar", href: "/school/reports",   icon: BarChart2, permission: "reports.view" },
-          { name: "Sozlamalar", href: "/school/settings",  icon: Settings },
+          { name: "Sozlamalar", href: "/school/settings",  icon: Settings,  permission: "settings.view" },
         ];
 
         return schoolNavItems.reduce<NavItem[]>((acc, item) => {

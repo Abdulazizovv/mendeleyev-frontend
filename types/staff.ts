@@ -170,6 +170,7 @@ export interface StaffStatistics {
  */
 export interface CreateRoleRequest {
   name: string;
+  branch?: string;
   code?: string;
   permissions?: Record<string, Record<string, boolean>>;
   description?: string;

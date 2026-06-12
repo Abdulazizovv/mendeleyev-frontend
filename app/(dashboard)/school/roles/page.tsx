@@ -1,235 +1,383 @@
 "use client";
 
-import React from "react";
+import React, { useState, useMemo } from "react";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { staffApi } from "@/lib/api";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Role, CreateRoleRequest } from "@/types";
+import type { Role, StaffMember, CreateRoleRequest } from "@/types";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Briefcase,
-  Plus,
-  Trash2,
-  Save,
-  X,
-  Search,
-  ChevronRight,
-  Shield,
-  Check,
-  ArrowLeft,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Plus, Edit, Trash2, Shield, Search, Users, Check,
+  ChevronRight, UserCircle, Briefcase,
 } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
-// ── Permission modules ────────────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────────
+
 type PermsData = Record<string, Record<string, boolean>>;
 
-const PERMISSION_MODULES: Record<string, { label: string; actions: string[] }> = {
-  students:   { label: "O'quvchilar",  actions: ["view", "create", "edit", "delete"] },
-  finance:    { label: "Moliya",        actions: ["view", "create", "edit", "delete"] },
-  staff:      { label: "Xodimlar",      actions: ["view", "create", "edit", "delete"] },
-  schedule:   { label: "Dars jadvali",  actions: ["view", "create", "edit", "delete"] },
-  classes:    { label: "Sinflar",       actions: ["view", "create", "edit", "delete"] },
-  grades:     { label: "Baholar",       actions: ["view", "create", "edit", "delete"] },
-  attendance: { label: "Davomat",       actions: ["view", "create", "edit", "delete"] },
-  homework:   { label: "Uyga vazifa",   actions: ["view", "create", "edit", "delete"] },
-  reports:    { label: "Hisobotlar",    actions: ["view"] },
-  settings:   { label: "Sozlamalar",    actions: ["view", "edit"] },
+const MODULES: Array<{ key: string; label: string; actions: string[] }> = [
+  { key: "students",   label: "O'quvchilar",  actions: ["view","create","edit","delete"] },
+  { key: "finance",    label: "Moliya",        actions: ["view","create","edit","delete"] },
+  { key: "staff",      label: "Xodimlar",      actions: ["view","create","edit","delete"] },
+  { key: "schedule",   label: "Dars jadvali",  actions: ["view","create","edit","delete"] },
+  { key: "classes",    label: "Sinflar",       actions: ["view","create","edit","delete"] },
+  { key: "grades",     label: "Baholar",       actions: ["view","create","edit","delete"] },
+  { key: "attendance", label: "Davomat",       actions: ["view","create","edit","delete"] },
+  { key: "homework",   label: "Uyga vazifa",   actions: ["view","create","edit","delete"] },
+  { key: "reports",    label: "Hisobotlar",    actions: ["view"] },
+  { key: "settings",   label: "Sozlamalar",    actions: ["view","edit"] },
+];
+
+const ACTION_LABEL: Record<string, string> = {
+  view: "Ko'rish", create: "Yaratish", edit: "Tahrirlash", delete: "O'chirish",
 };
 
-const ACTION_LABELS: Record<string, string> = {
-  view: "Ko'rish",
-  create: "Yaratish",
-  edit: "Tahrirlash",
-  delete: "O'chirish",
-};
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-// ── PermissionMatrix ──────────────────────────────────────────────────────────
-function PermissionMatrix({
-  permissions,
-  onChange,
+function enabledModuleCount(perms: PermsData) {
+  return MODULES.filter(({ key, actions }) =>
+    actions.some((a) => perms[key]?.[a])
+  ).length;
+}
+
+function emptyForm() {
+  return { name: "", description: "", is_active: true, permissions: {} as PermsData };
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+/** Clickable toggle chip used in the permission table */
+function ActionChip({
+  checked, label, onClick, readOnly,
+}: { checked: boolean; label: string; onClick?: () => void; readOnly?: boolean }) {
+  const base = "inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg transition-all select-none";
+  if (readOnly) {
+    return (
+      <span className={cn(base, checked
+        ? "bg-blue-50 text-blue-700 border border-blue-200"
+        : "bg-slate-50 text-slate-300 border border-slate-100"
+      )}>
+        {checked && <Check className="w-3 h-3 shrink-0" />}
+        {label}
+      </span>
+    );
+  }
+  return (
+    <button type="button" onClick={onClick} className={cn(base, "cursor-pointer",
+      checked
+        ? "bg-blue-600 text-white shadow-sm"
+        : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+    )}>
+      {checked && <Check className="w-3 h-3 shrink-0" />}
+      {label}
+    </button>
+  );
+}
+
+/** Permission table — read-only or editable */
+function PermissionsTable({
+  permissions, onChange,
 }: {
   permissions: PermsData;
-  onChange: (p: PermsData) => void;
+  onChange?: (p: PermsData) => void;
 }) {
-  const toggle = (module: string, action: string, val: boolean) => {
-    onChange({
-      ...permissions,
-      [module]: { ...(permissions[module] || {}), [action]: val },
-    });
+  const readOnly = !onChange;
+
+  const toggle = (module: string, action: string) => {
+    if (!onChange) return;
+    const cur = permissions[module] ?? {};
+    onChange({ ...permissions, [module]: { ...cur, [action]: !cur[action] } });
   };
 
-  const toggleModule = (module: string, allOn: boolean) => {
-    const actions = PERMISSION_MODULES[module].actions;
-    onChange({
-      ...permissions,
-      [module]: Object.fromEntries(actions.map((a) => [a, !allOn])),
-    });
+  const toggleRow = (module: string, actions: string[]) => {
+    if (!onChange) return;
+    const allOn = actions.every((a) => permissions[module]?.[a]);
+    onChange({ ...permissions, [module]: Object.fromEntries(actions.map((a) => [a, !allOn])) });
   };
 
   return (
-    <div className="space-y-2.5">
-      {Object.entries(PERMISSION_MODULES).map(([module, meta]) => {
-        const modPerms = permissions[module] || {};
-        const enabledCount = meta.actions.filter((a) => modPerms[a]).length;
-        const allOn = enabledCount === meta.actions.length;
-        const someOn = enabledCount > 0 && !allOn;
-
-        return (
-          <div key={module} className="border border-gray-200 rounded-xl overflow-hidden">
-            {/* Module header */}
-            <div className="flex items-center justify-between bg-gray-50 px-4 py-3">
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => toggleModule(module, allOn)}
-                  className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors shrink-0 ${
-                    allOn
-                      ? "bg-blue-600 border-blue-600"
-                      : someOn
-                      ? "bg-blue-100 border-blue-400"
-                      : "bg-white border-gray-300 hover:border-gray-400"
-                  }`}
-                >
-                  {allOn && <Check className="w-3 h-3 text-white" />}
-                  {someOn && <span className="w-2.5 h-0.5 bg-blue-500 block rounded-full" />}
-                </button>
-                <span className="text-sm font-semibold text-gray-700">{meta.label}</span>
-              </div>
-              <span className="text-xs font-medium text-gray-400 bg-gray-200 px-2 py-0.5 rounded-full">
-                {enabledCount}/{meta.actions.length}
-              </span>
-            </div>
-            {/* Actions grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-y divide-gray-100">
-              {meta.actions.map((action) => {
-                const checked = !!modPerms[action];
-                return (
-                  <label
-                    key={action}
-                    className={`flex items-center gap-2.5 px-4 py-3 cursor-pointer transition-colors ${
-                      checked ? "bg-blue-50" : "bg-white hover:bg-gray-50"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={(e) => toggle(module, action, e.target.checked)}
-                      className="sr-only"
-                    />
-                    <div
-                      className={`w-[18px] h-[18px] rounded-md border-2 flex items-center justify-center shrink-0 transition-colors ${
-                        checked ? "bg-blue-600 border-blue-600" : "bg-white border-gray-300"
-                      }`}
-                    >
-                      {checked && <Check className="w-3 h-3 text-white" />}
-                    </div>
-                    <span className="text-sm text-gray-600 select-none">
-                      {ACTION_LABELS[action] || action}
+    <div className="border border-slate-200 rounded-xl overflow-hidden">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="bg-slate-50 border-b border-slate-200">
+            <th className="py-2.5 px-4 text-xs font-semibold text-slate-500 text-left w-[160px]">Modul</th>
+            {["view","create","edit","delete"].map((a) => (
+              <th key={a} className="py-2.5 px-3 text-xs font-semibold text-slate-400 text-center">
+                {ACTION_LABEL[a]}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {MODULES.map(({ key, label, actions }) => {
+            const allOn = actions.every((a) => permissions[key]?.[a]);
+            const someOn = actions.some((a) => permissions[key]?.[a]);
+            return (
+              <tr key={key} className="group">
+                <td className="py-2.5 px-4">
+                  <div className="flex items-center gap-2">
+                    {!readOnly && (
+                      <button
+                        type="button"
+                        onClick={() => toggleRow(key, actions)}
+                        className={cn(
+                          "w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
+                          allOn ? "bg-blue-600 border-blue-600"
+                            : someOn ? "bg-blue-100 border-blue-400"
+                              : "bg-white border-slate-300 hover:border-slate-400"
+                        )}
+                      >
+                        {allOn && <Check className="w-2.5 h-2.5 text-white" />}
+                        {someOn && !allOn && <span className="w-2 h-0.5 bg-blue-500 block rounded" />}
+                      </button>
+                    )}
+                    <span className={cn("text-sm font-medium", someOn ? "text-slate-800" : "text-slate-400")}>
+                      {label}
                     </span>
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
+                  </div>
+                </td>
+                {["view","create","edit","delete"].map((action) => {
+                  const enabled = action === "edit" && !actions.includes("edit")
+                    ? undefined  // this module doesn't have this action
+                    : action === "delete" && !actions.includes("delete")
+                      ? undefined
+                      : action === "create" && !actions.includes("create")
+                        ? undefined
+                        : !!permissions[key]?.[action];
+
+                  if (!actions.includes(action)) {
+                    return <td key={action} className="py-2.5 px-3 text-center"><span className="text-slate-200">—</span></td>;
+                  }
+
+                  return (
+                    <td key={action} className="py-2.5 px-3 text-center">
+                      {readOnly ? (
+                        <span className={cn(
+                          "inline-block w-5 h-5 rounded-full mx-auto",
+                          enabled ? "bg-blue-100 ring-1 ring-blue-300" : "bg-slate-100"
+                        )}>
+                          {enabled && <Check className="w-3 h-3 text-blue-600 m-1" />}
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => toggle(key, action)}
+                          className={cn(
+                            "w-5 h-5 rounded border-2 flex items-center justify-center mx-auto transition-colors",
+                            enabled ? "bg-blue-600 border-blue-600" : "bg-white border-slate-300 hover:border-blue-400"
+                          )}
+                        >
+                          {enabled && <Check className="w-3 h-3 text-white" />}
+                        </button>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
 
-// ── RoleCard ──────────────────────────────────────────────────────────────────
+/** Role card in the left panel */
 function RoleCard({
-  role,
-  selected,
-  onClick,
-}: {
-  role: Role;
-  selected: boolean;
-  onClick: () => void;
-}) {
-  const activeModules = Object.values(role.permissions || {}).filter(
-    (v) => typeof v === "object" && Object.values(v).some(Boolean)
-  ).length;
+  role, selected, onClick,
+}: { role: Role; selected: boolean; onClick: () => void }) {
+  const modCount = enabledModuleCount((role.permissions as unknown as PermsData) ?? {});
+  const membersCount = (role as any).members_count ?? 0;
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`w-full text-left px-4 py-3.5 rounded-xl border transition-all ${
+      className={cn(
+        "w-full text-left rounded-xl px-3.5 py-3 border transition-all",
         selected
-          ? "border-blue-500 bg-blue-50 shadow-sm"
-          : "border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50/40"
-      }`}
+          ? "bg-blue-600 border-blue-600 shadow-md shadow-blue-600/20"
+          : "bg-white border-slate-200 hover:border-blue-300 hover:shadow-sm"
+      )}
     >
-      <div className="flex items-center gap-3">
-        <div
-          className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-            selected ? "bg-blue-600" : "bg-blue-100"
-          }`}
-        >
-          <Briefcase className={`w-5 h-5 ${selected ? "text-white" : "text-blue-600"}`} />
+      <div className="flex items-center gap-2.5">
+        <div className={cn(
+          "w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
+          selected ? "bg-white/20" : "bg-blue-50"
+        )}>
+          <Shield className={cn("w-4 h-4", selected ? "text-white" : "text-blue-500")} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className={`text-sm font-semibold truncate ${selected ? "text-blue-700" : "text-gray-900"}`}>
+          <p className={cn("text-sm font-semibold truncate", selected ? "text-white" : "text-slate-800")}>
             {role.name}
           </p>
-          {(role as any).description ? (
-            <p className="text-xs text-gray-400 truncate mt-0.5">{(role as any).description}</p>
-          ) : (
-            <p className="text-xs text-gray-400 mt-0.5">
-              {activeModules > 0 ? `${activeModules} ta modul` : "Ruxsatlar belgilanmagan"}
-            </p>
-          )}
+          <p className={cn("text-xs mt-0.5", selected ? "text-blue-200" : "text-slate-400")}>
+            {modCount > 0 ? `${modCount} ta modul` : "Ruxsat yo'q"}
+            {membersCount > 0 && ` · ${membersCount} ta xodim`}
+          </p>
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
-          <Badge
-            variant={role.is_active ? "default" : "secondary"}
-            className={`text-xs h-5 px-2 ${
-              role.is_active
-                ? "bg-green-100 text-green-700 hover:bg-green-100 border-0"
-                : "bg-gray-100 text-gray-500 border-0"
-            }`}
-          >
+          <span className={cn(
+            "text-[10px] font-medium px-1.5 py-0.5 rounded-full",
+            role.is_active
+              ? selected ? "bg-white/20 text-white" : "bg-emerald-50 text-emerald-600"
+              : selected ? "bg-white/10 text-blue-200" : "bg-slate-100 text-slate-400"
+          )}>
             {role.is_active ? "Faol" : "Nofaol"}
-          </Badge>
-          <ChevronRight className={`w-4 h-4 ${selected ? "text-blue-500" : "text-gray-300"}`} />
+          </span>
+          <ChevronRight className={cn("w-3.5 h-3.5", selected ? "text-white/60" : "text-slate-300")} />
         </div>
       </div>
     </button>
   );
 }
 
-// ── Role form interface ───────────────────────────────────────────────────────
-interface RoleForm {
-  name: string;
-  description: string;
-  is_active: boolean;
-  permissions: PermsData;
-}
-const emptyForm = (): RoleForm => ({
-  name: "",
-  description: "",
-  is_active: true,
-  permissions: {},
-});
-type EditorMode = "idle" | "create" | "edit";
+/** Role form dialog — create or edit */
+function RoleFormDialog({
+  open, mode, form, setForm, onClose, onSubmit, isSaving,
+}: {
+  open: boolean;
+  mode: "create" | "edit";
+  form: ReturnType<typeof emptyForm>;
+  setForm: (f: ReturnType<typeof emptyForm>) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+  isSaving: boolean;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0">
+        <DialogHeader className="px-6 pt-5 pb-4 border-b border-slate-100 shrink-0">
+          <DialogTitle className="text-base font-bold">
+            {mode === "create" ? "Yangi rol yaratish" : "Rolni tahrirlash"}
+          </DialogTitle>
+        </DialogHeader>
 
-// ── Main page ─────────────────────────────────────────────────────────────────
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          {/* Name */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">
+                Rol nomi <span className="text-rose-500">*</span>
+              </Label>
+              <Input
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="Masalan: Marketing menejeri"
+                className="h-10"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">Holat</Label>
+              <button
+                type="button"
+                onClick={() => setForm({ ...form, is_active: !form.is_active })}
+                className={cn(
+                  "w-full h-10 rounded-lg border text-sm font-medium transition-colors flex items-center gap-2.5 px-3",
+                  form.is_active
+                    ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                    : "border-slate-200 bg-slate-50 text-slate-500"
+                )}
+              >
+                <span className={cn(
+                  "w-2 h-2 rounded-full shrink-0",
+                  form.is_active ? "bg-emerald-500" : "bg-slate-300"
+                )} />
+                {form.is_active ? "Faol" : "Nofaol"}
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium">Tavsif</Label>
+            <Textarea
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              placeholder="Bu rol haqida qisqacha ma'lumot..."
+              rows={2}
+              className="resize-none text-sm"
+            />
+          </div>
+
+          {/* Permissions */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Shield className="w-4 h-4 text-blue-500 shrink-0" />
+              <p className="text-sm font-semibold text-slate-800">Ruxsatlar</p>
+              <span className="text-xs text-slate-400">
+                — {enabledModuleCount(form.permissions)} ta modul faol
+              </span>
+            </div>
+            <PermissionsTable
+              permissions={form.permissions}
+              onChange={(p) => setForm({ ...form, permissions: p })}
+            />
+          </div>
+        </div>
+
+        <DialogFooter className="px-6 py-4 border-t border-slate-100 shrink-0">
+          <Button variant="outline" onClick={onClose}>Bekor qilish</Button>
+          <Button
+            onClick={onSubmit}
+            disabled={!form.name.trim() || isSaving}
+            className="bg-blue-600 hover:bg-blue-700 gap-2"
+          >
+            {isSaving && <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+            {mode === "create" ? "Yaratish" : "Saqlash"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Member card in the Xodimlar tab */
+function MemberCard({ member }: { member: StaffMember }) {
+  return (
+    <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 last:border-0">
+      <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+        <UserCircle className="w-5 h-5 text-slate-400" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-slate-800 truncate">{member.full_name}</p>
+        <p className="text-xs text-slate-400 mt-0.5">{member.phone_number}</p>
+      </div>
+      <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full shrink-0">
+        {member.role_display}
+      </span>
+    </div>
+  );
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
+
 export default function RolesPage() {
   const { currentBranch } = useAuth();
   const queryClient = useQueryClient();
-  const branchId = currentBranch?.branch_id || "";
+  const branchId = currentBranch?.branch_id ?? "";
 
-  const [search, setSearch] = React.useState("");
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
-  const [mode, setMode] = React.useState<EditorMode>("idle");
-  const [form, setForm] = React.useState<RoleForm>(emptyForm());
-  // On mobile, show either the list or the editor, not both
-  const [mobileView, setMobileView] = React.useState<"list" | "editor">("list");
+  const [search, setSearch] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"permissions" | "members">("permissions");
+  const [dialog, setDialog] = useState<"create" | "edit" | null>(null);
+  const [form, setForm] = useState(emptyForm());
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  // ── Queries ──────────────────────────────────────────────────────────────
 
   const { data: roles = [], isLoading } = useQuery({
     queryKey: ["roles", branchId],
@@ -237,15 +385,22 @@ export default function RolesPage() {
     enabled: !!branchId,
   });
 
-  const handleApiError = (err: any, fallback: string) => {
-    const errors = err?.response?.data;
+  const selectedRole = roles.find((r) => r.id === selectedId) ?? null;
+
+  const { data: members = [], isLoading: membersLoading } = useQuery({
+    queryKey: ["role-members", selectedId, branchId],
+    queryFn: () => staffApi.getStaff({ branch: branchId, role_ref: selectedId! }),
+    enabled: !!selectedId && activeTab === "members",
+  });
+
+  // ── Mutations ────────────────────────────────────────────────────────────
+
+  const handleError = (err: unknown) => {
+    const errors = (err as any)?.response?.data;
     if (errors && typeof errors === "object") {
-      Object.entries(errors).forEach(([field, msgs]) => {
-        const list = Array.isArray(msgs) ? msgs : [msgs];
-        list.forEach((m) => toast.error(`${field}: ${m}`));
-      });
+      Object.values(errors).flat().forEach((m) => toast.error(String(m)));
     } else {
-      toast.error(fallback);
+      toast.error("Xatolik yuz berdi");
     }
   };
 
@@ -253,11 +408,11 @@ export default function RolesPage() {
     mutationFn: (data: CreateRoleRequest) => staffApi.createRole(branchId, data),
     onSuccess: (newRole) => {
       queryClient.invalidateQueries({ queryKey: ["roles", branchId] });
-      setSelectedId(newRole.id);
-      setMode("edit");
       toast.success("Rol yaratildi");
+      setDialog(null);
+      setSelectedId(newRole.id);
     },
-    onError: (err: any) => handleApiError(err, "Rol yaratishda xatolik"),
+    onError: handleError,
   });
 
   const updateMutation = useMutation({
@@ -266,349 +421,302 @@ export default function RolesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["roles", branchId] });
       toast.success("Rol yangilandi");
+      setDialog(null);
     },
-    onError: (err: any) => handleApiError(err, "Rolni yangilashda xatolik"),
+    onError: handleError,
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => staffApi.deleteRole(branchId, id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["roles", branchId] });
-      setSelectedId(null);
-      setMode("idle");
-      setMobileView("list");
       toast.success("Rol o'chirildi");
+      setDeleteId(null);
+      setSelectedId(null);
     },
-    onError: (err: any) => handleApiError(err, "Rolni o'chirishda xatolik"),
+    onError: handleError,
   });
 
-  const selectedRole = roles.find((r) => r.id === selectedId);
+  // ── Handlers ─────────────────────────────────────────────────────────────
 
-  const selectRole = (role: Role) => {
-    setSelectedId(role.id);
-    setMode("edit");
-    setMobileView("editor");
-    setForm({
-      name: role.name,
-      description: (role as any).description || "",
-      is_active: role.is_active,
-      permissions: (role.permissions as unknown as PermsData) || {},
-    });
-  };
-
-  const startCreate = () => {
-    setSelectedId(null);
-    setMode("create");
-    setMobileView("editor");
+  const openCreate = () => {
     setForm(emptyForm());
+    setDialog("create");
   };
 
-  const cancelEdit = () => {
-    if (mode === "create") {
-      setMode("idle");
-      setMobileView("list");
-    } else if (selectedRole) {
-      selectRole(selectedRole);
-    }
+  const openEdit = () => {
+    if (!selectedRole) return;
+    setForm({
+      name: selectedRole.name,
+      description: (selectedRole as any).description ?? "",
+      is_active: selectedRole.is_active,
+      permissions: (selectedRole.permissions as unknown as PermsData) ?? {},
+    });
+    setDialog("edit");
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.name.trim()) {
-      toast.error("Rol nomini kiriting");
-      return;
-    }
+  const handleSubmit = () => {
+    if (!form.name.trim()) return;
     const payload: CreateRoleRequest = {
       name: form.name.trim(),
       description: form.description.trim() || undefined,
       is_active: form.is_active,
       permissions: form.permissions,
+      branch: branchId,
     };
-    if (mode === "create") {
-      createMutation.mutate(payload);
-    } else if (selectedId) {
-      updateMutation.mutate({ id: selectedId, data: payload });
-    }
+    if (dialog === "create") createMutation.mutate(payload);
+    else if (dialog === "edit" && selectedId) updateMutation.mutate({ id: selectedId, data: payload });
   };
 
-  const handleDelete = () => {
-    if (!selectedId || !selectedRole) return;
-    if (confirm(`"${selectedRole.name}" rolini o'chirmoqchimisiz?`)) {
-      deleteMutation.mutate(selectedId);
-    }
-  };
-
-  const filtered = roles.filter(
-    (r) =>
+  const filtered = useMemo(
+    () => roles.filter((r) =>
       r.name.toLowerCase().includes(search.toLowerCase()) ||
-      ((r as any).description || "").toLowerCase().includes(search.toLowerCase())
+      ((r as any).description ?? "").toLowerCase().includes(search.toLowerCase())
+    ),
+    [roles, search]
   );
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
   const isSaving = createMutation.isPending || updateMutation.isPending;
-  const showList = mobileView === "list";
-  const showEditor = mobileView === "editor";
+  const selectedPerms = (selectedRole?.permissions as unknown as PermsData) ?? {};
+
+  // ── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Page header */}
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Rollar</h1>
-          <p className="text-sm text-gray-500 mt-1">{roles.length} ta custom rol mavjud</p>
-        </div>
-        <Button
-          onClick={startCreate}
-          className="gap-2 bg-blue-600 hover:bg-blue-700 h-10 px-4"
-        >
-          <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">Yangi rol</span>
-          <span className="sm:hidden">Yangi</span>
-        </Button>
-      </div>
+    <div className="flex gap-4 h-full">
 
-      {/* Split layout — desktop side by side, mobile stacked */}
-      <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0">
-
-        {/* ── Left: role list ── */}
-        <div className={`lg:w-80 xl:w-96 lg:flex-shrink-0 flex flex-col gap-3 ${!showList ? "hidden lg:flex" : "flex"}`}>
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <Input
-              className="pl-10 h-11 text-sm rounded-xl border-gray-200 focus:border-blue-400"
-              placeholder="Rol qidirish..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+      {/* ── LEFT PANEL ────────────────────────────────────────────────── */}
+      <div className="w-72 shrink-0 flex flex-col gap-3 h-full">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-base font-bold text-slate-900">Rollar</h1>
+            <p className="text-xs text-slate-400 mt-0.5">{roles.length} ta rol</p>
           </div>
-
-          {/* List */}
-          <div className="flex-1 overflow-y-auto space-y-2 lg:max-h-[calc(100vh-260px)]">
-            {filtered.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mb-4">
-                  <Briefcase className="w-8 h-8 text-gray-300" />
-                </div>
-                <p className="text-base font-semibold text-gray-500 mb-1">
-                  {search ? "Topilmadi" : "Hali rol yo'q"}
-                </p>
-                <p className="text-sm text-gray-400 mb-5">
-                  {search ? "Boshqa kalit so'z bilan qidiring" : "Birinchi rolni yarating"}
-                </p>
-                {!search && (
-                  <Button onClick={startCreate} variant="outline" className="gap-2">
-                    <Plus className="w-4 h-4" />
-                    Rol yaratish
-                  </Button>
-                )}
-              </div>
-            ) : (
-              filtered.map((role) => (
-                <RoleCard
-                  key={role.id}
-                  role={role}
-                  selected={selectedId === role.id}
-                  onClick={() => selectRole(role)}
-                />
-              ))
-            )}
-          </div>
+          <Button onClick={openCreate} size="sm" className="bg-blue-600 hover:bg-blue-700 gap-1.5 h-9">
+            <Plus className="w-3.5 h-3.5" />
+            Yangi
+          </Button>
         </div>
 
-        {/* ── Right: editor ── */}
-        <div
-          className={`flex-1 border border-gray-200 rounded-2xl bg-white flex flex-col overflow-hidden min-h-0 ${
-            !showEditor && mode === "idle" ? "hidden lg:flex" : "flex"
-          }`}
-        >
-          {mode === "idle" ? (
-            /* Empty state */
-            <div className="flex flex-col items-center justify-center h-full py-20 text-center px-6">
-              <div className="w-20 h-20 bg-blue-50 rounded-2xl flex items-center justify-center mb-5">
-                <Shield className="w-10 h-10 text-blue-400" />
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+          <Input
+            className="pl-9 h-9 text-sm rounded-xl border-slate-200"
+            placeholder="Rol qidirish..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
+        {/* List */}
+        <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5">
+          {isLoading ? (
+            [...Array(4)].map((_, i) => (
+              <div key={i} className="h-16 rounded-xl bg-slate-100 animate-pulse" />
+            ))
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mb-3">
+                <Briefcase className="w-6 h-6 text-slate-300" />
               </div>
-              <h3 className="text-xl font-bold text-gray-800 mb-2">Rol tanlang</h3>
-              <p className="text-sm text-gray-400 max-w-xs leading-relaxed mb-6">
-                Chap paneldan tahrirlash uchun rol tanlang yoki yangi rol yarating
+              <p className="text-sm font-medium text-slate-500 mb-1">
+                {search ? "Topilmadi" : "Rollar yo'q"}
               </p>
-              <Button
-                onClick={startCreate}
-                className="gap-2 bg-blue-600 hover:bg-blue-700 h-11 px-6"
-              >
-                <Plus className="w-4 h-4" />
-                Yangi rol yaratish
-              </Button>
+              {!search && (
+                <button onClick={openCreate} className="text-xs text-blue-500 hover:underline mt-1">
+                  Birinchi rolni yarating
+                </button>
+              )}
             </div>
           ) : (
-            <>
-              {/* Editor header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
-                {/* Mobile: back to list */}
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => { setMobileView("list"); }}
-                    className="lg:hidden p-2 rounded-xl text-gray-400 hover:bg-gray-100 -ml-1"
-                  >
-                    <ArrowLeft className="w-5 h-5" />
-                  </button>
-                  <div>
-                    <h2 className="text-base font-bold text-gray-900">
-                      {mode === "create" ? "Yangi rol yaratish" : `"${selectedRole?.name}" tahrirlash`}
-                    </h2>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {mode === "create"
-                        ? "Rol nomini va ruxsatlarini belgilang"
-                        : "O'zgarishlar avtomatik saqlanmaydi"}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={cancelEdit}
-                  className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Form */}
-              <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
-                <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
-
-                  {/* Basic info */}
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="name" className="text-sm font-semibold text-gray-700">
-                        Rol nomi <span className="text-red-500">*</span>
-                      </Label>
-                      <Input
-                        id="name"
-                        value={form.name}
-                        onChange={(e) => setForm({ ...form, name: e.target.value })}
-                        placeholder="Masalan: Marketing menejeri"
-                        className="h-11 text-sm rounded-xl"
-                        required
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="desc" className="text-sm font-semibold text-gray-700">
-                        Tavsif
-                      </Label>
-                      <Textarea
-                        id="desc"
-                        value={form.description}
-                        onChange={(e) => setForm({ ...form, description: e.target.value })}
-                        placeholder="Bu rol haqida qisqacha ma'lumot..."
-                        rows={2}
-                        className="text-sm rounded-xl resize-none"
-                      />
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setForm({ ...form, is_active: !form.is_active })}
-                        className={`relative inline-flex h-6 w-11 rounded-full transition-colors shrink-0 ${
-                          form.is_active ? "bg-blue-600" : "bg-gray-200"
-                        }`}
-                      >
-                        <span
-                          className={`inline-block mt-0.5 ml-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                            form.is_active ? "translate-x-5" : "translate-x-0"
-                          }`}
-                        />
-                      </button>
-                      <div>
-                        <p className="text-sm font-medium text-gray-700">
-                          {form.is_active ? "Faol" : "Nofaol"}
-                        </p>
-                        <p className="text-xs text-gray-400">
-                          {form.is_active
-                            ? "Xodimlarga tayinlanishi mumkin"
-                            : "Bu rol hozircha ishlatilmaydi"}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Divider */}
-                  <div className="border-t border-gray-100" />
-
-                  {/* Permissions */}
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2.5">
-                      <Shield className="w-4.5 h-4.5 text-blue-600" style={{ width: 18, height: 18 }} />
-                      <div>
-                        <p className="text-sm font-bold text-gray-800">Ruxsatlar</p>
-                        <p className="text-xs text-gray-400">
-                          Har bir modul uchun alohida ruxsatlarni belgilang
-                        </p>
-                      </div>
-                    </div>
-                    <PermissionMatrix
-                      permissions={form.permissions}
-                      onChange={(p) => setForm({ ...form, permissions: p })}
-                    />
-                  </div>
-                </div>
-
-                {/* Sticky footer */}
-                <div className="border-t border-gray-100 px-6 py-4 flex items-center justify-between bg-white shrink-0">
-                  {mode === "edit" ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleDelete}
-                      disabled={deleteMutation.isPending}
-                      className="gap-2 text-red-500 hover:text-red-600 hover:bg-red-50 h-10"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      O&apos;chirish
-                    </Button>
-                  ) : (
-                    <div />
-                  )}
-                  <div className="flex items-center gap-2.5">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={cancelEdit}
-                      className="h-10 px-4"
-                    >
-                      Bekor qilish
-                    </Button>
-                    <Button
-                      type="submit"
-                      size="sm"
-                      disabled={isSaving}
-                      className="gap-2 bg-blue-600 hover:bg-blue-700 h-10 px-5"
-                    >
-                      {isSaving ? (
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        <Save className="w-4 h-4" />
-                      )}
-                      {mode === "create" ? "Yaratish" : "Saqlash"}
-                    </Button>
-                  </div>
-                </div>
-              </form>
-            </>
+            filtered.map((role) => (
+              <RoleCard
+                key={role.id}
+                role={role}
+                selected={selectedId === role.id}
+                onClick={() => { setSelectedId(role.id); setActiveTab("permissions"); }}
+              />
+            ))
           )}
         </div>
       </div>
+
+      {/* ── RIGHT PANEL ───────────────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col min-w-0 bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        {!selectedRole ? (
+          /* Empty state */
+          <div className="flex flex-col items-center justify-center h-full text-center px-8 py-20">
+            <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center mb-4">
+              <Shield className="w-8 h-8 text-blue-300" />
+            </div>
+            <p className="text-base font-semibold text-slate-700 mb-1">Rol tanlang</p>
+            <p className="text-sm text-slate-400 mb-6 max-w-xs">
+              Chap paneldan rolni bosing yoki yangi rol yarating
+            </p>
+            <Button onClick={openCreate} className="bg-blue-600 hover:bg-blue-700 gap-2 h-10">
+              <Plus className="w-4 h-4" />
+              Yangi rol yaratish
+            </Button>
+          </div>
+        ) : (
+          <>
+            {/* Detail header */}
+            <div className="px-6 py-4 border-b border-slate-100 shrink-0">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
+                    <Shield className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-base font-bold text-slate-900">{selectedRole.name}</h2>
+                      <span className={cn(
+                        "text-xs font-medium px-2 py-0.5 rounded-full",
+                        selectedRole.is_active
+                          ? "bg-emerald-50 text-emerald-600"
+                          : "bg-slate-100 text-slate-500"
+                      )}>
+                        {selectedRole.is_active ? "Faol" : "Nofaol"}
+                      </span>
+                    </div>
+                    {(selectedRole as any).description && (
+                      <p className="text-xs text-slate-400 mt-0.5">{(selectedRole as any).description}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    onClick={openEdit}
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 h-8 border-slate-200"
+                  >
+                    <Edit className="w-3.5 h-3.5" />
+                    Tahrirlash
+                  </Button>
+                  <Button
+                    onClick={() => setDeleteId(selectedRole.id)}
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1.5 h-8 text-rose-500 hover:text-rose-600 hover:bg-rose-50"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Tabs */}
+              <div className="flex gap-1 mt-4">
+                {([
+                  { key: "permissions", label: "Ruxsatlar", icon: Shield },
+                  { key: "members",     label: "Xodimlar",  icon: Users },
+                ] as const).map(({ key, label, icon: Icon }) => (
+                  <button
+                    key={key}
+                    onClick={() => setActiveTab(key)}
+                    className={cn(
+                      "flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all",
+                      activeTab === key
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+                    )}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Tab content */}
+            <div className="flex-1 overflow-y-auto">
+              {activeTab === "permissions" && (
+                <div className="p-6">
+                  {enabledModuleCount(selectedPerms) === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-center">
+                      <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mb-3">
+                        <Shield className="w-6 h-6 text-slate-300" />
+                      </div>
+                      <p className="text-sm font-medium text-slate-500 mb-1">Ruxsatlar belgilanmagan</p>
+                      <p className="text-xs text-slate-400">Bu rol hech qanday modulga kirish huquqiga ega emas</p>
+                      <Button onClick={openEdit} variant="outline" size="sm" className="mt-4 gap-1.5">
+                        <Edit className="w-3.5 h-3.5" />
+                        Ruxsatlarni belgilash
+                      </Button>
+                    </div>
+                  ) : (
+                    <PermissionsTable permissions={selectedPerms} />
+                  )}
+                </div>
+              )}
+
+              {activeTab === "members" && (
+                <div>
+                  {membersLoading ? (
+                    <div className="p-4 space-y-2">
+                      {[...Array(5)].map((_, i) => (
+                        <div key={i} className="h-14 rounded-xl bg-slate-100 animate-pulse" />
+                      ))}
+                    </div>
+                  ) : members.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-center px-8">
+                      <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mb-3">
+                        <Users className="w-6 h-6 text-slate-300" />
+                      </div>
+                      <p className="text-sm font-medium text-slate-500 mb-1">Xodimlar yo'q</p>
+                      <p className="text-xs text-slate-400">Bu rolga hali hech kim biriktirilmagan</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="px-6 py-3 border-b border-slate-100 flex items-center gap-2">
+                        <Users className="w-3.5 h-3.5 text-slate-400" />
+                        <span className="text-xs font-medium text-slate-500">{members.length} ta xodim</span>
+                      </div>
+                      {members.map((m) => <MemberCard key={m.id} member={m} />)}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── DIALOGS ───────────────────────────────────────────────────── */}
+      <RoleFormDialog
+        open={!!dialog}
+        mode={dialog ?? "create"}
+        form={form}
+        setForm={setForm}
+        onClose={() => setDialog(null)}
+        onSubmit={handleSubmit}
+        isSaving={isSaving}
+      />
+
+      <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Rolni o'chirish</AlertDialogTitle>
+            <AlertDialogDescription>
+              <span className="font-medium">&quot;{selectedRole?.name}&quot;</span> rolini o&apos;chirishni
+              tasdiqlaysizmi? Bu amalni qaytarib bo&apos;lmaydi.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Bekor qilish</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteId && deleteMutation.mutate(deleteId)}
+              className="bg-rose-600 hover:bg-rose-700"
+            >
+              {deleteMutation.isPending
+                ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                : "O'chirish"
+              }
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

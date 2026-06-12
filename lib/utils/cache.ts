@@ -17,9 +17,9 @@ export const CACHE_KEYS = {
 
 // Cache expiry times (milliseconds)
 export const CACHE_EXPIRY = {
-  USER_PROFILE: 15 * 60 * 1000,      // 15 daqiqa
-  BRANCH_INFO: 15 * 60 * 1000,       // 15 daqiqa
-  MEMBERSHIPS: 15 * 60 * 1000,       // 15 daqiqa
+  USER_PROFILE: 60 * 1000,      // 60 soniya — ruxsatlar tez aks etsin
+  BRANCH_INFO: 60 * 1000,
+  MEMBERSHIPS: 60 * 1000,
 } as const;
 
 /**

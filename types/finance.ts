@@ -122,6 +122,16 @@ export interface Transaction {
   };
   created_at: string;
   updated_at: string;
+  created_by_info?: {
+    id: string;
+    full_name: string;
+    phone_number: string;
+  } | null;
+  updated_by_info?: {
+    id: string;
+    full_name: string;
+    phone_number: string;
+  } | null;
 }
 
 export interface CreateTransactionRequest {

@@ -148,8 +148,10 @@ export const useAuth = () => {
     }
 
     // Cache miss or force refresh — fetch from API
+    // Only show loading spinner on initial load (when user is not yet set)
+    const alreadyLoaded = !!useAuthStore.getState().user;
     try {
-      setLoading(true);
+      if (!alreadyLoaded) setLoading(true);
       const data = await authApi.getMe();
       setCache(CACHE_KEYS.USER_DATA, data, CACHE_EXPIRY.USER_PROFILE);
       setMeData(data);
@@ -158,27 +160,24 @@ export const useAuth = () => {
       clearCache(CACHE_KEYS.USER_DATA);
       storeLogout();
     } finally {
-      setLoading(false);
+      if (!alreadyLoaded) setLoading(false);
     }
   }, [setMeData, setLoading, storeLogout]);
 
   /**
    * Check if user has a specific module-level permission.
-   * Super admins always pass. Legacy users (no permissions set) always pass.
+   * Super admins always pass. Users with no permissions set (no custom role) always pass.
+   * branch_admin with a custom role_ref IS subject to that role's permissions.
    */
   const hasPermission = useCallback(
     (module: string, action: string): boolean => {
-      // Super admin: doim ruxsat
-      if (memberships?.some((m) => m.role === "super_admin")) return true;
       if (!currentBranch) return false;
-      // Branch admin: doim ruxsat
-      if (currentBranch.role === "branch_admin") return true;
       const perms = currentBranch.permissions;
-      // Eski foydalanuvchilar (permissions yo'q): ruxsat beriladi
+      // Ruxsatlar belgilanmagan (custom rol yo'q yoki eski foydalanuvchi): to'liq ruxsat
       if (!perms || Object.keys(perms).length === 0) return true;
       return perms[module]?.[action] ?? false;
     },
-    [currentBranch, memberships]
+    [currentBranch]
   );
 
   /**
