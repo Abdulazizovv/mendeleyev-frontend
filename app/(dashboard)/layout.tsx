@@ -488,19 +488,19 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           {/* Logo row */}
           <div className={`flex items-center border-b border-gray-100 h-16 relative ${sidebarCollapsed ? "justify-center px-0" : "px-4"}`}>
             {sidebarCollapsed ? (
-              <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
+              <Link href={`/${rolePath}`} className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center hover:bg-blue-700 transition-colors">
                 <GraduationCap className="w-5 h-5 text-white" />
-              </div>
+              </Link>
             ) : (
-              <div className="flex items-center gap-3 flex-1">
-                <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center shrink-0">
+              <Link href={`/${rolePath}`} className="flex items-center gap-3 flex-1 min-w-0 group">
+                <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-blue-700 transition-colors">
                   <GraduationCap className="w-5 h-5 text-white" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-base font-bold text-gray-900 leading-tight">Mendeleyev</p>
                   <p className="text-xs text-gray-400 leading-tight">{translateRole(role)}</p>
                 </div>
-              </div>
+              </Link>
             )}
             {/* Collapse toggle */}
             <button

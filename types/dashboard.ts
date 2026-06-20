@@ -7,6 +7,7 @@ export interface DashboardStudentsStats {
   active: number;
   with_debt: number;
   total_debt_amount: number;
+  new_this_month: number;
 }
 
 export interface DashboardStaffStats {

@@ -120,52 +120,73 @@ const QUICK_ACTIONS: QuickAction[] = [
   { label: "Moliya hisoboti",     href: "/school/finance/statistics",  icon: BarChart3,     color: "text-indigo-600",  bg: "bg-indigo-50 hover:bg-indigo-100" },
 ];
 
-// ── Stat card ─────────────────────────────────────────────────────────────────
+// ── Metric card (student stats) ───────────────────────────────────────────────
 
-interface StatCardProps {
+interface MetricCardProps {
   title: string;
   value: string | number;
   subtitle: string;
   icon: React.ElementType;
+  accentCls: string;
   iconBg: string;
   iconColor: string;
   href?: string;
   badge?: { text: string; cls: string };
 }
 
-function StatCard({ title, value, subtitle, icon: Icon, iconBg, iconColor, href, badge }: StatCardProps) {
+function MetricCard({ title, value, subtitle, icon: Icon, accentCls, iconBg, iconColor, href, badge }: MetricCardProps) {
   const inner = (
-    <Card className={`transition-all duration-200 h-full ${href ? "hover:shadow-md hover:-translate-y-0.5 cursor-pointer" : ""}`}>
-      <CardContent className="p-5">
+    <div className={`bg-white rounded-xl ring-1 ring-gray-100 overflow-hidden h-full ${href ? "hover:ring-gray-200 hover:shadow-sm transition-all cursor-pointer" : ""}`}>
+      <div className={`h-1 w-full ${accentCls}`} />
+      <div className="p-4">
         <div className="flex items-start justify-between mb-3">
-          <div className={`w-11 h-11 rounded-xl ${iconBg} flex items-center justify-center shrink-0`}>
-            <Icon className={`w-5 h-5 ${iconColor}`} />
+          <div className={`w-8 h-8 rounded-lg ${iconBg} flex items-center justify-center shrink-0`}>
+            <Icon className={`w-4 h-4 ${iconColor}`} />
           </div>
           {badge && (
-            <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${badge.cls}`}>{badge.text}</span>
+            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${badge.cls}`}>{badge.text}</span>
           )}
         </div>
-        <p className="text-2xl font-bold text-gray-900 leading-none tabular-nums">{value}</p>
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mt-1.5">{title}</p>
-        <p className="text-xs text-gray-400 mt-0.5 leading-snug">{subtitle}</p>
-      </CardContent>
-    </Card>
+        <p className="text-2xl font-bold text-gray-900 tabular-nums leading-none">{value}</p>
+        <p className="text-xs font-medium text-gray-500 mt-1.5">{title}</p>
+        <p className="text-[11px] text-gray-400 mt-0.5">{subtitle}</p>
+      </div>
+    </div>
   );
-  return href ? <Link href={href} className="block">{inner}</Link> : inner;
+  return href ? <Link href={href} className="block h-full">{inner}</Link> : inner;
 }
 
-function StatCardSkeleton() {
+function MetricsSkeleton() {
   return (
-    <Card>
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between mb-3">
-          <Skeleton className="w-11 h-11 rounded-xl" />
+    <>
+      <div className="grid grid-cols-3 gap-3">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="bg-white rounded-xl ring-1 ring-gray-100 overflow-hidden">
+            <Skeleton className="h-1 w-full rounded-none" />
+            <div className="p-4">
+              <Skeleton className="w-8 h-8 rounded-lg mb-3" />
+              <Skeleton className="h-6 w-14 mb-1.5" />
+              <Skeleton className="h-3 w-20 mb-1" />
+              <Skeleton className="h-2.5 w-16" />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="bg-white rounded-xl ring-1 ring-gray-100 overflow-hidden">
+        <div className="flex divide-x divide-gray-100">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="flex-1 flex items-center gap-3 px-5 py-3.5">
+              <Skeleton className="w-8 h-8 rounded-lg shrink-0" />
+              <div>
+                <Skeleton className="h-4 w-12 mb-1" />
+                <Skeleton className="h-3 w-16 mb-0.5" />
+                <Skeleton className="h-2.5 w-20" />
+              </div>
+            </div>
+          ))}
         </div>
-        <Skeleton className="h-7 w-20 mb-1.5" />
-        <Skeleton className="h-3 w-24 mb-1" />
-        <Skeleton className="h-3 w-16" />
-      </CardContent>
-    </Card>
+      </div>
+    </>
   );
 }
 
@@ -290,66 +311,87 @@ export default function SchoolDashboard() {
         </div>
       </div>
 
-      {/* ── Stat cards ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {statsLoading ? (
-          [1, 2, 3, 4].map((i) => <StatCardSkeleton key={i} />)
-        ) : stats ? (
-          <>
-            <StatCard
+      {/* ── Metrics ── */}
+      {statsLoading ? (
+        <MetricsSkeleton />
+      ) : stats ? (
+        <div className="space-y-3">
+          {/* Student metrics — 3 cards */}
+          <div className="grid grid-cols-3 gap-3">
+            <MetricCard
               title={studentLabel}
               value={stats.students.total}
-              subtitle={`${stats.students.active} faol · ${stats.students.with_debt} qarzdor`}
+              subtitle={`${stats.students.active} faol`}
               icon={GraduationCap}
-              iconBg="bg-blue-100"
+              accentCls="bg-blue-500"
+              iconBg="bg-blue-50"
               iconColor="text-blue-600"
+              href="/school/students"
+            />
+            <MetricCard
+              title="Qarzdorlar"
+              value={stats.students.with_debt}
+              subtitle={formatCurrency(stats.students.total_debt_amount) + " qarz"}
+              icon={CircleAlert}
+              accentCls="bg-orange-400"
+              iconBg="bg-orange-50"
+              iconColor="text-orange-500"
               href="/school/students"
               badge={
                 stats.students.with_debt > 0
-                  ? { text: `${debtPercent}% qarz`, cls: "bg-orange-100 text-orange-700" }
-                  : { text: "Qarz yo'q", cls: "bg-emerald-100 text-emerald-700" }
+                  ? { text: `${debtPercent}%`, cls: "bg-orange-50 text-orange-600" }
+                  : { text: "Yo'q", cls: "bg-emerald-50 text-emerald-700" }
               }
             />
-            <StatCard
-              title="Xodimlar"
-              value={stats.staff.total}
-              subtitle={`${stats.staff.teachers} o'qituvchi · ${stats.staff.admins} admin`}
-              icon={Users}
-              iconBg="bg-purple-100"
-              iconColor="text-purple-600"
-              href="/school/staff"
+            <MetricCard
+              title="Yangi (to'lovsiz)"
+              value={stats.students.new_this_month ?? 0}
+              subtitle="Abonement bor, to'lov yo'q"
+              icon={UserPlus}
+              accentCls="bg-teal-500"
+              iconBg="bg-teal-50"
+              iconColor="text-teal-600"
+              href="/school/students"
             />
-            <StatCard
-              title="Bugungi darslar"
-              value={stats.lessons.today}
-              subtitle={`${stats.lessons.completed_today} tugallandi · ${stats.lessons.this_week} bu hafta`}
-              icon={BookOpen}
-              iconBg="bg-emerald-100"
-              iconColor="text-emerald-600"
-              href="/school/schedule"
-              badge={
-                stats.lessons.today > 0
-                  ? { text: `${Math.round((stats.lessons.completed_today / stats.lessons.today) * 100)}%`, cls: "bg-blue-100 text-blue-700" }
-                  : undefined
-              }
-            />
-            <StatCard
-              title="Oylik kirim"
-              value={formatCurrency(stats.finance.this_month_income)}
-              subtitle={`${stats.finance.recent_payments_count} ta to'lov · ${getCurrentMonthLabel()}`}
-              icon={Banknote}
-              iconBg="bg-orange-100"
-              iconColor="text-orange-600"
-              href="/school/finance"
-              badge={
-                statNetProfit >= 0
-                  ? { text: `+${formatCurrency(statNetProfit)}`, cls: "bg-emerald-100 text-emerald-700" }
-                  : { text: formatCurrency(statNetProfit), cls: "bg-red-100 text-red-700" }
-              }
-            />
-          </>
-        ) : null}
-      </div>
+          </div>
+
+          {/* Ops strip — staff / lessons / finance */}
+          <div className="bg-white rounded-xl ring-1 ring-gray-100 overflow-hidden">
+            <div className="flex divide-x divide-gray-100">
+              <Link href="/school/staff" className="flex-1 flex items-center gap-3 px-5 py-3.5 hover:bg-gray-50 transition-colors min-w-0">
+                <div className="w-8 h-8 bg-purple-50 rounded-lg flex items-center justify-center shrink-0">
+                  <Users className="w-4 h-4 text-purple-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-base font-bold text-gray-900 tabular-nums leading-none">{stats.staff.total}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Xodimlar</p>
+                  <p className="text-[10px] text-gray-400 truncate">{stats.staff.teachers} o'qt · {stats.staff.admins} adm</p>
+                </div>
+              </Link>
+              <Link href="/school/schedule" className="flex-1 flex items-center gap-3 px-5 py-3.5 hover:bg-gray-50 transition-colors min-w-0">
+                <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center shrink-0">
+                  <BookOpen className="w-4 h-4 text-emerald-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-base font-bold text-gray-900 tabular-nums leading-none">{stats.lessons.today}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Bugungi darslar</p>
+                  <p className="text-[10px] text-gray-400">{stats.lessons.completed_today} tugallandi</p>
+                </div>
+              </Link>
+              <Link href="/school/finance" className="flex-1 flex items-center gap-3 px-5 py-3.5 hover:bg-gray-50 transition-colors min-w-0">
+                <div className="w-8 h-8 bg-orange-50 rounded-lg flex items-center justify-center shrink-0">
+                  <Banknote className="w-4 h-4 text-orange-500" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-base font-bold text-gray-900 tabular-nums leading-none truncate">{formatCurrency(stats.finance.this_month_income)}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Oylik kirim</p>
+                  <p className="text-[10px] text-gray-400">{stats.finance.recent_payments_count} ta to'lov</p>
+                </div>
+              </Link>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* ── Quick actions ── */}
       <Card>
@@ -384,6 +426,40 @@ export default function SchoolDashboard() {
                 </span>
               </Link>
             ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Dars jadvali (placeholder) ── */}
+      <Card className="overflow-hidden">
+        <CardHeader className="pb-0 pt-4 px-5">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-blue-500" />
+              Dars jadvali
+            </CardTitle>
+            <Link href="/school/schedule" className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+              To'liq jadval <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
+        </CardHeader>
+        <CardContent className="px-5 pb-5 pt-3">
+          <div className="border border-dashed border-amber-200 bg-amber-50/50 rounded-xl flex items-center gap-4 px-5 py-4">
+            <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center shrink-0 text-lg">
+              🚧
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-amber-900">Bu bo'lim ishlab chiqilmoqda</p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                Tez orada bugungi darslar, vaqt jadvali va dars holatlari shu yerda ko'rinadi
+              </p>
+            </div>
+            <Link
+              href="/school/schedule"
+              className="shrink-0 text-xs bg-white border border-amber-200 text-amber-800 hover:bg-amber-50 px-3 py-1.5 rounded-lg transition-colors font-medium"
+            >
+              Jadvalga o'tish
+            </Link>
           </div>
         </CardContent>
       </Card>
