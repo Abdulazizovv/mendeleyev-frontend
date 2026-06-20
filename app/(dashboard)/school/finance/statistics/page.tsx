@@ -8,98 +8,49 @@ import { useAuth } from "@/lib/hooks";
 import { formatCurrency } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  AreaChart,
-  Area,
-  LineChart,
-  Line,
 } from "recharts";
 import {
-  TrendingUp,
-  TrendingDown,
-  DollarSign,
-  CreditCard,
-  Banknote,
-  Building2,
-  GraduationCap,
-  BarChart3,
-  PieChartIcon,
-  ArrowRight,
-  Wallet,
-  Users,
-  RefreshCw,
+  TrendingUp, TrendingDown, Wallet, RefreshCw,
+  ArrowRight, Banknote, CreditCard, BarChart3,
 } from "lucide-react";
 
-// ── Uzbek formatters ──────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-const UZ_MONTHS_SHORT = [
-  "Yan", "Fev", "Mar", "Apr", "May", "Iyn",
-  "Iyl", "Avg", "Sen", "Okt", "Noy", "Dek",
-];
-
-function fmtMonth(isoStr: string): string {
-  const d = new Date(isoStr);
-  return `${UZ_MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`;
-}
-
-function fmtDay(isoStr: string): string {
-  const d = new Date(isoStr);
-  return `${d.getDate()}-${UZ_MONTHS_SHORT[d.getMonth()]}`;
-}
-
-function fmtCurrencyShort(val: number): string {
-  if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(1)}M`;
-  if (val >= 1_000) return `${(val / 1_000).toFixed(0)}K`;
-  return String(val);
-}
-
-const UZ_MONTHS = [
-  "Yanvar","Fevral","Mart","Aprel","May","Iyun",
-  "Iyul","Avgust","Sentabr","Oktabr","Noyabr","Dekabr",
-];
+const UZ_MONTHS_SHORT = ["Yan","Fev","Mar","Apr","May","Iyn","Iyl","Avg","Sen","Okt","Noy","Dek"];
+const UZ_MONTHS = ["Yanvar","Fevral","Mart","Aprel","May","Iyun","Iyul","Avgust","Sentabr","Oktabr","Noyabr","Dekabr"];
 const NOW = new Date();
 const MONTH_START = new Date(NOW.getFullYear(), NOW.getMonth(), 1).toISOString().split("T")[0];
 const CURRENT_MONTH = `${UZ_MONTHS[NOW.getMonth()]} ${NOW.getFullYear()}`;
 
-// ── Color palette ─────────────────────────────────────────────────────────────
+function fmtMonth(iso: string) {
+  const d = new Date(iso);
+  return `${UZ_MONTHS_SHORT[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`;
+}
+function fmtShort(val: number): string {
+  if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(1)}M`;
+  if (val >= 1_000) return `${(val / 1_000).toFixed(0)}K`;
+  return String(val);
+}
+function sign(n: number) { return n >= 0 ? "+" : ""; }
 
-const COLORS = {
-  income: "#10b981",
-  expense: "#ef4444",
-  net: "#3b82f6",
-  cash: "#f59e0b",
-  card: "#8b5cf6",
-};
+// ── Tooltip ───────────────────────────────────────────────────────────────────
 
-const PIE_COLORS = ["#10b981","#3b82f6","#f59e0b","#8b5cf6","#ef4444","#06b6d4","#ec4899","#84cc16"];
-
-// ── Custom Tooltip ────────────────────────────────────────────────────────────
-
-function CustomTooltip({ active, payload, label }: any) {
+function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white border border-gray-200 rounded-xl shadow-lg px-4 py-3 text-sm min-w-[180px]">
-      <p className="font-semibold text-gray-700 mb-2">{label}</p>
-      {payload.map((entry: any) => (
-        <div key={entry.name} className="flex items-center justify-between gap-4">
-          <span className="flex items-center gap-1.5 text-gray-600">
-            <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: entry.color }} />
-            {entry.name}
+    <div className="bg-white border border-gray-200 rounded-xl shadow-lg px-4 py-3 text-xs min-w-[160px]">
+      <p className="font-semibold text-gray-600 mb-2">{label}</p>
+      {payload.map((e: any) => (
+        <div key={e.name} className="flex items-center justify-between gap-3 mb-0.5">
+          <span className="flex items-center gap-1.5 text-gray-500">
+            <span className="w-2 h-2 rounded-sm shrink-0" style={{ background: e.color }} />
+            {e.name}
           </span>
-          <span className="font-bold tabular-nums" style={{ color: entry.color }}>
-            {formatCurrency(entry.value)}
+          <span className="font-bold tabular-nums" style={{ color: e.color }}>
+            {formatCurrency(e.value)}
           </span>
         </div>
       ))}
@@ -107,69 +58,54 @@ function CustomTooltip({ active, payload, label }: any) {
   );
 }
 
-// ── Summary card ─────────────────────────────────────────────────────────────
+// ── Summary strip ─────────────────────────────────────────────────────────────
 
-function SummaryCard({
-  title, value, subtitle, icon: Icon, iconBg, iconColor, trend,
-}: {
-  title: string;
-  value: string;
-  subtitle?: string;
-  icon: React.ElementType;
-  iconBg: string;
-  iconColor: string;
-  trend?: "up" | "down" | "neutral";
-}) {
+interface MetricProps {
+  label: string; value: string; sub?: string;
+  icon: React.ElementType; iconBg: string; iconColor: string;
+  valueCls?: string;
+}
+function Metric({ label, value, sub, icon: Icon, iconBg, iconColor, valueCls = "text-gray-900" }: MetricProps) {
   return (
-    <Card>
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between mb-3">
-          <div className={`w-11 h-11 rounded-xl ${iconBg} flex items-center justify-center shrink-0`}>
-            <Icon className={`w-5 h-5 ${iconColor}`} />
-          </div>
-          {trend && (
-            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-              trend === "up" ? "bg-emerald-100 text-emerald-700"
-              : trend === "down" ? "bg-red-100 text-red-700"
-              : "bg-gray-100 text-gray-600"
-            }`}>
-              {trend === "up" ? "▲ Daromad" : trend === "down" ? "▼ Zarar" : "Teng"}
-            </span>
-          )}
-        </div>
-        <p className="text-xl font-bold text-gray-900 tabular-nums leading-tight">{value}</p>
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mt-1.5">{title}</p>
-        {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
-      </CardContent>
-    </Card>
+    <div className="flex items-center gap-3 px-5 py-4 min-w-0">
+      <div className={`w-9 h-9 rounded-xl ${iconBg} flex items-center justify-center shrink-0`}>
+        <Icon className={`w-4 h-4 ${iconColor}`} />
+      </div>
+      <div className="min-w-0">
+        <p className={`text-lg font-bold tabular-nums leading-none ${valueCls}`}>{value}</p>
+        <p className="text-xs text-gray-500 mt-0.5 font-medium">{label}</p>
+        {sub && <p className="text-[10px] text-gray-400">{sub}</p>}
+      </div>
+    </div>
   );
 }
 
-function CardSkeleton() {
+// ── Category bar ──────────────────────────────────────────────────────────────
+
+function CatBar({ name, total, maxTotal, color }: { name: string; total: number; maxTotal: number; color: string }) {
+  const pct = maxTotal > 0 ? Math.round((total / maxTotal) * 100) : 0;
   return (
-    <Card>
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between mb-3">
-          <Skeleton className="w-11 h-11 rounded-xl" />
-        </div>
-        <Skeleton className="h-6 w-32 mb-1.5" />
-        <Skeleton className="h-3 w-20 mb-1" />
-        <Skeleton className="h-3 w-16" />
-      </CardContent>
-    </Card>
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-gray-600 truncate max-w-[55%]">{name}</span>
+        <span className={`font-semibold tabular-nums ${color}`}>{formatCurrency(total)}</span>
+      </div>
+      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: color === "text-emerald-600" ? "#10b981" : "#ef4444" }} />
+      </div>
+    </div>
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function FinanceStatisticsPage() {
   const { currentBranch } = useAuth();
   const branchId = currentBranch?.branch_id;
   const [period, setPeriod] = useState<"month" | "all">("month");
-
   const startDate = period === "month" ? MONTH_START : undefined;
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ["finance-statistics-full", branchId, startDate],
     queryFn: () => financeApi.getStatistics({ branch_id: branchId, start_date: startDate }),
     enabled: !!branchId,
@@ -177,562 +113,307 @@ export default function FinanceStatisticsPage() {
 
   const s = data?.summary;
   const byMethod = data?.by_payment_method ?? {};
-  const byType = data?.by_transaction_type ?? {};
-  const monthlyStats = (data?.monthly_stats ?? []).map(m => ({
+  const registers = data?.registers ?? [];
+  const topIncome = data?.top_income_categories ?? [];
+  const topExpense = data?.top_expense_categories ?? [];
+
+  const monthlyData = (data?.monthly_stats ?? []).map(m => ({
     name: fmtMonth(m.month),
     Kirim: m.income ?? 0,
     Chiqim: m.expense ?? 0,
-    Balans: (m.income ?? 0) - (m.expense ?? 0),
   }));
-  const dailyStats = (data?.daily_stats ?? []).map(d => ({
-    name: fmtDay(d.day),
-    Kirim: d.income ?? 0,
-    Chiqim: d.expense ?? 0,
-  }));
-  const topIncome = data?.top_income_categories ?? [];
-  const topExpense = data?.top_expense_categories ?? [];
-  const registers = data?.registers ?? [];
 
-  // Pie chart data for payment method
-  const methodPieData = Object.entries(byMethod).map(([key, val]) => ({
-    name: val.label,
-    value: val.income + val.expense,
-    income: val.income,
-    expense: val.expense,
-  })).filter(d => d.value > 0);
+  // Payment methods
+  const cashTotal = (byMethod.cash?.income ?? 0) + (byMethod.cash?.expense ?? 0);
+  const cardTotal = (byMethod.card?.income ?? 0) + (byMethod.card?.expense ?? 0);
+  const methodTotal = cashTotal + cardTotal || 1;
+  const cashPct = Math.round((cashTotal / methodTotal) * 100);
+  const cardPct = 100 - cashPct;
 
-  // Pie chart data for transaction type
-  const typePieData = Object.entries(byType)
-    .map(([, val]) => ({ name: val.label, value: val.total }))
-    .filter(d => d.value > 0)
-    .sort((a, b) => b.value - a.value);
+  // Kassalar total
+  const kassaTotal = registers.reduce((acc, r) => acc + (r.balance ?? 0), 0);
+  const kassaMax = Math.max(...registers.map(r => r.balance ?? 0), 1);
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-5 max-w-6xl mx-auto">
 
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Moliya Statistikasi</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {currentBranch?.branch_name} — professional hisobotlar
-          </p>
+          <h1 className="text-xl font-bold text-gray-900">Moliya hisoboti</h1>
+          <p className="text-xs text-gray-400 mt-0.5">{currentBranch?.branch_name}</p>
         </div>
         <div className="flex items-center gap-2">
-          {/* Period selector */}
           <div className="flex bg-gray-100 rounded-xl p-1">
-            {(["month", "all"] as const).map((p) => (
+            {(["month", "all"] as const).map(p => (
               <button
                 key={p}
                 onClick={() => setPeriod(p)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                  period === p
-                    ? "bg-white text-gray-900 shadow-sm"
-                    : "text-gray-500 hover:text-gray-700"
+                  period === p ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
                 }`}
               >
-                {p === "month" ? `${CURRENT_MONTH}` : "Barcha vaqt"}
+                {p === "month" ? CURRENT_MONTH : "Barcha vaqt"}
               </button>
             ))}
           </div>
           <button
             onClick={() => refetch()}
-            className="p-2 rounded-xl text-gray-500 hover:bg-gray-100 transition-colors"
+            className={`p-2 rounded-xl text-gray-400 hover:bg-gray-100 transition-colors ${isFetching ? "animate-spin" : ""}`}
             title="Yangilash"
           >
             <RefreshCw className="w-4 h-4" />
           </button>
-          <Link
-            href="/school/finance"
-            className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
-          >
+          <Link href="/school/finance" className="flex items-center gap-1 text-xs text-blue-600 hover:underline shrink-0">
             Moliya <ArrowRight className="w-3 h-3" />
           </Link>
         </div>
       </div>
 
-      {/* ── Summary cards ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {isLoading ? (
-          [1,2,3,4].map(i => <CardSkeleton key={i} />)
-        ) : s ? (
-          <>
-            <SummaryCard
-              title="Jami kirim"
-              value={formatCurrency(s.total_income)}
-              subtitle={`${s.payments_count} ta to'lov`}
-              icon={TrendingUp}
-              iconBg="bg-emerald-100"
-              iconColor="text-emerald-600"
-              trend="up"
-            />
-            <SummaryCard
-              title="Jami chiqim"
-              value={formatCurrency(s.total_expense)}
-              icon={TrendingDown}
-              iconBg="bg-red-100"
-              iconColor="text-red-600"
-              trend="down"
-            />
-            <SummaryCard
-              title="Sof balans"
-              value={formatCurrency(s.net_balance)}
-              subtitle={s.net_balance >= 0 ? "Musbat balans" : "Manfiy balans"}
-              icon={BarChart3}
-              iconBg={s.net_balance >= 0 ? "bg-blue-100" : "bg-orange-100"}
-              iconColor={s.net_balance >= 0 ? "text-blue-600" : "text-orange-600"}
-              trend={s.net_balance >= 0 ? "up" : "down"}
-            />
-            <SummaryCard
-              title="O'quvchi to'lovlari"
-              value={formatCurrency(s.total_payments)}
-              subtitle={`${s.payments_count} ta to'lov`}
-              icon={GraduationCap}
-              iconBg="bg-purple-100"
-              iconColor="text-purple-600"
-            />
-          </>
-        ) : null}
-      </div>
-
-      {/* ── Naqd / Plastik summary strip ── */}
-      {!isLoading && s && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Naqd */}
-          <Card className="border-amber-200 bg-amber-50/60">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center">
-                    <Banknote className="w-4 h-4 text-amber-600" />
-                  </div>
-                  <span className="text-sm font-semibold text-gray-800">Naqd pul</span>
-                </div>
-                <span className="text-xs text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full font-medium">
-                  {byMethod.cash?.count ?? 0} ta tranzaksiya
-                </span>
-              </div>
-              <div className="grid grid-cols-3 gap-3 text-center">
-                <div>
-                  <p className="text-xs text-gray-500 mb-0.5">Kirim</p>
-                  <p className="text-sm font-bold text-emerald-700 tabular-nums">{formatCurrency(s.cash_income)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 mb-0.5">Chiqim</p>
-                  <p className="text-sm font-bold text-red-600 tabular-nums">{formatCurrency(s.cash_expense)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 mb-0.5">Sof</p>
-                  <p className={`text-sm font-bold tabular-nums ${s.cash_net >= 0 ? "text-blue-700" : "text-red-600"}`}>
-                    {s.cash_net >= 0 ? "+" : ""}{formatCurrency(s.cash_net)}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          {/* Plastik */}
-          <Card className="border-purple-200 bg-purple-50/60">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-purple-100 rounded-xl flex items-center justify-center">
-                    <CreditCard className="w-4 h-4 text-purple-600" />
-                  </div>
-                  <span className="text-sm font-semibold text-gray-800">Plastik karta</span>
-                </div>
-                <span className="text-xs text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full font-medium">
-                  {byMethod.card?.count ?? 0} ta tranzaksiya
-                </span>
-              </div>
-              <div className="grid grid-cols-3 gap-3 text-center">
-                <div>
-                  <p className="text-xs text-gray-500 mb-0.5">Kirim</p>
-                  <p className="text-sm font-bold text-emerald-700 tabular-nums">{formatCurrency(s.card_income)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 mb-0.5">Chiqim</p>
-                  <p className="text-sm font-bold text-red-600 tabular-nums">{formatCurrency(s.card_expense)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 mb-0.5">Sof</p>
-                  <p className={`text-sm font-bold tabular-nums ${s.card_net >= 0 ? "text-blue-700" : "text-red-600"}`}>
-                    {s.card_net >= 0 ? "+" : ""}{formatCurrency(s.card_net)}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* ── Kassalar holati ── */}
-      {!isLoading && registers.length > 0 && (
+      {/* ── Summary strip ── */}
+      {isLoading ? (
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Wallet className="w-4 h-4 text-blue-500" />
-              Kassalar holati
-              <span className="text-xs font-normal text-gray-400 ml-auto">Jami: {formatCurrency(s?.total_cash_balance ?? 0)}</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {registers.map(r => {
-                const total = Math.abs(r.cash_net) + Math.abs(r.card_net) || 1;
-                const cashPct = Math.round((Math.abs(r.cash_net) / total) * 100);
-                const cardPct = 100 - cashPct;
-                return (
-                  <div key={r.id} className="border border-gray-100 rounded-xl p-4 space-y-3 bg-gray-50/50">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="text-sm font-semibold text-gray-800">{r.name}</p>
-                        {r.location && <p className="text-xs text-gray-400 mt-0.5">{r.location}</p>}
-                      </div>
-                      <p className="text-base font-bold text-gray-900 tabular-nums">{formatCurrency(r.balance)}</p>
-                    </div>
-                    {/* Progress bar */}
-                    <div className="space-y-1.5">
-                      <div className="flex h-2 rounded-full overflow-hidden gap-0.5">
-                        <div className="bg-amber-400 rounded-l-full transition-all" style={{ width: `${cashPct}%` }} />
-                        <div className="bg-purple-400 rounded-r-full transition-all" style={{ width: `${cardPct}%` }} />
-                      </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="flex items-center gap-1 text-amber-700">
-                          <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
-                          Naqd: {formatCurrency(r.cash_net)}
-                        </span>
-                        <span className="flex items-center gap-1 text-purple-700">
-                          <span className="w-2 h-2 rounded-full bg-purple-400 inline-block" />
-                          Plastik: {formatCurrency(r.card_net)}
-                        </span>
-                      </div>
-                    </div>
+          <CardContent className="p-0">
+            <div className="flex divide-x divide-gray-100">
+              {[1,2,3,4].map(i => (
+                <div key={i} className="flex-1 flex items-center gap-3 px-5 py-4">
+                  <Skeleton className="w-9 h-9 rounded-xl shrink-0" />
+                  <div className="space-y-1.5">
+                    <Skeleton className="h-5 w-20" />
+                    <Skeleton className="h-3 w-14" />
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>
-      )}
-
-      {/* ── Oylik va kunlik ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-        {/* Oylik bar chart */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-blue-500" />
-              Oylik kirim va chiqim
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-56 w-full rounded-xl" />
-            ) : monthlyStats.length === 0 ? (
-              <div className="h-56 flex items-center justify-center text-gray-400 text-sm">
-                Ma'lumot mavjud emas
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={monthlyStats} barSize={14} barGap={4}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#6b7280" }} axisLine={false} tickLine={false} />
-                  <YAxis tickFormatter={fmtCurrencyShort} tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="Kirim" fill={COLORS.income} radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="Chiqim" fill={COLORS.expense} radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* To'lov usullari pie */}
+      ) : s ? (
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <PieChartIcon className="w-4 h-4 text-amber-500" />
-              To&apos;lov usullari
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-[220px] w-full rounded-xl" />
-            ) : methodPieData.length === 0 ? (
-              <div className="h-[220px] flex items-center justify-center text-gray-400 text-sm">
-                Ma&apos;lumot mavjud emas
+          <CardContent className="p-0">
+            <div className="flex flex-wrap divide-x divide-gray-100">
+              <div className="flex-1 min-w-[140px]">
+                <Metric
+                  label="Jami kirim" value={formatCurrency(s.total_income)}
+                  sub={`${s.payments_count} ta to'lov`}
+                  icon={TrendingUp} iconBg="bg-emerald-50" iconColor="text-emerald-600"
+                  valueCls="text-emerald-700"
+                />
               </div>
-            ) : (
-              <div className="flex flex-col items-center gap-4">
-                <ResponsiveContainer width="100%" height={140}>
-                  <PieChart>
-                    <Pie
-                      data={methodPieData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={38}
-                      outerRadius={60}
-                      dataKey="value"
-                      strokeWidth={2}
-                    >
-                      {methodPieData.map((entry, i) => (
-                        <Cell
-                          key={i}
-                          fill={entry.name === "Naqd pul" ? COLORS.cash : COLORS.card}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(val) => formatCurrency(Number(val))}
-                      contentStyle={{ fontSize: 12, borderRadius: 8 }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="w-full space-y-2">
-                  {methodPieData.map((entry) => {
-                    const color = entry.name === "Naqd pul" ? COLORS.cash : COLORS.card;
-                    const total = methodPieData.reduce((acc, d) => acc + d.value, 0) || 1;
-                    const pct = Math.round((entry.value / total) * 100);
-                    return (
-                      <div key={entry.name}>
-                        <div className="flex justify-between text-xs mb-0.5">
-                          <span className="flex items-center gap-1.5 text-gray-600">
-                            <span className="w-2 h-2 rounded-full inline-block" style={{ background: color }} />
-                            {entry.name}
-                          </span>
-                          <span className="font-bold tabular-nums" style={{ color }}>{pct}%</span>
-                        </div>
-                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+              <div className="flex-1 min-w-[140px]">
+                <Metric
+                  label="Jami chiqim" value={formatCurrency(s.total_expense)}
+                  icon={TrendingDown} iconBg="bg-red-50" iconColor="text-red-500"
+                  valueCls="text-red-600"
+                />
               </div>
-            )}
+              <div className="flex-1 min-w-[140px]">
+                <Metric
+                  label="Sof balans"
+                  value={`${sign(s.net_balance)}${formatCurrency(s.net_balance)}`}
+                  icon={BarChart3}
+                  iconBg={s.net_balance >= 0 ? "bg-blue-50" : "bg-orange-50"}
+                  iconColor={s.net_balance >= 0 ? "text-blue-600" : "text-orange-500"}
+                  valueCls={s.net_balance >= 0 ? "text-blue-700" : "text-orange-600"}
+                />
+              </div>
+              <div className="flex-1 min-w-[140px]">
+                <Metric
+                  label="Kassalar balansi" value={formatCurrency(s.total_cash_balance)}
+                  sub={`${registers.length} ta kassa`}
+                  icon={Wallet} iconBg="bg-purple-50" iconColor="text-purple-600"
+                />
+              </div>
+            </div>
           </CardContent>
         </Card>
-      </div>
+      ) : null}
 
-      {/* ── Kunlik trend ── */}
+      {/* ── Oylik grafik ── */}
       <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-emerald-500" />
-            So'nggi 30 kunlik trend
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+            <BarChart3 className="w-4 h-4 text-blue-500" />
+            Oylik kirim va chiqim
           </CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <Skeleton className="h-52 w-full rounded-xl" />
-          ) : dailyStats.length === 0 ? (
-            <div className="h-52 flex items-center justify-center text-gray-400 text-sm">
-              Shu davrda ma'lumot yo'q
+          ) : monthlyData.length === 0 ? (
+            <div className="h-52 flex items-center justify-center text-sm text-gray-400">
+              Ma'lumot mavjud emas
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={200}>
-              <AreaChart data={dailyStats}>
-                <defs>
-                  <linearGradient id="incomeGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={COLORS.income} stopOpacity={0.15} />
-                    <stop offset="95%" stopColor={COLORS.income} stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="expenseGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={COLORS.expense} stopOpacity={0.12} />
-                    <stop offset="95%" stopColor={COLORS.expense} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-                <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-                <YAxis tickFormatter={fmtCurrencyShort} tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
-                <Area type="monotone" dataKey="Kirim" stroke={COLORS.income} strokeWidth={2} fill="url(#incomeGrad)" dot={false} />
-                <Area type="monotone" dataKey="Chiqim" stroke={COLORS.expense} strokeWidth={2} fill="url(#expenseGrad)" dot={false} />
-              </AreaChart>
+              <BarChart data={monthlyData} barSize={12} barGap={3} barCategoryGap="30%">
+                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                <YAxis tickFormatter={fmtShort} tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} width={40} />
+                <Tooltip content={<ChartTooltip />} cursor={{ fill: "#f9fafb" }} />
+                <Bar dataKey="Kirim" fill="#10b981" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="Chiqim" fill="#f87171" radius={[3, 3, 0, 0]} />
+              </BarChart>
             </ResponsiveContainer>
           )}
         </CardContent>
       </Card>
 
-      {/* ── Tranzaksiya turlari + Kategoriyalar ── */}
+      {/* ── Kassalar + To'lov usullari ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-        {/* Tranzaksiya turlari — pie + table */}
+        {/* Kassalar */}
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <PieChartIcon className="w-4 h-4 text-purple-500" />
-              Tranzaksiya turlari
-            </CardTitle>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <Wallet className="w-4 h-4 text-amber-500" />
+                Kassalar
+              </CardTitle>
+              {s && (
+                <span className="text-xs font-semibold text-gray-500">
+                  Jami: <span className="text-gray-900">{formatCurrency(kassaTotal)}</span>
+                </span>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <Skeleton className="h-48 w-full rounded-xl" />
-            ) : typePieData.length === 0 ? (
-              <div className="h-48 flex items-center justify-center text-gray-400 text-sm">
-                Ma'lumot mavjud emas
+              <div className="space-y-3">
+                {[1,2,3].map(i => <Skeleton key={i} className="h-14 rounded-xl" />)}
               </div>
+            ) : registers.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-6">Kassalar yo'q</p>
             ) : (
-              <div className="flex gap-4 items-center">
-                <ResponsiveContainer width={140} height={140}>
-                  <PieChart>
-                    <Pie
-                      data={typePieData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={38}
-                      outerRadius={60}
-                      dataKey="value"
-                      strokeWidth={2}
-                    >
-                      {typePieData.map((_, i) => (
-                        <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="flex-1 space-y-1.5">
-                  {typePieData.map((item, i) => (
-                    <div key={item.name} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
-                        <span className="text-xs text-gray-600">{item.name}</span>
+              <div className="space-y-2.5">
+                {registers.map(r => {
+                  const pct = kassaMax > 0 ? Math.round(((r.balance ?? 0) / kassaMax) * 100) : 0;
+                  return (
+                    <div key={r.id} className="p-3.5 bg-gray-50 rounded-xl space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-800">{r.name}</p>
+                          {r.location && <p className="text-[11px] text-gray-400">{r.location}</p>}
+                        </div>
+                        <p className="text-sm font-bold text-gray-900 tabular-nums">{formatCurrency(r.balance ?? 0)}</p>
                       </div>
-                      <span className="text-xs font-bold tabular-nums text-gray-800">{formatCurrency(item.value)}</span>
+                      <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                        <div className="h-full bg-amber-400 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+                      </div>
                     </div>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Kirim/Chiqim kategoriyalari */}
+        {/* To'lov usullari */}
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-orange-500" />
-              Top kategoriyalar
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <CreditCard className="w-4 h-4 text-purple-500" />
+              To'lov usullari
             </CardTitle>
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <Skeleton className="h-48 w-full rounded-xl" />
-            ) : (
               <div className="space-y-4">
-                {topIncome.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide mb-2">Kirim kategoriyalari</p>
-                    {topIncome.slice(0, 4).map((c, i) => {
-                      const pct = topIncome[0]?.total ? Math.round((c.total / topIncome[0].total) * 100) : 0;
-                      return (
-                        <div key={i} className="mb-2">
-                          <div className="flex justify-between text-xs mb-0.5">
-                            <span className="text-gray-600 truncate max-w-[150px]">{c.category__name}</span>
-                            <span className="font-bold text-emerald-700 tabular-nums shrink-0 ml-2">{formatCurrency(c.total)}</span>
-                          </div>
-                          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                            <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${pct}%` }} />
-                          </div>
-                        </div>
-                      );
-                    })}
+                <Skeleton className="h-20 rounded-xl" />
+                <Skeleton className="h-20 rounded-xl" />
+              </div>
+            ) : !s ? null : (
+              <div className="space-y-3">
+                {/* Naqd */}
+                <div className="p-3.5 bg-amber-50 rounded-xl border border-amber-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Banknote className="w-3.5 h-3.5 text-amber-600" />
+                      <span className="text-xs font-semibold text-amber-800">Naqd pul</span>
+                    </div>
+                    <span className="text-xs font-bold text-amber-700 tabular-nums">{cashPct}%</span>
                   </div>
-                )}
-                {topExpense.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-2">Chiqim kategoriyalari</p>
-                    {topExpense.slice(0, 4).map((c, i) => {
-                      const pct = topExpense[0]?.total ? Math.round((c.total / topExpense[0].total) * 100) : 0;
-                      return (
-                        <div key={i} className="mb-2">
-                          <div className="flex justify-between text-xs mb-0.5">
-                            <span className="text-gray-600 truncate max-w-[150px]">{c.category__name}</span>
-                            <span className="font-bold text-red-600 tabular-nums shrink-0 ml-2">{formatCurrency(c.total)}</span>
-                          </div>
-                          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                            <div className="h-full bg-red-500 rounded-full" style={{ width: `${pct}%` }} />
-                          </div>
-                        </div>
-                      );
-                    })}
+                  <div className="h-1.5 bg-amber-100 rounded-full overflow-hidden mb-2">
+                    <div className="h-full bg-amber-400 rounded-full" style={{ width: `${cashPct}%` }} />
                   </div>
-                )}
-                {topIncome.length === 0 && topExpense.length === 0 && (
-                  <div className="h-48 flex items-center justify-center text-gray-400 text-sm">
-                    Kategoriyali tranzaksiyalar yo'q
+                  <div className="flex justify-between text-[11px] text-amber-700">
+                    <span>Kirim: <b className="tabular-nums">{formatCurrency(s.cash_income)}</b></span>
+                    <span>Chiqim: <b className="tabular-nums">{formatCurrency(s.cash_expense)}</b></span>
+                    <span>Sof: <b className={`tabular-nums ${s.cash_net >= 0 ? "" : "text-red-600"}`}>{sign(s.cash_net)}{formatCurrency(s.cash_net)}</b></span>
                   </div>
-                )}
+                </div>
+
+                {/* Plastik */}
+                <div className="p-3.5 bg-purple-50 rounded-xl border border-purple-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <CreditCard className="w-3.5 h-3.5 text-purple-600" />
+                      <span className="text-xs font-semibold text-purple-800">Plastik karta</span>
+                    </div>
+                    <span className="text-xs font-bold text-purple-700 tabular-nums">{cardPct}%</span>
+                  </div>
+                  <div className="h-1.5 bg-purple-100 rounded-full overflow-hidden mb-2">
+                    <div className="h-full bg-purple-400 rounded-full" style={{ width: `${cardPct}%` }} />
+                  </div>
+                  <div className="flex justify-between text-[11px] text-purple-700">
+                    <span>Kirim: <b className="tabular-nums">{formatCurrency(s.card_income)}</b></span>
+                    <span>Chiqim: <b className="tabular-nums">{formatCurrency(s.card_expense)}</b></span>
+                    <span>Sof: <b className={`tabular-nums ${s.card_net >= 0 ? "" : "text-red-600"}`}>{sign(s.card_net)}{formatCurrency(s.card_net)}</b></span>
+                  </div>
+                </div>
               </div>
             )}
           </CardContent>
         </Card>
       </div>
 
-      {/* ── Oylik jadval ── */}
-      {monthlyStats.length > 0 && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <DollarSign className="w-4 h-4 text-blue-500" />
-              Oylik moliya jadvali
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-gray-50">
-                    <th className="text-left py-3 px-5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Oy</th>
-                    <th className="text-right py-3 px-5 text-xs font-semibold text-emerald-600 uppercase">Kirim</th>
-                    <th className="text-right py-3 px-5 text-xs font-semibold text-red-600 uppercase">Chiqim</th>
-                    <th className="text-right py-3 px-5 text-xs font-semibold text-blue-600 uppercase">Sof balans</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {monthlyStats.map((row, i) => {
-                    const bal = row.Balans;
-                    return (
-                      <tr key={i} className="border-b last:border-0 hover:bg-gray-50 transition-colors">
-                        <td className="py-3 px-5 font-medium text-gray-800">{row.name}</td>
-                        <td className="text-right py-3 px-5 text-emerald-600 font-semibold tabular-nums">
-                          +{formatCurrency(row.Kirim)}
-                        </td>
-                        <td className="text-right py-3 px-5 text-red-600 font-semibold tabular-nums">
-                          −{formatCurrency(row.Chiqim)}
-                        </td>
-                        <td className={`text-right py-3 px-5 font-bold tabular-nums ${bal >= 0 ? "text-blue-600" : "text-orange-600"}`}>
-                          {bal >= 0 ? "+" : ""}{formatCurrency(bal)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                {monthlyStats.length > 1 && s && (
-                  <tfoot>
-                    <tr className="bg-gray-50 border-t-2 border-gray-200">
-                      <td className="py-3 px-5 font-bold text-gray-800 text-xs uppercase">Jami</td>
-                      <td className="text-right py-3 px-5 font-bold text-emerald-700 tabular-nums">
-                        +{formatCurrency(s.total_income)}
-                      </td>
-                      <td className="text-right py-3 px-5 font-bold text-red-700 tabular-nums">
-                        −{formatCurrency(s.total_expense)}
-                      </td>
-                      <td className={`text-right py-3 px-5 font-bold tabular-nums ${s.net_balance >= 0 ? "text-blue-700" : "text-orange-700"}`}>
-                        {s.net_balance >= 0 ? "+" : ""}{formatCurrency(s.net_balance)}
-                      </td>
-                    </tr>
-                  </tfoot>
-                )}
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+      {/* ── Kategoriyalar ── */}
+      {(topIncome.length > 0 || topExpense.length > 0) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+          {/* Kirim kategoriyalari */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-emerald-500" />
+                Kirim kategoriyalari
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {topIncome.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-4">Kategoriyalar yo'q</p>
+              ) : (
+                <div className="space-y-3">
+                  {topIncome.slice(0, 5).map((c, i) => (
+                    <CatBar key={i} name={c.category__name} total={c.total} maxTotal={topIncome[0]?.total ?? 1} color="text-emerald-600" />
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Chiqim kategoriyalari */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <TrendingDown className="w-4 h-4 text-red-500" />
+                Chiqim kategoriyalari
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {topExpense.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-4">Kategoriyalar yo'q</p>
+              ) : (
+                <div className="space-y-3">
+                  {topExpense.slice(0, 5).map((c, i) => (
+                    <CatBar key={i} name={c.category__name} total={c.total} maxTotal={topExpense[0]?.total ?? 1} color="text-red-500" />
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       )}
+
     </div>
   );
 }
