@@ -13,8 +13,6 @@ services:
         NEXT_PUBLIC_APP_NAME:     ${NEXT_PUBLIC_APP_NAME:-Mendeleyev}
     container_name: mendeleyev_frontend
     restart: unless-stopped
-    expose:
-      - "3000"
     networks:
       - frontend_net
     security_opt:
