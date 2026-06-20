@@ -1,0 +1,89 @@
+services:
+
+  # ── Next.js application ──────────────────────────────────────────────────────
+  mendeleyev_frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # NEXT_PUBLIC_* o'zgaruvchilari BUILD vaqtida bundle ichiga yoziladi.
+        # API URL o'zgarsa — "make build" bilan qayta build qilish kerak.
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
+        NEXT_PUBLIC_API_VERSION:  ${NEXT_PUBLIC_API_VERSION:-v1}
+        NEXT_PUBLIC_APP_NAME:     ${NEXT_PUBLIC_APP_NAME:-Mendeleyev}
+    container_name: mendeleyev_frontend
+    restart: unless-stopped
+    expose:
+      - "3000"
+    networks:
+      - frontend_net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ── Nginx (tashqariga ochiq yagona port) ────────────────────────────────────
+  mendeleyev_frontend_nginx:
+    image: nginx:1.26-alpine
+    container_name: mendeleyev_frontend_nginx
+    restart: unless-stopped
+    ports:
+      - "3008:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      mendeleyev_frontend:
+        condition: service_healthy
+    networks:
+      - frontend_net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 32M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+
+networks:
+  frontend_net:
+    driver: bridge
+    internal: false

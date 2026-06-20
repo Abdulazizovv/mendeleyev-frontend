@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  output: 'standalone',
   turbopack: {},
   // Favicon va static fayllarni to'g'ri yuklash
   headers: async () => {
