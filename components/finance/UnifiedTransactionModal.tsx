@@ -2,27 +2,20 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { toast } from "sonner";
 import { extractApiError } from "@/lib/error-messages";
 import { financeApi, schoolApi, branchApi } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import {
   Loader2, Search, X, TrendingUp, TrendingDown, ArrowRightLeft,
-  Users, Globe, HelpCircle, Banknote, CreditCard,
+  Users, Globe, HelpCircle, Banknote, CreditCard, Building2,
   GraduationCap, Check, Calendar, AlertTriangle, ArrowRight,
-  ChevronDown, Wallet, BookOpen,
+  ChevronDown, Plus, Lock, ChevronRight,
 } from "lucide-react";
 import type { FinanceCategory, CashRegister, StudentSubscription, StudentBalance } from "@/types/finance";
 import type { Student } from "@/types/school";
@@ -37,7 +30,7 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
-  methodBalance?: { cash_net: number; card_net: number } | null;
+  methodBalance?: { cash_net: number; card_net: number; bank_net?: number } | null;
 }
 
 const UZ_MONTHS = ["Yanvar","Fevral","Mart","Aprel","May","Iyun","Iyul","Avgust","Sentabr","Oktabr","Noyabr","Dekabr"];
@@ -50,12 +43,43 @@ function monthLabel(ym: string) {
   const [y, m] = ym.split("-").map(Number);
   return `${UZ_MONTHS[m - 1]} ${y}`;
 }
-function buildMonthOptions(count = 12) {
+function buildMonthOptions(pastCount = 5, futureCount = 3) {
   const now = new Date();
-  return Array.from({ length: count }, (_, i) => {
+  const options: string[] = [];
+  for (let i = pastCount; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  });
+    options.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+  for (let i = 1; i <= futureCount; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    options.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+  return options;
+}
+type DebtMonth = { month: string; owed: number; is_partial: boolean };
+
+function getUnpaidMonths(sub?: StudentSubscription | null): DebtMonth[] {
+  if (!sub || !sub.total_debt || sub.total_debt <= 0 || !sub.subscription_plan_price || !sub.next_payment_date) return [];
+  const price = sub.subscription_plan_price;
+  const fullMonths = Math.floor(sub.total_debt / price);
+  const partial = sub.total_debt % price;
+  const totalPeriods = fullMonths + (partial > 0 ? 1 : 0);
+  const result: DebtMonth[] = [];
+  for (let i = totalPeriods; i >= 1; i--) {
+    const nextDate = new Date(sub.next_payment_date + "T00:00:00");
+    const d = new Date(nextDate.getFullYear(), nextDate.getMonth() - i, 1);
+    const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const isPartial = i === totalPeriods && partial > 0;
+    result.push({ month: ym, owed: isPartial ? partial : price, is_partial: isPartial });
+  }
+  return result;
+}
+
+// Keyingi oyni hisoblash (YYYY-MM)
+function nextMonth(ym: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  const d = new Date(y, m, 1); // m — 0-indexed bo'lgani uchun to'g'ri
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 function parseAmt(val: string) { return parseInt(val.replace(/\D/g, ""), 10) || 0; }
 function displayAmt(n: number) { return n ? n.toLocaleString("ru-RU") : ""; }
@@ -82,10 +106,11 @@ export default function UnifiedTransactionModal({ type, cashRegister, branchId, 
   const [catOpen, setCatOpen]               = useState(false);
   const [catSearch, setCatSearch]           = useState("");
   const [amountStr, setAmountStr]           = useState("");
-  const [paymentMethod, setPaymentMethod]   = useState<"cash" | "card">("cash");
+  const [paymentMethod, setPaymentMethod]   = useState<"cash" | "card" | "bank">("cash");
   const [toMethod, setToMethod]             = useState<"cash" | "card">("card");
   const [description, setDescription]      = useState("");
-  const [periodMonth, setPeriodMonth]       = useState(currentYearMonth);
+  // ordered array of YYYY-MM strings (first item = default/oldest debt)
+  const [selectedMonths, setSelectedMonths] = useState<string[]>([currentYearMonth()]);
   const [thirdPartyName, setThirdPartyName] = useState("");
   const [studentSearch, setStudentSearch]   = useState("");
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -96,7 +121,7 @@ export default function UnifiedTransactionModal({ type, cashRegister, branchId, 
     if (!isOpen) return;
     setCategoryId(""); setCatOpen(false); setCatSearch(""); setAmountStr("");
     setPaymentMethod("cash"); setToMethod("card");
-    setDescription(""); setPeriodMonth(currentYearMonth()); setThirdPartyName("");
+    setDescription(""); setSelectedMonths([currentYearMonth()]); setThirdPartyName("");
     setStudentSearch(""); setSelectedStudent(null); setEmployeeSearch(""); setSelectedEmployee(null);
   }, [isOpen, type]);
 
@@ -124,10 +149,37 @@ export default function UnifiedTransactionModal({ type, cashRegister, branchId, 
     enabled: !!selectedStudent && clientType === "student",
     staleTime: 60_000,
   });
-  const activeSub = studentSubData?.results?.[0];
+  const activeSub = studentSubData?.results?.[0] ?? null;
+  const debtMonths = useMemo(() => getUnpaidMonths(activeSub), [activeSub]);
+
+  // Debt oylarini avtomatik belgilash
   useEffect(() => {
-    if (activeSub && !amountStr) setAmountStr(displayAmt(activeSub.subscription_plan_price ?? 0));
-  }, [activeSub]);
+    if (!isOpen) return;
+    if (!selectedStudent) {
+      setSelectedMonths([currentYearMonth()]);
+      return;
+    }
+    if (debtMonths.length > 0) {
+      // Faqat birinchi qarz oyini avtomatik qo'yamiz
+      setSelectedMonths([debtMonths[0].month]);
+    } else {
+      setSelectedMonths([currentYearMonth()]);
+    }
+  }, [isOpen, selectedStudent, activeSub]);
+
+  // Tanlangan oylar asosida summani avtomatik hisoblash
+  function getMonthAmount(ym: string): number {
+    const debt = debtMonths.find((m) => m.month === ym);
+    if (debt) return debt.owed;
+    return activeSub?.subscription_plan_price ?? 0;
+  }
+
+  useEffect(() => {
+    if (clientType !== "student" || !activeSub) return;
+    if (selectedMonths.length === 0) return;
+    const total = selectedMonths.reduce((sum, ym) => sum + getMonthAmount(ym), 0);
+    if (total > 0) setAmountStr(displayAmt(total));
+  }, [selectedMonths, activeSub?.subscription_plan_price, clientType]);
 
   // Student balance (wallet)
   const { data: studentBalanceData } = useQuery({
@@ -165,22 +217,36 @@ export default function UnifiedTransactionModal({ type, cashRegister, branchId, 
       if (amount <= 0) throw new Error("Summa 0 dan katta bo'lishi kerak");
       if (type === "transfer") {
         if (paymentMethod === toMethod) throw new Error("Manba va maqsad bir xil bo'lishi mumkin emas");
-        return financeApi.internalTransfer({ cash_register: cashRegister.id, from_method: paymentMethod, to_method: toMethod, amount, description });
+        return financeApi.internalTransfer({ cash_register: cashRegister.id, from_method: paymentMethod as "cash" | "card", to_method: toMethod, amount, description });
       }
       if (!categoryId) throw new Error("Tranzaksiya turini tanlang");
-      if (clientType === "student"     && !selectedStudent)       throw new Error("O'quvchini tanlang");
-      if (clientType === "employee"    && !selectedEmployee)      throw new Error("Xodimni tanlang");
-      if (clientType === "third_party" && !thirdPartyName.trim()) throw new Error("Uchinchi shaxs nomini kiriting");
-      return financeApi.createTransaction({
+      if (clientType === "student"     && !selectedStudent)           throw new Error("O'quvchini tanlang");
+      if (clientType === "student"     && selectedMonths.length === 0) throw new Error("Kamida bitta oy tanlang");
+      if (clientType === "employee"    && !selectedEmployee)           throw new Error("Xodimni tanlang");
+      if (clientType === "third_party" && !thirdPartyName.trim())      throw new Error("Uchinchi shaxs nomini kiriting");
+
+      const commonPayload = {
         branch: branchId, cash_register: cashRegister.id,
         transaction_type: type === "income" ? "income" : "expense",
-        category: categoryId, amount, payment_method: paymentMethod, description,
+        category: categoryId, payment_method: paymentMethod, description,
         student_profile:     clientType === "student"     ? selectedStudent?.id  : undefined,
         employee_membership: clientType === "employee"    ? selectedEmployee?.id : undefined,
-        period_month:        clientType === "student"     ? periodMonth          : undefined,
         third_party_name:    clientType === "third_party" ? thirdPartyName       : undefined,
         auto_approve: true,
-      });
+      } as const;
+
+      // O'quvchi to'lovi — bitta tranzaksiya, period_months ro'yxati bilan
+      if (clientType === "student") {
+        const sortedMonths = [...selectedMonths].sort();
+        return financeApi.createTransaction({
+          ...commonPayload,
+          amount,
+          period_month: sortedMonths[0],
+          period_months: sortedMonths.length > 1 ? sortedMonths : undefined,
+        });
+      }
+
+      return financeApi.createTransaction({ ...commonPayload, amount });
     },
     onSuccess: () => {
       toast.success(type === "income" ? "Kirim saqlandi" : type === "expense" ? "Chiqim saqlandi" : "Transfer amalga oshirildi");
@@ -188,6 +254,8 @@ export default function UnifiedTransactionModal({ type, cashRegister, branchId, 
       queryClient.invalidateQueries({ queryKey: ["cash-register-transactions"] });
       queryClient.invalidateQueries({ queryKey: ["cash-registers"] });
       queryClient.invalidateQueries({ queryKey: ["tx-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["student"] });
+      queryClient.invalidateQueries({ queryKey: ["students"] });
       onSuccess?.(); onClose();
     },
     onError: (err: unknown) => toast.error(extractApiError(err) ?? "Xatolik yuz berdi"),
@@ -196,6 +264,7 @@ export default function UnifiedTransactionModal({ type, cashRegister, branchId, 
   return (
     <Sheet open={isOpen} onOpenChange={(o) => !o && onClose()}>
       <SheetContent side="right" hideClose className="w-full sm:max-w-[420px] p-0 flex flex-col gap-0 overflow-hidden">
+        <SheetTitle className="sr-only">{cfg.label}</SheetTitle>
 
         {/* ── Colored header ── */}
         <div className={cn("px-5 py-4 shrink-0 relative", cfg.hdr)}>
@@ -225,7 +294,7 @@ export default function UnifiedTransactionModal({ type, cashRegister, branchId, 
             {/* ═══ TRANSFER ═══ */}
             {type === "transfer" && (
               <TransferSection
-                fromMethod={paymentMethod}
+                fromMethod={paymentMethod as "cash" | "card"}
                 toMethod={toMethod}
                 cashNet={methodBalance?.cash_net}
                 cardNet={methodBalance?.card_net}
@@ -337,6 +406,7 @@ export default function UnifiedTransactionModal({ type, cashRegister, branchId, 
                     student={selectedStudent}
                     activeSub={activeSub}
                     studentBalance={studentBalance}
+                    debtMonths={debtMonths}
                     onClear={() => { setSelectedStudent(null); setAmountStr(""); }}
                   />
                 ) : (
@@ -356,15 +426,12 @@ export default function UnifiedTransactionModal({ type, cashRegister, branchId, 
 
             {/* ═══ MONTH ═══ */}
             {type !== "transfer" && clientType === "student" && selectedStudent && (
-              <section>
-                <FL><Calendar className="w-3.5 h-3.5 inline mr-1 mb-0.5" />Qaysi oy uchun</FL>
-                <Select value={periodMonth} onValueChange={setPeriodMonth}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {buildMonthOptions(12).map((ym) => <SelectItem key={ym} value={ym}>{monthLabel(ym)}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </section>
+              <MonthPicker
+                debtMonths={debtMonths}
+                activeSub={activeSub}
+                selectedMonths={selectedMonths}
+                onChange={setSelectedMonths}
+              />
             )}
 
             {/* ═══ EMPLOYEE PICKER ═══ */}
@@ -448,17 +515,20 @@ export default function UnifiedTransactionModal({ type, cashRegister, branchId, 
             {type !== "transfer" && (
               <section>
                 <FL>To'lov usuli</FL>
-                <div className="grid grid-cols-2 gap-2">
-                  {(["cash", "card"] as const).map((m) => {
-                    const Icon = m === "cash" ? Banknote : CreditCard;
-                    const active = paymentMethod === m;
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    { value: "cash",  Icon: Banknote,   label: "Naqd"    },
+                    { value: "card",  Icon: CreditCard,  label: "Plastik" },
+                    { value: "bank",  Icon: Building2,   label: "Bank"    },
+                  ] as const).map(({ value, Icon, label }) => {
+                    const active = paymentMethod === value;
                     return (
-                      <button key={m} type="button" onClick={() => setPaymentMethod(m)}
+                      <button key={value} type="button" onClick={() => setPaymentMethod(value)}
                         className={cn(
-                          "flex items-center justify-center gap-2 h-10 rounded-xl border-2 text-sm font-medium transition-all",
+                          "flex items-center justify-center gap-1.5 h-10 rounded-xl border-2 text-sm font-medium transition-all",
                           active ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 text-slate-600 hover:border-slate-300"
                         )}>
-                        <Icon className="w-4 h-4" />{m === "cash" ? "Naqd" : "Plastik"}
+                        <Icon className="w-4 h-4" />{label}
                       </button>
                     );
                   })}
@@ -502,20 +572,22 @@ export default function UnifiedTransactionModal({ type, cashRegister, branchId, 
 
 // ── Student financial card ────────────────────────────────────────────────────
 
-function StudentCard({ student, activeSub, studentBalance, onClear }: {
+function StudentCard({ student, activeSub, studentBalance, debtMonths, onClear }: {
   student: Student;
-  activeSub?: StudentSubscription;
+  activeSub?: StudentSubscription | null;
   studentBalance?: StudentBalance | null;
+  debtMonths: DebtMonth[];
   onClear: () => void;
 }) {
-  const walletBal = studentBalance?.balance ?? null;
-  const walletNeg = walletBal !== null && walletBal < 0;
-  const hasDebt = activeSub && activeSub.total_debt > 0;
+  const walletBal = studentBalance?.balance ?? 0;
+  const totalDebt = activeSub?.total_debt ?? 0;
+  const hasDebt = totalDebt > 0;
+  const [debtExpanded, setDebtExpanded] = useState(false);
 
   return (
     <div className="rounded-xl border border-slate-200 overflow-hidden">
-      {/* Identity row */}
-      <div className="flex items-center gap-3 px-3.5 py-2.5 bg-slate-50 border-b border-slate-200">
+      {/* Header: ism va o'chirish tugmasi */}
+      <div className="flex items-center gap-3 px-3.5 py-2.5 bg-slate-50">
         <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center shrink-0">
           <GraduationCap className="w-4 h-4 text-slate-500" />
         </div>
@@ -531,66 +603,302 @@ function StudentCard({ student, activeSub, studentBalance, onClear }: {
         </button>
       </div>
 
-      {/* Finance stats row */}
-      <div className="grid grid-cols-3 divide-x divide-slate-100 bg-white">
-        {/* Wallet */}
+      {/* Balans va qarz */}
+      <div className="grid grid-cols-2 divide-x divide-slate-100 border-t border-slate-100">
         <div className="px-3 py-2.5">
-          <p className="text-xs text-slate-400 mb-0.5 flex items-center gap-1">
-            <Wallet className="w-3 h-3" />Hamyon
+          <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-0.5">Balans</p>
+          <p className={cn("text-sm font-bold tabular-nums",
+            walletBal > 0 ? "text-emerald-600" : walletBal < 0 ? "text-rose-600" : "text-slate-400"
+          )}>
+            {walletBal > 0 ? "+" : ""}{formatCurrency(walletBal)}
           </p>
-          {walletBal === null ? (
-            <p className="text-xs text-slate-300">—</p>
-          ) : (
-            <p className={cn(
-              "text-sm font-bold tabular-nums",
-              walletNeg ? "text-rose-600" : walletBal > 0 ? "text-emerald-600" : "text-slate-400"
-            )}>
-              {walletBal >= 0 ? "+" : ""}{formatCurrency(walletBal)}
-            </p>
-          )}
         </div>
-
-        {/* Subscription price */}
         <div className="px-3 py-2.5">
-          <p className="text-xs text-slate-400 mb-0.5 flex items-center gap-1">
-            <BookOpen className="w-3 h-3" />Abonement
+          <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-0.5">
+            {hasDebt ? "Qarz" : activeSub ? "Oylik to'lov" : "Abonement"}
           </p>
-          {activeSub ? (
+          {hasDebt ? (
+            <p className="text-sm font-bold tabular-nums text-rose-600">
+              {formatCurrency(totalDebt)}
+              <span className="text-[10px] font-normal text-rose-400 ml-1">{debtMonths.length} oy</span>
+            </p>
+          ) : activeSub ? (
             <p className="text-sm font-bold tabular-nums text-slate-700">
               {formatCurrency(activeSub.subscription_plan_price)}
-              <span className="text-xs font-normal text-slate-400">/oy</span>
+              <span className="text-[10px] font-normal text-slate-400">/oy</span>
             </p>
           ) : (
             <p className="text-xs text-slate-300">Yo'q</p>
           )}
         </div>
-
-        {/* Debt */}
-        <div className="px-3 py-2.5">
-          <p className="text-xs text-slate-400 mb-0.5 flex items-center gap-1">
-            <AlertTriangle className="w-3 h-3" />Qarz
-          </p>
-          {activeSub ? (
-            <p className={cn("text-sm font-bold tabular-nums", hasDebt ? "text-rose-600" : "text-emerald-600")}>
-              {hasDebt ? formatCurrency(activeSub.total_debt) : "Yo'q"}
-            </p>
-          ) : (
-            <p className="text-xs text-slate-300">—</p>
-          )}
-        </div>
       </div>
 
-      {/* Alerts */}
-      {(walletNeg || hasDebt) && (
-        <div className="flex items-center gap-2 px-3.5 py-2 bg-amber-50 border-t border-amber-100">
-          <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-          <p className="text-xs text-amber-700">
-            {walletNeg && hasDebt ? "Hamyon manfiy va qarzdor" :
-             walletNeg ? "Hamyon balansi manfiy" : "To'lanmagan qarz mavjud"}
-          </p>
+      {/* Qarz oylar batafsil */}
+      {hasDebt && debtMonths.length > 0 && (
+        <div className="border-t border-rose-100">
+          <button
+            type="button"
+            onClick={() => setDebtExpanded((v) => !v)}
+            className="w-full flex items-center justify-between px-3.5 py-2 text-left hover:bg-rose-50 transition-colors"
+          >
+            <span className="text-xs font-medium text-rose-600">
+              Qarz oylar ro'yxati ({debtMonths.length} ta)
+            </span>
+            <ChevronRight className={cn("w-3.5 h-3.5 text-rose-400 transition-transform", debtExpanded && "rotate-90")} />
+          </button>
+          {debtExpanded && (
+            <div className="divide-y divide-rose-50 bg-rose-50/50">
+              {debtMonths.map((dm, i) => (
+                <div key={dm.month} className="flex items-center justify-between px-3.5 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-rose-100 text-rose-600 text-[10px] font-bold flex items-center justify-center shrink-0">
+                      {i + 1}
+                    </span>
+                    <span className="text-xs text-rose-700 font-medium">{monthLabel(dm.month)}</span>
+                    {dm.is_partial && (
+                      <span className="text-[9px] text-rose-400 bg-rose-100 px-1.5 py-0.5 rounded">qisman</span>
+                    )}
+                  </div>
+                  <span className="text-xs font-semibold text-rose-700 tabular-nums">{formatCurrency(dm.owed)}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
+  );
+}
+
+// ── Month picker ─────────────────────────────────────────────────────────────
+
+function MonthPicker({ debtMonths, activeSub, selectedMonths, onChange }: {
+  debtMonths: DebtMonth[];
+  activeSub?: StudentSubscription | null;
+  selectedMonths: string[];
+  onChange: (months: string[]) => void;
+}) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const price = activeSub?.subscription_plan_price ?? 0;
+  const debtSet = new Set(debtMonths.map((m) => m.month));
+  const nowYm = currentYearMonth();
+
+  function getAmount(ym: string): number {
+    const debt = debtMonths.find((m) => m.month === ym);
+    return debt ? debt.owed : price;
+  }
+
+  // To'lanmagan qarz oylari (tanlanmagan)
+  const unpaidDebtMonths = debtMonths.filter((dm) => !selectedMonths.includes(dm.month));
+  const hasUnpaidDebt = unpaidDebtMonths.length > 0;
+  const firstDebt = debtMonths[0];
+
+  // Tanlash uchun mavjud oylar ro'yxati
+  const availableMonths: Array<{ ym: string; locked: boolean; reason?: string }> = useMemo(() => {
+    const selected = new Set(selectedMonths);
+
+    if (hasUnpaidDebt) {
+      // Faqat birinchi to'lanmagan qarz oyi tanlanishi mumkin
+      return unpaidDebtMonths.map((dm, i) => ({
+        ym: dm.month,
+        locked: i > 0, // Birinchidan tashqari qolganlar qulflangan
+        reason: i > 0 ? `Avval ${monthLabel(unpaidDebtMonths[i - 1].month)} to'lang` : undefined,
+      }));
+    }
+
+    // Qarz yo'q — erkin oy tanlash (o'tgan 6 + kelajak 6, allaqachon tanlanganlar bundan tashqari)
+    return buildMonthOptions(6, 6)
+      .filter((ym) => !selected.has(ym))
+      .map((ym) => ({ ym, locked: false }));
+  }, [selectedMonths, unpaidDebtMonths, hasUnpaidDebt]);
+
+  function handleSelect(ym: string) {
+    if (!selectedMonths.includes(ym)) {
+      onChange([...selectedMonths, ym]);
+    }
+    setPickerOpen(false);
+  }
+
+  function handleRemove(idx: number) {
+    // Oxirgi oydan yuqorisini olib tashlash mumkin emas (ketma-ketlik)
+    const newMonths = selectedMonths.slice(0, idx);
+    onChange(newMonths.length > 0 ? newMonths : [selectedMonths[0]]);
+  }
+
+  const totalSelected = selectedMonths.reduce((s, ym) => s + getAmount(ym), 0);
+  const canOpenPicker = availableMonths.length > 0;
+
+  return (
+    <section>
+      <FL><Calendar className="w-3.5 h-3.5 inline mr-1 mb-0.5" />To'lov oyi</FL>
+
+      <div className="space-y-2">
+        {/* Tanlangan oylar */}
+        {selectedMonths.map((ym, idx) => {
+          const isDebt = debtSet.has(ym);
+          const amt = getAmount(ym);
+          const debtInfo = debtMonths.find((m) => m.month === ym);
+          const canRemove = idx > 0;
+
+          return (
+            <div
+              key={ym}
+              className={cn(
+                "flex items-center gap-3 px-3.5 py-2.5 rounded-xl border-2",
+                isDebt ? "border-rose-300 bg-rose-50" : "border-emerald-300 bg-emerald-50"
+              )}
+            >
+              <div className={cn(
+                "w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0",
+                isDebt ? "bg-rose-200 text-rose-700" : "bg-emerald-200 text-emerald-700"
+              )}>
+                {idx + 1}
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className={cn("text-sm font-semibold", isDebt ? "text-rose-800" : "text-emerald-800")}>
+                    {monthLabel(ym)}
+                  </span>
+                  {isDebt && (
+                    <span className="text-[9px] font-medium bg-rose-200 text-rose-700 px-1.5 py-0.5 rounded-full">
+                      qarz{debtInfo?.is_partial ? " · qisman" : ""}
+                    </span>
+                  )}
+                </div>
+                <span className={cn("text-xs tabular-nums font-medium", isDebt ? "text-rose-600" : "text-emerald-600")}>
+                  {formatCurrency(amt)}
+                </span>
+              </div>
+
+              {canRemove ? (
+                <button
+                  type="button"
+                  onClick={() => handleRemove(idx)}
+                  className={cn(
+                    "w-6 h-6 rounded-md flex items-center justify-center transition-colors shrink-0",
+                    isDebt
+                      ? "text-rose-400 hover:text-rose-700 hover:bg-rose-200"
+                      : "text-emerald-400 hover:text-emerald-700 hover:bg-emerald-200"
+                  )}
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              ) : (
+                <div className="w-6 h-6 shrink-0" />
+              )}
+            </div>
+          );
+        })}
+
+        {/* + Oy qo'shish */}
+        {canOpenPicker && (
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setPickerOpen((v) => !v)}
+              className={cn(
+                "w-full flex items-center justify-center gap-2 h-10 rounded-xl border-2 border-dashed text-sm font-medium transition-all",
+                pickerOpen
+                  ? "border-slate-400 bg-slate-50 text-slate-700"
+                  : "border-slate-300 text-slate-500 hover:border-slate-400 hover:text-slate-700 hover:bg-slate-50"
+              )}
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Oy qo'shish
+              <ChevronDown className={cn("w-3.5 h-3.5 text-slate-400 transition-transform", pickerOpen && "rotate-180")} />
+            </button>
+
+            {/* Oy tanlash paneli */}
+            {pickerOpen && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-20 overflow-hidden">
+                {hasUnpaidDebt ? (
+                  /* Qarz oylari — ketma-ket */
+                  <div className="p-2 space-y-1">
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wide px-2 py-1">Qarz oylar</p>
+                    {availableMonths.map(({ ym, locked, reason }) => {
+                      const dm = debtMonths.find((m) => m.month === ym)!;
+                      return (
+                        <button
+                          key={ym}
+                          type="button"
+                          disabled={locked}
+                          onClick={() => !locked && handleSelect(ym)}
+                          className={cn(
+                            "w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors",
+                            locked
+                              ? "opacity-40 cursor-not-allowed bg-slate-50"
+                              : "hover:bg-rose-50 active:bg-rose-100"
+                          )}
+                        >
+                          <div className="flex items-center gap-2">
+                            {locked
+                              ? <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              : <div className="w-3.5 h-3.5 rounded-full border-2 border-rose-400 shrink-0" />
+                            }
+                            <div>
+                              <p className="text-sm font-medium text-slate-800">{monthLabel(ym)}</p>
+                              {reason && <p className="text-[10px] text-slate-400">{reason}</p>}
+                            </div>
+                          </div>
+                          <span className="text-xs font-semibold text-rose-600 tabular-nums">{formatCurrency(dm.owed)}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  /* Erkin oy tanlash */
+                  <div className="p-2">
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wide px-2 py-1">Oy tanlang</p>
+                    <div className="grid grid-cols-3 gap-1">
+                      {availableMonths.map(({ ym }) => {
+                        const isFuture = ym > nowYm;
+                        const isCurrent = ym === nowYm;
+                        return (
+                          <button
+                            key={ym}
+                            type="button"
+                            onClick={() => handleSelect(ym)}
+                            className={cn(
+                              "px-2 py-2 rounded-lg text-xs font-medium text-center transition-colors",
+                              isCurrent
+                                ? "bg-slate-100 text-slate-800 hover:bg-slate-200"
+                                : isFuture
+                                ? "text-blue-700 hover:bg-blue-50"
+                                : "text-slate-700 hover:bg-slate-50"
+                            )}
+                          >
+                            {monthLabel(ym)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Qarz bor, lekin birinchi tanlangan oy noto'g'ri */}
+        {!canOpenPicker && hasUnpaidDebt && firstDebt && (
+          <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-amber-200 bg-amber-50">
+            <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+            <p className="text-xs text-amber-700 font-medium">
+              Avval <span className="font-bold">{monthLabel(firstDebt.month)}</span> qarzini to'lang
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Jami */}
+      {selectedMonths.length > 1 && totalSelected > 0 && (
+        <div className="mt-2 flex items-center justify-between px-3 py-2 rounded-lg bg-slate-100">
+          <span className="text-xs text-slate-500">{selectedMonths.length} ta oy · jami:</span>
+          <span className="text-sm font-bold text-slate-800 tabular-nums">{formatCurrency(totalSelected)}</span>
+        </div>
+      )}
+    </section>
   );
 }
 

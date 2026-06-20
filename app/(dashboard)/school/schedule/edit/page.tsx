@@ -1,28 +1,31 @@
-/**
- * Timetable Template Edit Page
- * TIME-BASED GRID: Rows = Time Slots, Columns = Classes
- * Uses TimetableSlots (template definitions), NOT LessonInstances
- */
-
 'use client';
 
-import React, { useState, useCallback } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import React, { useState, useCallback, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   useTimetableTemplates,
   useTimetableSlots,
   useCreateTimetableSlot,
   useUpdateTimetableSlot,
   useDeleteTimetableSlot,
-  scheduleKeys,
 } from '@/lib/features/schedule/hooks';
-import { TimeBasedGrid } from '@/lib/features/schedule/components/TimeBasedGrid';
+import { WeeklyClassGrid } from '@/lib/features/schedule/components/WeeklyClassGrid';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Calendar, AlertCircle, Loader2, Plus, Pencil, Trash2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  ArrowLeft,
+  Calendar,
+  AlertCircle,
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+  BookOpen,
+  GraduationCap,
+  CheckCircle2,
+} from 'lucide-react';
 import Link from 'next/link';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { 
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -55,654 +58,516 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
 
-const DAYS = [
-  { value: 1, label: 'Dushanba' },
-  { value: 2, label: 'Seshanba' },
-  { value: 3, label: 'Chorshanba' },
-  { value: 4, label: 'Payshanba' },
-  { value: 5, label: 'Juma' },
-  { value: 6, label: 'Shanba' },
-];
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-interface CreateSlotDialogState {
+interface CreateDialogState {
   open: boolean;
   classId?: string;
+  dayOfWeek?: number;
   timeSlot?: TimeSlotDefinition;
 }
 
-interface EditSlotDialogState {
+interface EditDialogState {
   open: boolean;
   slot?: TimetableSlot;
 }
 
-interface DeleteSlotDialogState {
+interface DeleteDialogState {
   open: boolean;
   slot?: TimetableSlot;
 }
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function TimetableEditPage() {
   const { currentBranch } = useAuth();
   const branchId = currentBranch?.branch_id || '';
-  const queryClient = useQueryClient();
-  
-  const [selectedDay, setSelectedDay] = useState<number>(1);
-  const [createDialogState, setCreateDialogState] = useState<CreateSlotDialogState>({ open: false });
-  const [editDialogState, setEditDialogState] = useState<EditSlotDialogState>({ open: false });
-  const [deleteDialogState, setDeleteDialogState] = useState<DeleteSlotDialogState>({ open: false });
-  const [selectedClassSubjectId, setSelectedClassSubjectId] = useState<string | undefined>(undefined);
-  const [selectedRoomId, setSelectedRoomId] = useState<string | undefined>(undefined);
+  const userRole = currentBranch?.role ?? '';
+  const scheduleBase = userRole === 'branch_admin' ? '/branch-admin/schedule' : '/school/schedule';
 
-  // Room ID handler to convert "_none" to undefined
-  const handleRoomChange = useCallback((value: string) => {
-    setSelectedRoomId(value === "_none" ? undefined : value);
-  }, []);
+  // Selected class index (navigate with arrows)
+  const [selectedClassIndex, setSelectedClassIndex] = useState(0);
 
-  // Fetch branch settings for time slots
-  const { data: branchSettings, isLoading: settingsLoading } = useQuery({
+  // Dialog states
+  const [createDialog, setCreateDialog] = useState<CreateDialogState>({ open: false });
+  const [editDialog, setEditDialog]     = useState<EditDialogState>({ open: false });
+  const [deleteDialog, setDeleteDialog] = useState<DeleteDialogState>({ open: false });
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string | undefined>();
+  const [selectedRoomId, setSelectedRoomId]       = useState<string | undefined>();
+
+  // ── Fetch data ──────────────────────────────────────────────────────────────
+
+  const { data: branchSettings } = useQuery({
     queryKey: ['branch-settings', branchId],
-    queryFn: async () => {
-      if (!branchId) throw new Error('No branch ID');
-      return await branchApi.getBranchSettings(branchId);
-    },
+    queryFn: () => branchApi.getBranchSettings(branchId),
     enabled: !!branchId,
   });
 
-  // Generate time slots from branch settings (with lunch break support)
-  const timeSlots = React.useMemo<TimeSlotDefinition[]>(() => {
-    if (!branchSettings) return [];
-    
-    const slots: TimeSlotDefinition[] = [];
-    const startTime = parse(branchSettings.school_start_time.substring(0, 5), 'HH:mm', new Date());
-    // Use daily_lesson_end_time if available, otherwise fall back to school_end_time
-    const endTimeStr = branchSettings.daily_lesson_end_time || branchSettings.school_end_time;
-    const endTime = parse(endTimeStr.substring(0, 5), 'HH:mm', new Date());
-    
-    // Parse lunch break times if available
-    const lunchStart = branchSettings.lunch_break_start 
-      ? parse(branchSettings.lunch_break_start.substring(0, 5), 'HH:mm', new Date())
-      : null;
-    const lunchEnd = branchSettings.lunch_break_end 
-      ? parse(branchSettings.lunch_break_end.substring(0, 5), 'HH:mm', new Date())
-      : null;
-    
-    let currentTime = startTime;
-    let slotNumber = 1;
-    let lunchAdded = false;
-    
-    while (currentTime < endTime) {
-      const slotEnd = addMinutes(currentTime, branchSettings.lesson_duration_minutes);
-      
-      // Check if lesson would exceed school end time
-      if (slotEnd > endTime) break;
-      
-      // Check if this lesson would overlap with lunch break
-      if (lunchStart && lunchEnd && !lunchAdded && slotEnd > lunchStart && currentTime < lunchEnd) {
-        // Add lunch break slot if we haven't added it yet
-        if (currentTime < lunchStart) {
-          // We're before lunch, so add lunch now
-          slots.push({
-            lesson_number: 0, // Special marker for lunch
-            start_time: formatDate(lunchStart, 'HH:mm:ss'),
-            end_time: formatDate(lunchEnd, 'HH:mm:ss'),
-            label: '🍽️ Tushlik vaqti',
-          });
-          lunchAdded = true;
-        }
-        
-        // Move to end of lunch break and continue
-        currentTime = lunchEnd;
-        continue;
-      }
-      
-      // Add regular lesson slot
-      slots.push({
-        lesson_number: slotNumber,
-        start_time: formatDate(currentTime, 'HH:mm:ss'),
-        end_time: formatDate(slotEnd, 'HH:mm:ss'),
-        label: `${slotNumber}-dars`,
-      });
-      
-      slotNumber++;
-      
-      // Move to next slot (add break time)
-      currentTime = addMinutes(slotEnd, branchSettings.break_duration_minutes);
-    }
-    
-    return slots;
-  }, [branchSettings]);
+  const { data: templatesResponse, isLoading: templatesLoading } = useTimetableTemplates(branchId);
+  const activeTemplate = templatesResponse?.results?.find((t) => t.is_active) ?? templatesResponse?.results?.[0];
 
-  // Fetch active template
-  const { data: templatesResponse, isLoading: templatesLoading } = useTimetableTemplates(branchId, { is_active: true });
-  const activeTemplate = templatesResponse?.results?.[0];
-
-  // Fetch slots for active template
   const { data: slotsResponse, isLoading: slotsLoading } = useTimetableSlots(
     branchId,
-    activeTemplate?.id || '',
-    undefined
+    activeTemplate?.id ?? '',
   );
-  const allSlots = slotsResponse?.results || [];
+  const allSlots: TimetableSlot[] = slotsResponse?.results ?? [];
 
-  // Fetch all active classes
-  const { data: classesData = [], isLoading: classesLoading } = useQuery<Class[]>({
+  const { data: classesData, isLoading: classesLoading } = useQuery({
     queryKey: ['classes', branchId, 'active'],
-    queryFn: () => schoolApi.getClasses(branchId, {
-      is_active: true,
-      page_size: 100,
-      ordering: 'grade_level,section',
-    }),
+    queryFn: () => schoolApi.getClassesPaginated(branchId, { is_active: true, page_size: 100, ordering: 'grade_level,section' }),
     enabled: !!branchId,
   });
+  const classesRaw: Class[] = classesData?.results ?? [];
 
-  // Transform classes to grid format (only id and name needed)
-  const classes = classesData.map(cls => ({
-    id: cls.id,
-    name: cls.name,
-  }));
+  const activeClassId =
+    createDialog.open ? createDialog.classId
+    : editDialog.open  ? editDialog.slot?.class_obj
+    : undefined;
 
-  // Fetch class subjects for selected class
-  const { 
-    data: classSubjects = [], 
-    isLoading: classSubjectsLoading,
-    isError: classSubjectsError 
-  } = useQuery<ClassSubject[]>({
-    queryKey: ['class-subjects', branchId, createDialogState.classId || editDialogState.slot?.class_obj],
-    queryFn: () =>
-      schoolApi.getClassSubjects(createDialogState.classId || editDialogState.slot?.class_obj!, {
-        is_active: true,
-      }),
-    enabled: !!branchId && !!(createDialogState.classId || editDialogState.slot?.class_obj),
+  const { data: classSubjects = [], isLoading: subjectsLoading } = useQuery<ClassSubject[]>({
+    queryKey: ['class-subjects', branchId, activeClassId],
+    queryFn: () => schoolApi.getClassSubjects(activeClassId!, { is_active: true }),
+    enabled: !!activeClassId,
   });
 
-  // Fetch rooms for room selection
   const { data: rooms = [], isLoading: roomsLoading } = useQuery<Room[]>({
     queryKey: ['rooms', branchId],
     queryFn: () => schoolApi.getRooms(branchId, { is_active: true }),
     enabled: !!branchId,
   });
 
-  // Mutations
-  const createMutation = useCreateTimetableSlot(branchId, activeTemplate?.id || '');
-  const updateMutation = useUpdateTimetableSlot(branchId, activeTemplate?.id || '');
-  const deleteMutation = useDeleteTimetableSlot(branchId, activeTemplate?.id || '');
+  // ── Time slots from branch settings ────────────────────────────────────────
 
-  // Loading states
-  const isLoading = templatesLoading || slotsLoading || classesLoading || settingsLoading;
+  const timeSlots = useMemo<TimeSlotDefinition[]>(() => {
+    if (!branchSettings) return [];
 
-  // Handle cell click to create new slot (ignore lunch break slots)
-  const handleSlotClick = useCallback((classId: string, timeSlot: TimeSlotDefinition) => {
-    // Don't allow creating lessons during lunch break
-    if (timeSlot.lesson_number === 0) {
-      return;
-    }
-    
-    setCreateDialogState({
-      open: true,
-      classId,
-      timeSlot,
-    });
-    setSelectedClassSubjectId(undefined);
-    setSelectedRoomId(undefined);
-  }, []);
+    const slots: TimeSlotDefinition[] = [];
+    const startTime = parse(branchSettings.school_start_time.substring(0, 5), 'HH:mm', new Date());
+    const endTimeStr = branchSettings.daily_lesson_end_time || branchSettings.school_end_time;
+    const endTime   = parse(endTimeStr.substring(0, 5), 'HH:mm', new Date());
+    const lunchStart = branchSettings.lunch_break_start
+      ? parse(branchSettings.lunch_break_start.substring(0, 5), 'HH:mm', new Date())
+      : null;
+    const lunchEnd = branchSettings.lunch_break_end
+      ? parse(branchSettings.lunch_break_end.substring(0, 5), 'HH:mm', new Date())
+      : null;
 
-  // Handle slot edit
-  const handleSlotEdit = useCallback((slot: TimetableSlot) => {
-    setEditDialogState({
-      open: true,
-      slot,
-    });
-    setSelectedClassSubjectId(slot.class_subject);
-    setSelectedRoomId(slot.room || undefined);
-  }, []);
+    let current = startTime;
+    let num = 1;
+    let lunchAdded = false;
 
-  // Handle slot delete
-  const handleSlotDelete = useCallback((slot: TimetableSlot) => {
-    setDeleteDialogState({
-      open: true,
-      slot,
-    });
-  }, []);
+    while (current < endTime) {
+      const slotEnd = addMinutes(current, branchSettings.lesson_duration_minutes);
+      if (slotEnd > endTime) break;
 
-  // Handle drag & drop
-  const handleSlotDrop = useCallback(
-    async (slotId: string, newClassId: string, newTimeSlot: TimeSlotDefinition) => {
-      if (!activeTemplate) return;
-
-      const slot = allSlots.find((s: TimetableSlot) => s.id === slotId);
-      if (!slot) return;
-
-      // Create payload with new time and class
-      const payload = createSlotPayload(
-        newClassId,
-        slot.class_subject || '',
-        selectedDay,
-        newTimeSlot.start_time,
-        newTimeSlot.end_time,
-        activeTemplate.id,
-        slot.room
-      );
-
-      if (!payload) {
-        toast.error('Noto\'g\'ri vaqt tanlandi');
-        return;
-      }
-
-      try {
-        await updateMutation.mutateAsync({
-          slotId,
-          data: payload,
-        });
-        toast.success('Dars muvaffaqiyatli ko\'chirildi');
-      } catch (error: any) {
-        // Parse backend error and show user-friendly message
-        const errorData = error.response?.data;
-        
-        if (errorData?.class_subject) {
-          toast.error('Tanlangan fan ushbu sinfga tegishli emas. Iltimos, avval shu sinf uchun fanni biriktiring.');
-        } else if (errorData?.conflicts) {
-          toast.error(`Vaqt to'qnashuvi: ${errorData.conflicts.join(', ')}`);
-        } else if (errorData?.detail) {
-          toast.error(errorData.detail);
-        } else {
-          toast.error('Darsni ko\'chirishda xatolik yuz berdi');
+      if (lunchStart && lunchEnd && !lunchAdded && slotEnd > lunchStart && current < lunchEnd) {
+        if (current < lunchStart) {
+          slots.push({ lesson_number: 0, start_time: formatDate(lunchStart, 'HH:mm:ss'), end_time: formatDate(lunchEnd, 'HH:mm:ss'), label: 'Tushlik' });
+          lunchAdded = true;
         }
+        current = lunchEnd;
+        continue;
       }
-    },
-    [activeTemplate, allSlots, selectedDay, updateMutation]
-  );
 
-  // Handle create slot
-  const handleCreateSlot = useCallback(async () => {
-    if (!activeTemplate || !createDialogState.timeSlot || !createDialogState.classId || !selectedClassSubjectId) {
-      return;
+      slots.push({
+        lesson_number: num,
+        start_time: formatDate(current, 'HH:mm:ss'),
+        end_time:   formatDate(slotEnd, 'HH:mm:ss'),
+        label: `${num}-dars`,
+      });
+      num++;
+      current = addMinutes(slotEnd, branchSettings.break_duration_minutes);
     }
+
+    return slots;
+  }, [branchSettings]);
+
+  // ── Derived: classes with slot counts ──────────────────────────────────────
+
+  const classes = useMemo(() => {
+    const lessonCount = timeSlots.filter((t) => t.lesson_number > 0).length;
+    const maxSlots = lessonCount * 6; // 6 days
+
+    return classesRaw.map((cls) => {
+      const count = allSlots.filter((s) => s.class_obj === cls.id).length;
+      return { id: cls.id, name: cls.name, slotCount: count, maxSlots };
+    });
+  }, [classesRaw, allSlots, timeSlots]);
+
+  const selectedClass = classes[selectedClassIndex] ?? classes[0];
+
+  // ── Mutations ───────────────────────────────────────────────────────────────
+
+  const createMutation = useCreateTimetableSlot(branchId, activeTemplate?.id ?? '');
+  const updateMutation = useUpdateTimetableSlot(branchId, activeTemplate?.id ?? '');
+  const deleteMutation = useDeleteTimetableSlot(branchId, activeTemplate?.id ?? '');
+
+  // ── Handlers ────────────────────────────────────────────────────────────────
+
+  const openCreate = useCallback((dayOfWeek: number, timeSlot: TimeSlotDefinition) => {
+    if (!selectedClass) return;
+    setCreateDialog({ open: true, classId: selectedClass.id, dayOfWeek, timeSlot });
+    setSelectedSubjectId(undefined);
+    setSelectedRoomId(undefined);
+  }, [selectedClass]);
+
+  const openEdit = useCallback((slot: TimetableSlot) => {
+    setEditDialog({ open: true, slot });
+    setSelectedSubjectId(slot.class_subject);
+    setSelectedRoomId(slot.room ?? undefined);
+  }, []);
+
+  const handleCreate = useCallback(async () => {
+    if (!activeTemplate || !createDialog.classId || !createDialog.dayOfWeek || !createDialog.timeSlot || !selectedSubjectId) return;
 
     const payload = createSlotPayload(
-      createDialogState.classId,
-      selectedClassSubjectId,
-      selectedDay,
-      createDialogState.timeSlot.start_time,
-      createDialogState.timeSlot.end_time,
+      createDialog.classId,
+      selectedSubjectId,
+      createDialog.dayOfWeek,
+      createDialog.timeSlot.start_time,
+      createDialog.timeSlot.end_time,
       activeTemplate.id,
-      selectedRoomId
+      selectedRoomId,
     );
-
-    if (!payload) {
-      toast.error('Noto\'g\'ri sozlamalar');
-      return;
-    }
+    if (!payload) { toast.error("Noto'g'ri sozlamalar"); return; }
 
     try {
       await createMutation.mutateAsync(payload);
-      toast.success('Dars muvaffaqiyatli yaratildi');
-      setCreateDialogState({ open: false });
-      setSelectedClassSubjectId(undefined);
-      setSelectedRoomId(undefined);
-    } catch (error: any) {
-      const errorData = error.response?.data;
-      
-      if (errorData?.conflicts) {
-        toast.error(`Vaqt to'qnashuvi: ${errorData.conflicts.join(', ')}`);
-      } else if (errorData?.detail) {
-        toast.error(errorData.detail);
-      } else {
-        toast.error('Darsni yaratishda xatolik yuz berdi');
-      }
+      toast.success('Dars qo\'shildi');
+      setCreateDialog({ open: false });
+    } catch (err: any) {
+      const d = err.response?.data;
+      if (d?.conflicts)    toast.error(`Vaqt to'qnashuvi: ${d.conflicts.join(', ')}`);
+      else if (d?.detail)  toast.error(d.detail);
+      else                 toast.error("Dars qo'shishda xatolik");
     }
-  }, [activeTemplate, createDialogState, selectedDay, selectedClassSubjectId, selectedRoomId, createMutation]);
+  }, [activeTemplate, createDialog, selectedSubjectId, selectedRoomId, createMutation]);
 
-  // Handle update slot
-  const handleUpdateSlot = useCallback(async () => {
-    if (!activeTemplate || !editDialogState.slot || !selectedClassSubjectId) {
-      return;
-    }
-
-    const slot = editDialogState.slot;
-
-    if (!slot.class_obj) {
-      toast.error('Sinf ma\'lumoti topilmadi');
-      return;
-    }
+  const handleUpdate = useCallback(async () => {
+    if (!activeTemplate || !editDialog.slot || !selectedSubjectId) return;
+    const slot = editDialog.slot;
 
     const payload = createSlotPayload(
-      slot.class_obj,
-      selectedClassSubjectId,
-      selectedDay,
+      slot.class_obj!,
+      selectedSubjectId,
+      dayOfWeekToNumber(slot.day_of_week),
       slot.start_time,
       slot.end_time,
       activeTemplate.id,
-      selectedRoomId
+      selectedRoomId,
     );
-
-    if (!payload) {
-      toast.error('Noto\'g\'ri sozlamalar');
-      return;
-    }
+    if (!payload) { toast.error("Noto'g'ri sozlamalar"); return; }
 
     try {
-      await updateMutation.mutateAsync({
-        slotId: slot.id,
-        data: payload,
-      });
-      toast.success('Dars muvaffaqiyatli yangilandi');
-      setEditDialogState({ open: false });
-      setSelectedClassSubjectId(undefined);
-      setSelectedRoomId(undefined);
-    } catch (error: any) {
-      const errorData = error.response?.data;
-      
-      if (errorData?.class_subject) {
-        toast.error('Tanlangan fan ushbu sinfga tegishli emas');
-      } else if (errorData?.conflicts) {
-        toast.error(`Vaqt to'qnashuvi: ${errorData.conflicts.join(', ')}`);
-      } else if (errorData?.detail) {
-        toast.error(errorData.detail);
-      } else {
-        toast.error('Darsni yangilashda xatolik yuz berdi');
-      }
+      await updateMutation.mutateAsync({ slotId: slot.id, data: payload });
+      toast.success('Dars yangilandi');
+      setEditDialog({ open: false });
+    } catch (err: any) {
+      const d = err.response?.data;
+      if (d?.conflicts)   toast.error(`Vaqt to'qnashuvi: ${d.conflicts.join(', ')}`);
+      else if (d?.detail) toast.error(d.detail);
+      else                toast.error('Darsni yangilashda xatolik');
     }
-  }, [activeTemplate, editDialogState, selectedDay, selectedClassSubjectId, selectedRoomId, updateMutation]);
+  }, [activeTemplate, editDialog, selectedSubjectId, selectedRoomId, updateMutation]);
 
-  // Handle confirm delete
-  const handleConfirmDelete = useCallback(async () => {
-    if (!deleteDialogState.slot) return;
-
+  const handleDelete = useCallback(async () => {
+    if (!deleteDialog.slot) return;
     try {
-      await deleteMutation.mutateAsync(deleteDialogState.slot.id);
-      toast.success('Dars muvaffaqiyatli o\'chirildi');
-      setDeleteDialogState({ open: false });
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Darsni o\'chirishda xatolik yuz berdi');
+      await deleteMutation.mutateAsync(deleteDialog.slot.id);
+      toast.success("Dars o'chirildi");
+      setDeleteDialog({ open: false });
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail ?? "O'chirishda xatolik");
     }
-  }, [deleteDialogState, deleteMutation]);
+  }, [deleteDialog, deleteMutation]);
+
+  // ── Loading ─────────────────────────────────────────────────────────────────
+
+  const isLoading = templatesLoading || classesLoading;
 
   if (isLoading) {
     return (
-      <div className="container mx-auto p-6 max-w-7xl">
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-        </div>
+      <div className="space-y-4 p-6 max-w-7xl mx-auto">
+        <Skeleton className="h-10 w-72" />
+        <Skeleton className="h-[600px] w-full" />
       </div>
     );
   }
 
   if (!activeTemplate) {
     return (
-      <div className="container mx-auto p-6 max-w-7xl">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            Faol dars jadvali shabloni topilmadi. Iltimos, avval shablon yarating.
-          </AlertDescription>
-        </Alert>
-        <div className="mt-4">
+      <div className="p-6 max-w-7xl mx-auto space-y-4">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" asChild>
+            <Link href={scheduleBase}><ArrowLeft className="h-5 w-5" /></Link>
+          </Button>
+          <h1 className="text-xl font-bold">Jadval sozlash</h1>
+        </div>
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-8 flex flex-col items-center text-center gap-3">
+          <AlertCircle className="w-10 h-10 text-amber-500" />
+          <div>
+            <p className="font-semibold text-gray-800 mb-1">Faol jadval shabloni topilmadi</p>
+            <p className="text-sm text-gray-500">Avval "Dars Jadvali" sahifasida shablon yarating</p>
+          </div>
           <Button asChild>
-            <Link href="/school/schedule">Dars jadvaliga qaytish</Link>
+            <Link href={scheduleBase}>Dars jadvaliga qaytish</Link>
           </Button>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="container mx-auto p-6 max-w-7xl">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
+  if (classes.length === 0) {
+    return (
+      <div className="p-6 max-w-7xl mx-auto space-y-4">
+        <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" asChild>
-            <Link href="/school/schedule">
-              <ArrowLeft className="h-5 w-5" />
-            </Link>
+            <Link href={scheduleBase}><ArrowLeft className="h-5 w-5" /></Link>
           </Button>
-          <div>
-            <h1 className="text-2xl font-bold">Dars jadvali shablonini tahrirlash</h1>
-            <p className="text-sm text-gray-600 mt-1">
-              <Calendar className="inline h-4 w-4 mr-1" />
-              {activeTemplate.name} ({activeTemplate.start_date} dan {activeTemplate.end_date} gacha)
-            </p>
-          </div>
+          <h1 className="text-xl font-bold">Jadval sozlash</h1>
         </div>
-        <Button asChild>
-          <Link href="/school/schedule">Tayyor</Link>
-        </Button>
+        <div className="bg-gray-50 border border-dashed border-gray-200 rounded-xl p-8 flex flex-col items-center text-center gap-3">
+          <GraduationCap className="w-10 h-10 text-gray-300" />
+          <p className="text-gray-500 text-sm">Faol sinflar topilmadi</p>
+        </div>
       </div>
+    );
+  }
 
-      {/* Time Slot Info Banner */}
-      {branchSettings && timeSlots.length > 0 && (
-        <Alert className="mb-6 border-blue-200 bg-blue-50">
-          <AlertCircle className="h-4 w-4 text-blue-600" />
-          <AlertTitle className="text-blue-900">Dars vaqtlari ma'lumoti</AlertTitle>
-          <AlertDescription className="text-blue-800 text-sm">
-            <div className="flex items-center gap-4 flex-wrap mt-2">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold">Birinchi dars:</span>
-                <span>{timeSlots[0]?.start_time.substring(0, 5)}</span>
-              </div>
-              <div className="h-4 w-px bg-blue-300" />
-              <div className="flex items-center gap-2">
-                <span className="font-semibold">Oxirgi dars:</span>
-                <span>{timeSlots[timeSlots.length - 1]?.end_time.substring(0, 5)}</span>
-              </div>
-              <div className="h-4 w-px bg-blue-300" />
-              <div className="flex items-center gap-2">
-                <span className="font-semibold">Jami darslar:</span>
-                <span>{timeSlots.filter(t => t.lesson_number > 0).length} ta</span>
-              </div>
-              {branchSettings.lunch_break_start && (
-                <>
-                  <div className="h-4 w-px bg-blue-300" />
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold">🍽️ Tushlik:</span>
-                    <span>{branchSettings.lunch_break_start.substring(0, 5)} - {branchSettings.lunch_break_end?.substring(0, 5)}</span>
-                  </div>
-                </>
-              )}
-            </div>
-          </AlertDescription>
-        </Alert>
-      )}
+  const lessonSlotCount = timeSlots.filter((t) => t.lesson_number > 0).length;
 
-      {/* Day Tabs */}
-      <Tabs value={selectedDay.toString()} onValueChange={(v) => setSelectedDay(Number(v))}>
-        <TabsList className="grid w-full grid-cols-6 mb-6">
-          {DAYS.map((day) => (
-            <TabsTrigger key={day.value} value={day.value.toString()}>
-              {day.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-
-        {DAYS.map((day) => (
-          <TabsContent key={day.value} value={day.value.toString()}>
-            <TimeBasedGrid
-              classes={classes}
-              slots={allSlots}
-              dayOfWeek={day.value}
-              timeSlots={timeSlots}
-              onSlotClick={handleSlotClick}
-              onSlotEdit={handleSlotEdit}
-              onSlotDelete={handleSlotDelete}
-              onSlotDrop={handleSlotDrop}
-            />
-          </TabsContent>
-        ))}
-      </Tabs>
-
-      {/* Create Slot Dialog */}
-      <Dialog open={createDialogState.open} onOpenChange={(open) => setCreateDialogState({ open })}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Dars qo'shish</DialogTitle>
-            <DialogDescription>
-              {classesData.find((c: Class) => c.id === createDialogState.classId)?.name} sinfi uchun{' '}
-              {createDialogState.timeSlot?.label} vaqtiga dars qo'shish
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            {/* Subject Select */}
-            <div className="space-y-2">
-              <Label htmlFor="subject">
-                Fan <span className="text-red-500">*</span>
-              </Label>
-              <Select value={selectedClassSubjectId} onValueChange={setSelectedClassSubjectId}>
-                <SelectTrigger id="subject" disabled={classSubjectsLoading}>
-                  <SelectValue placeholder={classSubjectsLoading ? "Yuklanmoqda..." : "Fanni tanlang"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {classSubjectsLoading ? (
-                    <div className="px-2 py-6 text-center text-sm text-gray-500">
-                      <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2" />
-                      Fanlar yuklanmoqda...
-                    </div>
-                  ) : classSubjectsError ? (
-                    <div className="px-2 py-6 text-center text-sm text-red-500">
-                      Fanlarni yuklashda xatolik yuz berdi
-                    </div>
-                  ) : (() => {
-                    const validSubjects = classSubjects.filter((cs) => 
-                      cs?.id && typeof cs.id === 'string' && cs.id.trim() !== ''
-                    );
-                    
-                    if (validSubjects.length === 0) {
-                      return (
-                        <div className="px-2 py-6 text-center text-sm text-gray-500">
-                          Bu sinf uchun faol fan mavjud emas
-                        </div>
-                      );
-                    }
-                    
-                    return validSubjects.map((cs) => (
-                      <SelectItem key={cs.id} value={cs.id}>
-                        {cs.subject_name || 'Noma\'lum fan'} ({cs.teacher_name || 'O\'qituvchi biriktirilmagan'})
-                      </SelectItem>
-                    ));
-                  })()}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Room Select */}
-            <div className="space-y-2">
-              <Label htmlFor="room">Xona</Label>
-              <Select value={selectedRoomId || "_none"} onValueChange={handleRoomChange}>
-                <SelectTrigger id="room" disabled={roomsLoading}>
-                  <SelectValue placeholder={roomsLoading ? "Yuklanmoqda..." : "Xonani tanlang (ixtiyoriy)"} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_none">Xonasiz</SelectItem>
-                  {rooms
-                    .filter((r) => r?.id && r.id.trim() !== '')
-                    .map((r) => (
-                      <SelectItem key={r.id} value={r.id}>
-                        {r.name} ({r.room_type_display}) - {r.capacity} o'rindi
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Dars o'tiladigan xonani belgilang
+  return (
+    <div className="pb-8">
+      {/* ── Header ── */}
+      <div className="sticky top-0 z-20 bg-white border-b border-gray-100 px-4 sm:px-6 py-3">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" asChild className="shrink-0">
+              <Link href={scheduleBase}><ArrowLeft className="h-4 w-4" /></Link>
+            </Button>
+            <div>
+              <h1 className="font-bold text-gray-900 text-base sm:text-lg leading-tight">
+                Jadval Sozlash
+              </h1>
+              <p className="text-xs text-gray-400 hidden sm:block">
+                <Calendar className="inline h-3 w-3 mr-1" />
+                {activeTemplate.name}
               </p>
             </div>
           </div>
 
+          {/* Quick stats */}
+          <div className="hidden md:flex items-center gap-4 text-sm text-gray-500">
+            <span className="flex items-center gap-1.5">
+              <BookOpen className="h-4 w-4 text-blue-500" />
+              {lessonSlotCount} dars / kun
+            </span>
+            <span className="flex items-center gap-1.5">
+              <GraduationCap className="h-4 w-4 text-purple-500" />
+              {classes.length} sinf
+            </span>
+            <span className="flex items-center gap-1.5">
+              <CheckCircle2 className="h-4 w-4 text-green-500" />
+              {allSlots.length} slot kiritilgan
+            </span>
+          </div>
+
+          <Button asChild size="sm">
+            <Link href={scheduleBase}>Tayyor</Link>
+          </Button>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 mt-5 flex gap-5">
+
+        {/* ── Left sidebar: class list ── */}
+        <aside className="hidden lg:flex flex-col w-52 shrink-0 gap-1">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 px-2">
+            Sinflar
+          </p>
+          {classes.map((cls, idx) => {
+            const pct = cls.maxSlots > 0 ? Math.round((cls.slotCount / cls.maxSlots) * 100) : 0;
+            const isSelected = idx === selectedClassIndex;
+            return (
+              <button
+                key={cls.id}
+                onClick={() => setSelectedClassIndex(idx)}
+                className={cn(
+                  'w-full text-left px-3 py-2.5 rounded-lg transition-all text-sm',
+                  isSelected
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-700 hover:bg-gray-100'
+                )}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-medium">{cls.name}</span>
+                  <span className={cn('text-xs', isSelected ? 'text-blue-100' : 'text-gray-400')}>
+                    {cls.slotCount}
+                  </span>
+                </div>
+                <div className={cn('h-1 rounded-full', isSelected ? 'bg-blue-400' : 'bg-gray-200')}>
+                  <div
+                    className={cn('h-1 rounded-full transition-all', isSelected ? 'bg-white' : 'bg-blue-500')}
+                    style={{ width: `${Math.min(pct, 100)}%` }}
+                  />
+                </div>
+              </button>
+            );
+          })}
+        </aside>
+
+        {/* ── Main area ── */}
+        <div className="flex-1 min-w-0 space-y-4">
+
+          {/* Class selector (mobile + navigation) */}
+          <div className="flex items-center gap-3">
+            {/* Mobile: arrows */}
+            <button
+              onClick={() => setSelectedClassIndex((i) => Math.max(0, i - 1))}
+              disabled={selectedClassIndex === 0}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-30 transition-colors"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+
+            <div className="flex-1">
+              <h2 className="text-xl font-bold text-gray-900">{selectedClass?.name ?? '—'}</h2>
+              <p className="text-sm text-gray-500">
+                {selectedClass?.slotCount ?? 0} ta slot kiritilgan
+              </p>
+            </div>
+
+            <button
+              onClick={() => setSelectedClassIndex((i) => Math.min(classes.length - 1, i + 1))}
+              disabled={selectedClassIndex >= classes.length - 1}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-30 transition-colors"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+
+            {/* Mobile: class selector dropdown */}
+            <div className="lg:hidden">
+              <Select
+                value={selectedClassIndex.toString()}
+                onValueChange={(v) => setSelectedClassIndex(Number(v))}
+              >
+                <SelectTrigger className="w-36 h-8 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {classes.map((cls, idx) => (
+                    <SelectItem key={cls.id} value={idx.toString()}>
+                      {cls.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Grid */}
+          {slotsLoading ? (
+            <Skeleton className="h-[500px] w-full rounded-xl" />
+          ) : selectedClass ? (
+            <WeeklyClassGrid
+              slots={allSlots}
+              timeSlots={timeSlots}
+              classId={selectedClass.id}
+              onCellClick={openCreate}
+              onSlotEdit={openEdit}
+              onSlotDelete={(slot) => setDeleteDialog({ open: true, slot })}
+            />
+          ) : null}
+
+          {/* Legend */}
+          <div className="text-xs text-gray-400 flex items-center gap-4 px-1">
+            <span>Katakchani bosing → dars qo'shish</span>
+            <span>•</span>
+            <span>Kalamush belgisini olib boring → tahrirlash</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Create Slot Dialog ── */}
+      <Dialog
+        open={createDialog.open}
+        onOpenChange={(o) => { if (!o) setCreateDialog({ open: false }); }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Dars qo'shish</DialogTitle>
+            <DialogDescription>
+              {selectedClass?.name} · {dayLabel(createDialog.dayOfWeek)} · {createDialog.timeSlot?.label}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <SubjectSelect
+              subjects={classSubjects}
+              loading={subjectsLoading}
+              value={selectedSubjectId}
+              onChange={setSelectedSubjectId}
+            />
+            <RoomSelect
+              rooms={rooms}
+              loading={roomsLoading}
+              value={selectedRoomId}
+              onChange={(v) => setSelectedRoomId(v === '_none' ? undefined : v)}
+            />
+          </div>
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateDialogState({ open: false })}>
+            <Button variant="outline" onClick={() => setCreateDialog({ open: false })}>
               Bekor qilish
             </Button>
-            <Button onClick={handleCreateSlot} disabled={!selectedClassSubjectId || createMutation.isPending}>
+            <Button
+              onClick={handleCreate}
+              disabled={!selectedSubjectId || createMutation.isPending}
+            >
               {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Yaratish
+              Qo'shish
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Edit Slot Dialog */}
-      <Dialog open={editDialogState.open} onOpenChange={(open) => setEditDialogState({ open })}>
-        <DialogContent>
+      {/* ── Edit Slot Dialog ── */}
+      <Dialog
+        open={editDialog.open}
+        onOpenChange={(o) => { if (!o) setEditDialog({ open: false }); }}
+      >
+        <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Darsni tahrirlash</DialogTitle>
             <DialogDescription>
-              {editDialogState.slot && (
-                <>
-                  {editDialogState.slot.class_name} - {editDialogState.slot.subject_name}
-                </>
-              )}
+              {editDialog.slot?.class_name} · {dayLabelFromStr(editDialog.slot?.day_of_week)} · {editDialog.slot?.lesson_number}-dars
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
-            {/* Subject Select */}
-            <div className="space-y-2">
-              <Label htmlFor="edit-subject">
-                Fan <span className="text-red-500">*</span>
-              </Label>
-              <Select value={selectedClassSubjectId} onValueChange={setSelectedClassSubjectId}>
-                <SelectTrigger id="edit-subject" disabled={classSubjectsLoading}>
-                  <SelectValue placeholder={classSubjectsLoading ? "Yuklanmoqda..." : "Fanni tanlang"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {classSubjectsLoading ? (
-                    <div className="px-2 py-6 text-center text-sm text-gray-500">
-                      <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2" />
-                      Fanlar yuklanmoqda...
-                    </div>
-                  ) : classSubjectsError ? (
-                    <div className="px-2 py-6 text-center text-sm text-red-500">
-                      Fanlarni yuklashda xatolik yuz berdi
-                    </div>
-                  ) : (() => {
-                    const validSubjects = classSubjects.filter((cs) => 
-                      cs?.id && typeof cs.id === 'string' && cs.id.trim() !== ''
-                    );
-                    
-                    if (validSubjects.length === 0) {
-                      return (
-                        <div className="px-2 py-6 text-center text-sm text-gray-500">
-                          Bu sinf uchun faol fan mavjud emas
-                        </div>
-                      );
-                    }
-                    
-                    return validSubjects.map((cs) => (
-                      <SelectItem key={cs.id} value={cs.id}>
-                        {cs.subject_name || 'Noma\'lum fan'} ({cs.teacher_name || 'O\'qituvchi biriktirilmagan'})
-                      </SelectItem>
-                    ));
-                  })()}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Room Select */}
-            <div className="space-y-2">
-              <Label htmlFor="edit-room">Xona</Label>
-              <Select value={selectedRoomId || "_none"} onValueChange={handleRoomChange}>
-                <SelectTrigger id="edit-room" disabled={roomsLoading}>
-                  <SelectValue placeholder={roomsLoading ? "Yuklanmoqda..." : "Xonani tanlang (ixtiyoriy)"} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_none">Xonasiz</SelectItem>
-                  {rooms
-                    .filter((r) => r?.id && r.id.trim() !== '')
-                    .map((r) => (
-                      <SelectItem key={r.id} value={r.id}>
-                        {r.name} ({r.room_type_display}) - {r.capacity} o'rindi
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="space-y-4 py-2">
+            <SubjectSelect
+              subjects={classSubjects}
+              loading={subjectsLoading}
+              value={selectedSubjectId}
+              onChange={setSelectedSubjectId}
+            />
+            <RoomSelect
+              rooms={rooms}
+              loading={roomsLoading}
+              value={selectedRoomId}
+              onChange={(v) => setSelectedRoomId(v === '_none' ? undefined : v)}
+            />
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditDialogState({ open: false })}>
+            <Button variant="outline" onClick={() => setEditDialog({ open: false })}>
               Bekor qilish
             </Button>
-            <Button onClick={handleUpdateSlot} disabled={!selectedClassSubjectId || updateMutation.isPending}>
+            <Button
+              onClick={handleUpdate}
+              disabled={!selectedSubjectId || updateMutation.isPending}
+            >
               {updateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Saqlash
             </Button>
@@ -710,29 +575,23 @@ export default function TimetableEditPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteDialogState.open} onOpenChange={(open) => setDeleteDialogState({ open })}>
+      {/* ── Delete Dialog ── */}
+      <AlertDialog
+        open={deleteDialog.open}
+        onOpenChange={(o) => { if (!o) setDeleteDialog({ open: false }); }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Darsni o'chirish</AlertDialogTitle>
             <AlertDialogDescription>
-              {deleteDialogState.slot && (
-                <>
-                  <span className="font-semibold">{deleteDialogState.slot.subject_name}</span> darsini{' '}
-                  <span className="font-semibold">{deleteDialogState.slot.class_name}</span> sinfidan o'chirmoqchimisiz?
-                  <br />
-                  <br />
-                  Bu amalni qaytarib bo'lmaydi.
-                </>
-              )}
+              <span className="font-semibold">{deleteDialog.slot?.subject_name}</span> darsini{' '}
+              {dayLabelFromStr(deleteDialog.slot?.day_of_week)}, {deleteDialog.slot?.lesson_number}-dars vaqtidan olib tashlansinmi?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setDeleteDialogState({ open: false })}>
-              Bekor qilish
-            </AlertDialogCancel>
+            <AlertDialogCancel>Bekor qilish</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleConfirmDelete}
+              onClick={handleDelete}
               disabled={deleteMutation.isPending}
               className="bg-red-600 hover:bg-red-700"
             >
@@ -744,4 +603,112 @@ export default function TimetableEditPage() {
       </AlertDialog>
     </div>
   );
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function SubjectSelect({
+  subjects,
+  loading,
+  value,
+  onChange,
+}: {
+  subjects: ClassSubject[];
+  loading: boolean;
+  value?: string;
+  onChange: (v: string) => void;
+}) {
+  const valid = subjects.filter((cs) => cs?.id);
+  return (
+    <div className="space-y-1.5">
+      <Label>Fan <span className="text-red-500">*</span></Label>
+      <Select value={value} onValueChange={onChange} disabled={loading}>
+        <SelectTrigger>
+          <SelectValue placeholder={loading ? 'Yuklanmoqda...' : 'Fanni tanlang'} />
+        </SelectTrigger>
+        <SelectContent>
+          {loading ? (
+            <div className="py-4 text-center text-sm text-gray-400">
+              <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+            </div>
+          ) : valid.length === 0 ? (
+            <div className="py-4 text-center text-sm text-gray-400">
+              Bu sinf uchun fan biriktirilmagan
+            </div>
+          ) : (
+            valid.map((cs) => (
+              <SelectItem key={cs.id} value={cs.id}>
+                {cs.subject_name ?? "Fan"}{cs.teacher_name ? ` — ${cs.teacher_name}` : ''}
+              </SelectItem>
+            ))
+          )}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+function RoomSelect({
+  rooms,
+  loading,
+  value,
+  onChange,
+}: {
+  rooms: Room[];
+  loading: boolean;
+  value?: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label>Xona <span className="text-xs text-gray-400 font-normal">(ixtiyoriy)</span></Label>
+      <Select value={value ?? '_none'} onValueChange={onChange} disabled={loading}>
+        <SelectTrigger>
+          <SelectValue placeholder="Xona tanlang" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="_none">Xonasiz</SelectItem>
+          {rooms
+            .filter((r) => r?.id)
+            .map((r) => (
+              <SelectItem key={r.id} value={r.id}>
+                {r.name}{r.room_type_display ? ` (${r.room_type_display})` : ''}{r.capacity ? ` · ${r.capacity} o'rin` : ''}
+              </SelectItem>
+            ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function cn(...classes: (string | boolean | undefined)[]) {
+  return classes.filter(Boolean).join(' ');
+}
+
+const DAY_LABELS: Record<number, string> = {
+  1: 'Dushanba', 2: 'Seshanba', 3: 'Chorshanba',
+  4: 'Payshanba', 5: 'Juma', 6: 'Shanba', 7: 'Yakshanba',
+};
+
+const DAY_STR_LABELS: Record<string, string> = {
+  monday: 'Dushanba', tuesday: 'Seshanba', wednesday: 'Chorshanba',
+  thursday: 'Payshanba', friday: 'Juma', saturday: 'Shanba', sunday: 'Yakshanba',
+};
+
+function dayLabel(day?: number) {
+  return day ? (DAY_LABELS[day] ?? '') : '';
+}
+
+function dayLabelFromStr(day?: string) {
+  return day ? (DAY_STR_LABELS[day] ?? day) : '';
+}
+
+function dayOfWeekToNumber(day?: string): number {
+  const map: Record<string, number> = {
+    monday: 1, tuesday: 2, wednesday: 3,
+    thursday: 4, friday: 5, saturday: 6, sunday: 7,
+  };
+  return day ? (map[day] ?? 1) : 1;
 }

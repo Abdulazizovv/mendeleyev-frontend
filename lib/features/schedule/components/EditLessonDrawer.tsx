@@ -63,7 +63,7 @@ export const EditLessonDrawer: React.FC<EditLessonDrawerProps> = ({
         start_time: lesson.start_time.substring(0, 5), // HH:mm
         end_time: lesson.end_time.substring(0, 5),
         room_name: lesson.room_name || '',
-        notes: lesson.notes || '',
+        notes: lesson.teacher_notes || lesson.notes || '',
       });
     }
   }, [lesson, reset]);
@@ -75,7 +75,7 @@ export const EditLessonDrawer: React.FC<EditLessonDrawerProps> = ({
       start_time: `${data.start_time}:00`,
       end_time: `${data.end_time}:00`,
       room_name: data.room_name || undefined,
-      notes: data.notes || undefined,
+      teacher_notes: data.notes || undefined,
     });
 
     onClose();

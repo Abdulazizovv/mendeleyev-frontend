@@ -15,6 +15,11 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -23,7 +28,8 @@ import {
   MoreHorizontal, Star, ArrowUpRight, ArrowDownRight, ArrowRightLeft,
   Building2, SlidersHorizontal, ChevronLeft, ChevronRight,
   Archive, ArchiveRestore, Eye, EyeOff, X,
-  ExternalLink, Calendar, UserCircle,
+  ExternalLink, Calendar, UserCircle, AlertTriangle,
+  GraduationCap, Users, Globe,
 } from "lucide-react";
 import { toast } from "sonner";
 import { extractApiError } from "@/lib/error-messages";
@@ -34,8 +40,9 @@ import { cn } from "@/lib/utils";
 
 type FlowType = "income" | "expense" | "transfer";
 type TxTypeFilter = "all" | "income" | "expense" | "transfer";
-type MethodFilter = "all" | "cash" | "card";
+type MethodFilter = "all" | "cash" | "card" | "bank";
 type ClientFilter = "all" | "student" | "employee" | "third_party";
+type StatusFilter = "all" | "completed" | "pending" | "cancelled";
 
 const PAGE_SIZE = 25;
 const SUMMARY_PAGE_SIZE = 500;
@@ -55,11 +62,11 @@ const TX_LABEL: Record<string, string> = {
   payment: "To'lov", salary: "Maosh", refund: "Qaytarish",
 };
 const STATUS_LABEL: Record<string, string> = {
-  completed: "Bajarilgan", pending: "Kutilmoqda", cancelled: "Bekor", failed: "Xato",
+  completed: "Bajarilgan", pending: "Kutilmoqda", cancelled: "Bekor",
 };
 const STATUS_DOT: Record<string, string> = {
   completed: "bg-emerald-500", pending: "bg-amber-400",
-  cancelled: "bg-slate-400",   failed: "bg-rose-500",
+  cancelled: "bg-slate-400",
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -112,6 +119,7 @@ export default function CashRegistersPage() {
   const [txTypeFilter, setTxTypeFilter] = useState<TxTypeFilter>("all");
   const [methodFilter, setMethodFilter] = useState<MethodFilter>("all");
   const [clientFilter, setClientFilter] = useState<ClientFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [serverPage, setServerPage] = useState(1);
 
   useEffect(() => {
@@ -152,10 +160,11 @@ export default function CashRegistersPage() {
     transaction_type: txTypeFilter !== "all" ? txTypeFilter : undefined,
     payment_method: methodFilter !== "all" ? methodFilter : undefined,
     client_filter: clientFilter !== "all" ? clientFilter : undefined,
+    status: statusFilter !== "all" ? statusFilter : undefined,
     ordering: "-transaction_date",
-  }), [selectedRegister?.id, dateFrom, dateTo, txTypeFilter, methodFilter, clientFilter]);
+  }), [selectedRegister?.id, dateFrom, dateTo, txTypeFilter, methodFilter, clientFilter, statusFilter]);
 
-  useEffect(() => { setServerPage(1); }, [dateFrom, dateTo, txTypeFilter, methodFilter, clientFilter, selectedRegister?.id]);
+  useEffect(() => { setServerPage(1); }, [dateFrom, dateTo, txTypeFilter, methodFilter, clientFilter, statusFilter, selectedRegister?.id]);
 
   const { data: summaryData } = useQuery({
     queryKey: ["tx-summary", sharedParams],
@@ -346,35 +355,78 @@ export default function CashRegistersPage() {
                     {/* Balance cards */}
                     <div className="flex items-center gap-2 flex-wrap">
                       {/* Total balance */}
-                      <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5">
-                        <Wallet className="w-4 h-4 text-slate-400 shrink-0" />
+                      {/* Total */}
+                      <button
+                        onClick={() => setMethodFilter("all")}
+                        className={cn(
+                          "flex items-center gap-2 rounded-xl px-3.5 py-2.5 border transition-all",
+                          methodFilter === "all"
+                            ? "bg-slate-800 border-slate-700 ring-2 ring-slate-400"
+                            : "bg-slate-50 border-slate-200 hover:border-slate-400"
+                        )}
+                      >
+                        <Wallet className={cn("w-4 h-4 shrink-0", methodFilter === "all" ? "text-white" : "text-slate-400")} />
                         <div>
-                          <p className="text-[10px] text-slate-400 leading-none mb-1">Jami balans</p>
-                          <p className="text-sm font-bold text-slate-900 tabular-nums leading-none">
+                          <p className={cn("text-[10px] leading-none mb-1", methodFilter === "all" ? "text-slate-300" : "text-slate-400")}>Jami balans</p>
+                          <p className={cn("text-sm font-bold tabular-nums leading-none", methodFilter === "all" ? "text-white" : "text-slate-900")}>
                             {hideBalance ? "••••••" : formatCurrency(selectedRegister.balance)}
                           </p>
                         </div>
-                      </div>
+                      </button>
                       {/* Cash */}
-                      <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-2.5">
-                        <Banknote className="w-4 h-4 text-amber-500 shrink-0" />
+                      <button
+                        onClick={() => setMethodFilter(methodFilter === "cash" ? "all" : "cash")}
+                        className={cn(
+                          "flex items-center gap-2 rounded-xl px-3.5 py-2.5 border transition-all",
+                          methodFilter === "cash"
+                            ? "bg-amber-500 border-amber-400 ring-2 ring-amber-300"
+                            : "bg-amber-50 border-amber-200 hover:border-amber-400"
+                        )}
+                      >
+                        <Banknote className={cn("w-4 h-4 shrink-0", methodFilter === "cash" ? "text-white" : "text-amber-500")} />
                         <div>
-                          <p className="text-[10px] text-amber-600 leading-none mb-1">Naqd</p>
-                          <p className="text-sm font-bold text-amber-800 tabular-nums leading-none">
+                          <p className={cn("text-[10px] leading-none mb-1", methodFilter === "cash" ? "text-amber-100" : "text-amber-600")}>Naqd</p>
+                          <p className={cn("text-sm font-bold tabular-nums leading-none", methodFilter === "cash" ? "text-white" : "text-amber-800")}>
                             {hideBalance ? "••••••" : formatCurrency(methodBalance?.cash_net ?? 0)}
                           </p>
                         </div>
-                      </div>
+                      </button>
                       {/* Card */}
-                      <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl px-3.5 py-2.5">
-                        <CreditCard className="w-4 h-4 text-blue-500 shrink-0" />
+                      <button
+                        onClick={() => setMethodFilter(methodFilter === "card" ? "all" : "card")}
+                        className={cn(
+                          "flex items-center gap-2 rounded-xl px-3.5 py-2.5 border transition-all",
+                          methodFilter === "card"
+                            ? "bg-blue-600 border-blue-500 ring-2 ring-blue-300"
+                            : "bg-blue-50 border-blue-200 hover:border-blue-400"
+                        )}
+                      >
+                        <CreditCard className={cn("w-4 h-4 shrink-0", methodFilter === "card" ? "text-white" : "text-blue-500")} />
                         <div>
-                          <p className="text-[10px] text-blue-600 leading-none mb-1">Plastik</p>
-                          <p className="text-sm font-bold text-blue-800 tabular-nums leading-none">
+                          <p className={cn("text-[10px] leading-none mb-1", methodFilter === "card" ? "text-blue-100" : "text-blue-600")}>Plastik</p>
+                          <p className={cn("text-sm font-bold tabular-nums leading-none", methodFilter === "card" ? "text-white" : "text-blue-800")}>
                             {hideBalance ? "••••••" : formatCurrency(methodBalance?.card_net ?? 0)}
                           </p>
                         </div>
-                      </div>
+                      </button>
+                      {/* Bank */}
+                      <button
+                        onClick={() => setMethodFilter(methodFilter === "bank" ? "all" : "bank")}
+                        className={cn(
+                          "flex items-center gap-2 rounded-xl px-3.5 py-2.5 border transition-all",
+                          methodFilter === "bank"
+                            ? "bg-emerald-600 border-emerald-500 ring-2 ring-emerald-300"
+                            : "bg-emerald-50 border-emerald-200 hover:border-emerald-400"
+                        )}
+                      >
+                        <Building2 className={cn("w-4 h-4 shrink-0", methodFilter === "bank" ? "text-white" : "text-emerald-600")} />
+                        <div>
+                          <p className={cn("text-[10px] leading-none mb-1", methodFilter === "bank" ? "text-emerald-100" : "text-emerald-700")}>Bank</p>
+                          <p className={cn("text-sm font-bold tabular-nums leading-none", methodFilter === "bank" ? "text-white" : "text-emerald-800")}>
+                            {hideBalance ? "••••••" : formatCurrency(methodBalance?.bank_net ?? 0)}
+                          </p>
+                        </div>
+                      </button>
                     </div>
                   </div>
 
@@ -398,13 +450,14 @@ export default function CashRegistersPage() {
               <FilterBar
                 dateFrom={dateFrom} dateTo={dateTo} activePreset={activePreset}
                 txTypeFilter={txTypeFilter} methodFilter={methodFilter}
-                clientFilter={clientFilter} totalCount={totalCount}
+                clientFilter={clientFilter} statusFilter={statusFilter} totalCount={totalCount}
                 onDateFrom={(v) => { setDateFrom(v); setActivePreset(null); }}
                 onDateTo={(v) => { setDateTo(v); setActivePreset(null); }}
                 onPreset={applyPreset}
                 onTxType={setTxTypeFilter}
                 onMethod={setMethodFilter}
                 onClient={setClientFilter}
+                onStatus={setStatusFilter}
                 onRefresh={() => { refetchTx(); queryClient.invalidateQueries({ queryKey: ["tx-summary"] }); }}
               />
 
@@ -513,7 +566,11 @@ export default function CashRegistersPage() {
 
             {/* ── TX DETAIL PANEL ── */}
             {activeTx && (
-              <TxDetailPanel tx={activeTx} onClose={() => setActiveTx(null)} />
+              <TxDetailPanel
+                tx={activeTx}
+                onClose={() => setActiveTx(null)}
+                onCancelled={() => { setActiveTx(null); onTxSuccess(); }}
+              />
             )}
           </>
         )}
@@ -562,131 +619,218 @@ export default function CashRegistersPage() {
   );
 }
 
+// ── Filter Bar helpers ────────────────────────────────────────────────────────
+
+const CAL_DAYS_HEADER = ["Du","Se","Ch","Pa","Ju","Sh","Ya"];
+const CAL_MONTHS = ["Yanvar","Fevral","Mart","Aprel","May","Iyun","Iyul","Avgust","Sentabr","Oktabr","Noyabr","Dekabr"];
+
+function isoDate(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+function buildCalDays(year: number, month: number): { date: string; inMonth: boolean }[] {
+  const firstDay = new Date(year, month, 1).getDay();
+  const offset = firstDay === 0 ? 6 : firstDay - 1;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells: { date: string; inMonth: boolean }[] = [];
+  for (let i = offset; i > 0; i--) cells.push({ date: isoDate(new Date(year, month, 1 - i)), inMonth: false });
+  for (let d = 1; d <= daysInMonth; d++) cells.push({ date: isoDate(new Date(year, month, d)), inMonth: true });
+  let extra = 1;
+  while (cells.length % 7 !== 0) cells.push({ date: isoDate(new Date(year, month + 1, extra++)), inMonth: false });
+  return cells;
+}
+function fmtShortDate(s: string) {
+  if (!s) return "—";
+  const [y, m, d] = s.split("-").map(Number);
+  return `${d} ${UZ_MONTHS_SHORT[m - 1]} ${y}`;
+}
+
 // ── Filter Bar ────────────────────────────────────────────────────────────────
 
-const FILTER_SEP = <div className="w-px h-5 bg-slate-200 shrink-0" />;
-
 function FilterBar({
-  dateFrom, dateTo, activePreset, txTypeFilter, methodFilter, clientFilter, totalCount,
-  onDateFrom, onDateTo, onPreset, onTxType, onMethod, onClient, onRefresh,
+  dateFrom, dateTo, activePreset, txTypeFilter, methodFilter, clientFilter, statusFilter, totalCount,
+  onDateFrom, onDateTo, onPreset, onTxType, onMethod, onClient, onStatus, onRefresh,
 }: {
   dateFrom: string; dateTo: string;
   activePreset: "today" | "week" | "month" | null;
-  txTypeFilter: TxTypeFilter; methodFilter: MethodFilter; clientFilter: ClientFilter; totalCount: number;
+  txTypeFilter: TxTypeFilter; methodFilter: MethodFilter; clientFilter: ClientFilter;
+  statusFilter: StatusFilter; totalCount: number;
   onDateFrom: (v: string) => void; onDateTo: (v: string) => void;
   onPreset: (p: "today" | "week" | "month") => void;
   onTxType: (t: TxTypeFilter) => void; onMethod: (m: MethodFilter) => void;
-  onClient: (c: ClientFilter) => void; onRefresh: () => void;
+  onClient: (c: ClientFilter) => void; onStatus: (s: StatusFilter) => void; onRefresh: () => void;
 }) {
-  const customDateActive = !activePreset;
+  const [calOpen, setCalOpen] = useState(false);
+  const [viewYear, setViewYear] = useState(() => new Date().getFullYear());
+  const [viewMonth, setViewMonth] = useState(() => new Date().getMonth());
+  const [rangeStart, setRangeStart] = useState<string | null>(null);
+  const [hoverDate, setHoverDate] = useState<string | null>(null);
+  const calRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!calOpen) return;
+    const h = (e: MouseEvent) => {
+      if (calRef.current && !calRef.current.contains(e.target as Node)) {
+        setCalOpen(false); setRangeStart(null); setHoverDate(null);
+      }
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [calOpen]);
+
+  const calDays = useMemo(() => buildCalDays(viewYear, viewMonth), [viewYear, viewMonth]);
+
+  const dateLabel = useMemo(() => {
+    if (activePreset === "today") return "Bugun";
+    if (activePreset === "week") return "Bu hafta";
+    if (activePreset === "month") return "Bu oy";
+    if (dateFrom === dateTo) return fmtShortDate(dateFrom);
+    return `${fmtShortDate(dateFrom)} – ${fmtShortDate(dateTo)}`;
+  }, [dateFrom, dateTo, activePreset]);
+
+  function handleDayClick(d: string) {
+    if (!rangeStart) {
+      setRangeStart(d); onDateFrom(d); onDateTo(d);
+    } else {
+      const [a, b] = rangeStart <= d ? [rangeStart, d] : [d, rangeStart];
+      onDateFrom(a); onDateTo(b);
+      setRangeStart(null); setHoverDate(null); setCalOpen(false);
+    }
+  }
+
+  function prevMonth() {
+    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
+    else setViewMonth(m => m - 1);
+  }
+  function nextMonth() {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); }
+    else setViewMonth(m => m + 1);
+  }
+
+  // Range display (including hover preview when first date selected)
+  const effectiveTo = rangeStart ? (hoverDate ?? rangeStart) : dateTo;
+  const [rangeL, rangeR] = rangeStart
+    ? (rangeStart <= effectiveTo ? [rangeStart, effectiveTo] : [effectiveTo, rangeStart])
+    : [dateFrom, dateTo];
+
+  const today = todayStr();
+  const hasExtraFilters = txTypeFilter !== "all" || methodFilter !== "all" || clientFilter !== "all" || statusFilter !== "all";
+
+  const SEP = <div className="w-px h-4 bg-slate-200 shrink-0" />;
+  const pillBase = "h-7 px-2.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap";
 
   return (
     <div className="bg-white border-b border-slate-200 shrink-0">
-      <div className="flex items-center gap-3 px-5 py-2.5 overflow-x-auto scrollbar-none">
 
-        {/* Segment: date presets */}
-        <div className="flex items-center bg-slate-100 rounded-xl p-1 gap-0.5 shrink-0">
-          {(["today", "week", "month"] as const).map((p) => (
-            <button
-              key={p}
-              onClick={() => onPreset(p)}
-              className={cn(
-                "h-7 px-3 rounded-lg text-xs font-medium transition-all whitespace-nowrap",
-                activePreset === p
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
+      {/* ── Row 1: date + type ── */}
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-slate-100">
+
+        {/* Date picker button + popover */}
+        <div className="relative shrink-0" ref={calRef}>
+          <button
+            onClick={() => setCalOpen(v => !v)}
+            className={cn(
+              "flex items-center gap-1.5 h-8 px-3 rounded-lg border text-xs font-semibold transition-colors",
+              calOpen
+                ? "border-blue-400 bg-blue-50 text-blue-700 ring-1 ring-blue-200"
+                : !activePreset
+                ? "border-blue-300 bg-blue-50 text-blue-700"
+                : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+            )}
+          >
+            <Calendar className="w-3.5 h-3.5 shrink-0" />
+            {dateLabel}
+          </button>
+
+          {calOpen && (
+            <div className="absolute top-full left-0 mt-1.5 z-50 bg-white border border-slate-200 rounded-xl shadow-xl w-[268px] p-3 select-none">
+              {/* Presets */}
+              <div className="flex gap-1.5 mb-3">
+                {(["today","week","month"] as const).map((p) => (
+                  <button key={p}
+                    onClick={() => { onPreset(p); setRangeStart(null); setHoverDate(null); setCalOpen(false); }}
+                    className={cn(
+                      "flex-1 h-7 rounded-lg text-xs font-semibold transition-colors",
+                      activePreset === p ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    )}>
+                    {{ today: "Bugun", week: "Bu hafta", month: "Bu oy" }[p]}
+                  </button>
+                ))}
+              </div>
+
+              {/* Month nav */}
+              <div className="flex items-center justify-between mb-2 px-1">
+                <button onClick={prevMonth} className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center transition-colors">
+                  <ChevronLeft className="w-3.5 h-3.5 text-slate-500" />
+                </button>
+                <span className="text-xs font-bold text-slate-800">
+                  {CAL_MONTHS[viewMonth]} {viewYear}
+                </span>
+                <button onClick={nextMonth} className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center transition-colors">
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
+                </button>
+              </div>
+
+              {/* Day headers */}
+              <div className="grid grid-cols-7 mb-0.5">
+                {CAL_DAYS_HEADER.map(d => (
+                  <div key={d} className="text-center text-[10px] font-semibold text-slate-400 py-1">{d}</div>
+                ))}
+              </div>
+
+              {/* Day cells */}
+              <div className="grid grid-cols-7">
+                {calDays.map(({ date, inMonth }) => {
+                  const day = parseInt(date.split("-")[2]);
+                  const isStart = date === rangeL;
+                  const isEnd   = date === rangeR;
+                  const isSame  = rangeL === rangeR;
+                  const inRange = date > rangeL && date < rangeR;
+                  const isToday = date === today;
+
+                  return (
+                    <button
+                      key={date}
+                      onMouseEnter={() => rangeStart && setHoverDate(date)}
+                      onMouseLeave={() => rangeStart && setHoverDate(null)}
+                      onClick={() => handleDayClick(date)}
+                      className={cn(
+                        "h-8 text-xs font-medium transition-colors flex items-center justify-center",
+                        !inMonth && "opacity-30",
+                        isSame && isStart && "rounded-full bg-blue-600 text-white",
+                        !isSame && isStart && "rounded-l-full bg-blue-600 text-white",
+                        !isSame && isEnd   && "rounded-r-full bg-blue-600 text-white",
+                        inRange && "bg-blue-100 text-blue-800",
+                        !isStart && !isEnd && !inRange && isToday && "text-blue-600 font-bold",
+                        !isStart && !isEnd && !inRange && !isToday && inMonth && "text-slate-700 hover:bg-slate-100 rounded-full",
+                      )}
+                    >
+                      {day}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {rangeStart && (
+                <p className="text-center text-[10px] text-slate-400 mt-2 font-medium">
+                  Tugash sanasini tanlang
+                </p>
               )}
-            >
-              {{ today: "Bugun", week: "Hafta", month: "Oy" }[p]}
-            </button>
-          ))}
+            </div>
+          )}
         </div>
 
-        {/* Date range */}
-        <div className={cn(
-          "flex items-center gap-1.5 h-9 px-3 rounded-xl border text-xs font-medium transition-colors shrink-0 cursor-pointer",
-          customDateActive
-            ? "border-blue-300 bg-blue-50 text-blue-700"
-            : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
-        )}>
-          <Calendar className={cn("w-3.5 h-3.5 shrink-0", customDateActive ? "text-blue-400" : "text-slate-400")} />
-          <input
-            type="date" value={dateFrom}
-            onChange={(e) => onDateFrom(e.target.value)}
-            className="bg-transparent border-none focus:outline-none w-[96px] cursor-pointer text-xs"
-          />
-          <span className={cn("select-none", customDateActive ? "text-blue-300" : "text-slate-300")}>–</span>
-          <input
-            type="date" value={dateTo}
-            onChange={(e) => onDateTo(e.target.value)}
-            className="bg-transparent border-none focus:outline-none w-[96px] cursor-pointer text-xs"
-          />
-        </div>
+        {SEP}
 
-        {FILTER_SEP}
-
-        {/* Transaction type */}
-        <div className="flex items-center gap-1 shrink-0">
+        {/* Transaction type pills */}
+        <div className="flex items-center gap-0.5 shrink-0">
           {([
-            { v: "all",      label: "Barchasi", cls: "bg-slate-800 text-white" },
-            { v: "income",   label: "↓ Kirim",  cls: "bg-emerald-600 text-white" },
-            { v: "expense",  label: "↑ Chiqim", cls: "bg-rose-500 text-white" },
-            { v: "transfer", label: "⇄",        cls: "bg-slate-600 text-white" },
-          ] as const).map(({ v, label, cls }) => (
-            <button
-              key={v}
-              onClick={() => onTxType(v as TxTypeFilter)}
-              className={cn(
-                "h-7 px-3 rounded-xl text-xs font-medium transition-all whitespace-nowrap",
-                txTypeFilter === v ? cls : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {FILTER_SEP}
-
-        {/* Method */}
-        <div className="flex items-center gap-1 shrink-0">
-          {([
-            { v: "all",  label: "Hammasi", icon: null },
-            { v: "cash", label: "Naqd",    icon: Banknote },
-            { v: "card", label: "Plastik", icon: CreditCard },
-          ] as const).map(({ v, label, icon: Icon }) => (
-            <button
-              key={v}
-              onClick={() => onMethod(v as MethodFilter)}
-              className={cn(
-                "h-7 px-3 rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 whitespace-nowrap",
-                methodFilter === v ? "bg-blue-600 text-white" : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
-              )}
-            >
-              {Icon && <Icon className="w-3 h-3" />}
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {FILTER_SEP}
-
-        {/* Client type */}
-        <div className="flex items-center gap-1 shrink-0">
-          {([
-            { v: "all",         label: "Barchasi" },
-            { v: "student",     label: "O'quvchi" },
-            { v: "employee",    label: "Xodim" },
-            { v: "third_party", label: "3-shaxs" },
-          ] as const).map(({ v, label }) => (
-            <button
-              key={v}
-              onClick={() => onClient(v as ClientFilter)}
-              className={cn(
-                "h-7 px-3 rounded-xl text-xs font-medium transition-all whitespace-nowrap",
-                clientFilter === v ? "bg-blue-600 text-white" : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
-              )}
-            >
+            { v: "all",      label: "Barchasi",  ac: "bg-slate-800 text-white"    },
+            { v: "income",   label: "↓ Kirim",   ac: "bg-emerald-600 text-white"  },
+            { v: "expense",  label: "↑ Chiqim",  ac: "bg-rose-500 text-white"     },
+            { v: "transfer", label: "⇄ Transfer",ac: "bg-slate-600 text-white"    },
+          ] as const).map(({ v, label, ac }) => (
+            <button key={v} onClick={() => onTxType(v as TxTypeFilter)}
+              className={cn(pillBase, txTypeFilter === v ? ac : "text-slate-500 hover:text-slate-800 hover:bg-slate-100")}>
               {label}
             </button>
           ))}
@@ -694,13 +838,73 @@ function FilterBar({
 
         <div className="flex-1" />
 
+        {hasExtraFilters && (
+          <button
+            onClick={() => { onTxType("all"); onMethod("all"); onClient("all"); onStatus("all"); }}
+            className="flex items-center gap-1 h-7 px-2.5 rounded-lg text-xs font-medium text-slate-500 hover:bg-rose-50 hover:text-rose-600 transition-colors shrink-0"
+          >
+            <X className="w-3 h-3" />Tozalash
+          </button>
+        )}
+
         <span className="text-xs text-slate-400 tabular-nums shrink-0 font-medium">{totalCount} ta</span>
-        <button
-          onClick={onRefresh}
-          className="w-7 h-7 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors shrink-0"
-        >
+        <button onClick={onRefresh}
+          className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors shrink-0">
           <RefreshCw className="w-3.5 h-3.5" />
         </button>
+      </div>
+
+      {/* ── Row 2: method + client + status ── */}
+      <div className="flex items-center gap-2 px-4 py-1.5 overflow-x-auto scrollbar-none">
+        {/* To'lov usuli */}
+        <div className="flex items-center gap-0.5 shrink-0">
+          {([
+            { v: "all",  label: "Hammasi", Icon: null },
+            { v: "cash", label: "Naqd",    Icon: Banknote  },
+            { v: "card", label: "Plastik", Icon: CreditCard },
+            { v: "bank", label: "Bank",    Icon: Building2 },
+          ] as const).map(({ v, label, Icon }) => (
+            <button key={v} onClick={() => onMethod(v as MethodFilter)}
+              className={cn(pillBase, "flex items-center gap-1",
+                methodFilter === v ? "bg-blue-600 text-white" : "text-slate-500 hover:text-slate-800 hover:bg-slate-100")}>
+              {Icon && <Icon className="w-3 h-3" />}{label}
+            </button>
+          ))}
+        </div>
+
+        {SEP}
+
+        {/* Mijoz */}
+        <div className="flex items-center gap-0.5 shrink-0">
+          {([
+            { v: "all",         label: "Barchasi"  },
+            { v: "student",     label: "O'quvchi"  },
+            { v: "employee",    label: "Xodim"     },
+            { v: "third_party", label: "3-shaxs"   },
+          ] as const).map(({ v, label }) => (
+            <button key={v} onClick={() => onClient(v as ClientFilter)}
+              className={cn(pillBase, clientFilter === v ? "bg-blue-600 text-white" : "text-slate-500 hover:text-slate-800 hover:bg-slate-100")}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {SEP}
+
+        {/* Holat */}
+        <div className="flex items-center gap-0.5 shrink-0">
+          {([
+            { v: "all",       label: "Barchasi",     ac: "bg-slate-700 text-white"    },
+            { v: "completed", label: "✓ Bajarilgan", ac: "bg-emerald-600 text-white"  },
+            { v: "pending",   label: "⏳ Kutilmoqda",ac: "bg-amber-500 text-white"    },
+            { v: "cancelled", label: "✕ Bekor",      ac: "bg-slate-500 text-white"    },
+          ] as const).map(({ v, label, ac }) => (
+            <button key={v} onClick={() => onStatus(v as StatusFilter)}
+              className={cn(pillBase, statusFilter === v ? ac : "text-slate-500 hover:text-slate-800 hover:bg-slate-100")}>
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -781,7 +985,6 @@ const STATUS_BADGE: Record<string, { bg: string; text: string; dot: string }> = 
   completed: { bg: "bg-emerald-50",  text: "text-emerald-700", dot: "bg-emerald-500" },
   pending:   { bg: "bg-amber-50",    text: "text-amber-700",   dot: "bg-amber-400"   },
   cancelled: { bg: "bg-slate-100",   text: "text-slate-500",   dot: "bg-slate-400"   },
-  failed:    { bg: "bg-rose-50",     text: "text-rose-600",    dot: "bg-rose-500"    },
 };
 
 function TxRow({ tx, active, onSelect }: {
@@ -793,11 +996,50 @@ function TxRow({ tx, active, onSelect }: {
   const { date, time } = fmtDateTime(tx.transaction_date);
   const inc = isIncome(tx.transaction_type);
   const exp = isExpense(tx.transaction_type);
+  const cancelled = tx.status === "cancelled";
   const whoLabel = tx.student?.full_name ?? tx.employee?.full_name ?? tx.third_party_name ?? null;
   const whoHref = tx.student
     ? `/school/students/${tx.student.id}`
     : tx.employee ? `/school/staff/${tx.employee.id}` : null;
   const statusStyle = STATUS_BADGE[tx.status] ?? { bg: "bg-slate-100", text: "text-slate-500", dot: "bg-slate-300" };
+
+  if (cancelled) {
+    return (
+      <tr
+        onClick={onSelect}
+        className={cn(
+          "group transition-colors cursor-pointer",
+          active ? "bg-slate-100" : "bg-slate-50/70 hover:bg-slate-100/60"
+        )}
+      >
+        <td className="py-2.5 pl-4 pr-4 whitespace-nowrap border-b border-slate-100 border-l-[3px] border-l-slate-300">
+          <p className="text-xs text-slate-400 leading-tight">{date}</p>
+          <p className="text-[11px] text-slate-300 mt-0.5 tabular-nums">{time}</p>
+        </td>
+        <td colSpan={3} className="py-2.5 px-4 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full">
+              <X className="w-2.5 h-2.5" />Bekor qilindi
+            </span>
+            {tx.category_name && (
+              <span className="text-xs text-slate-400 truncate max-w-[200px]">{tx.category_name}</span>
+            )}
+            {whoLabel && (
+              <span className="text-xs text-slate-400 truncate max-w-[120px]">· {whoLabel}</span>
+            )}
+          </div>
+        </td>
+        <td className="py-2.5 px-4 text-right border-b border-slate-100 whitespace-nowrap">
+          <p className="text-sm font-medium tabular-nums text-slate-400 line-through">
+            {formatCurrency(tx.amount)}
+          </p>
+        </td>
+        <td className="py-2.5 pl-4 pr-5 text-center border-b border-slate-100">
+          <span className="inline-block w-2.5 h-2.5 rounded-full bg-slate-300" title={statusLabel} />
+        </td>
+      </tr>
+    );
+  }
 
   return (
     <tr
@@ -812,7 +1054,7 @@ function TxRow({ tx, active, onSelect }: {
         "py-3.5 pl-4 pr-4 whitespace-nowrap border-b border-slate-100 border-l-[3px]",
         inc ? "border-l-emerald-400" : exp ? "border-l-rose-400" : "border-l-slate-300"
       )}>
-        <p className="text-xs font-semibold text-slate-800 leading-tight">{date}</p>
+        <p className="text-xs font-semibold leading-tight text-slate-800">{date}</p>
         <p className="text-[11px] text-slate-400 mt-0.5 tabular-nums">{time}</p>
       </td>
 
@@ -820,11 +1062,7 @@ function TxRow({ tx, active, onSelect }: {
       <td className="py-3.5 px-4 border-b border-slate-100 whitespace-nowrap">
         <span className={cn(
           "inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full",
-          inc
-            ? "bg-emerald-100 text-emerald-700"
-            : exp
-            ? "bg-rose-100 text-rose-700"
-            : "bg-slate-100 text-slate-600"
+          inc ? "bg-emerald-100 text-emerald-700" : exp ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-600"
         )}>
           {inc
             ? <ArrowDownRight className="w-2.5 h-2.5" />
@@ -837,10 +1075,17 @@ function TxRow({ tx, active, onSelect }: {
 
       {/* Tranzaksiya — category + period + description */}
       <td className="py-3.5 px-4 border-b border-slate-100">
-        <p className="text-xs font-medium text-slate-700 truncate max-w-[220px] leading-tight">
-          {tx.category_name ?? "—"}
-          {tx.period_month && <span className="text-slate-400 font-normal"> · {tx.period_month}</span>}
-        </p>
+        {(() => {
+          const periods: string[] = (tx.period_months?.length ?? 0) > 0 ? (tx.period_months as string[]) : tx.period_month ? [tx.period_month as string] : [];
+          return (
+            <p className="text-xs font-medium truncate max-w-[220px] leading-tight text-slate-700">
+              {tx.category_name ?? "—"}
+              {periods.length > 0 && (
+                <span className="font-normal"> · {periods.map(fmtPeriod).join(", ")}</span>
+              )}
+            </p>
+          );
+        })()}
         {tx.description && (
           <p className="text-[11px] text-slate-400 mt-0.5 truncate max-w-[220px]">{tx.description}</p>
         )}
@@ -875,10 +1120,12 @@ function TxRow({ tx, active, onSelect }: {
         </p>
         <span className={cn(
           "inline-flex items-center gap-0.5 text-[10px] font-semibold mt-1",
-          tx.payment_method === "card" ? "text-blue-500" : "text-amber-600"
+          tx.payment_method === "card" ? "text-blue-500" : tx.payment_method === "bank" ? "text-emerald-600" : "text-amber-600"
         )}>
           {tx.payment_method === "card"
             ? <><CreditCard className="w-2.5 h-2.5" />Plastik</>
+            : tx.payment_method === "bank"
+            ? <><Building2 className="w-2.5 h-2.5" />Bank</>
             : <><Banknote className="w-2.5 h-2.5" />Naqd</>}
         </span>
       </td>
@@ -896,126 +1143,301 @@ function TxRow({ tx, active, onSelect }: {
 
 // ── Transaction Detail Panel ──────────────────────────────────────────────────
 
-function TxDetailPanel({ tx, onClose }: { tx: Transaction; onClose: () => void }) {
+const PANEL_HDR: Record<string, string> = {
+  income: "bg-emerald-600", payment: "bg-emerald-600",
+  expense: "bg-rose-600",  salary: "bg-amber-600",
+  transfer: "bg-blue-600", refund: "bg-orange-500",
+};
+const PANEL_ICON_BG: Record<string, string> = {
+  income: "bg-emerald-500", payment: "bg-emerald-500",
+  expense: "bg-rose-500",  salary: "bg-amber-500",
+  transfer: "bg-blue-500", refund: "bg-orange-400",
+};
+const UZ_MONTH_NAMES: Record<string, string> = {
+  "01":"Yanvar","02":"Fevral","03":"Mart","04":"Aprel",
+  "05":"May","06":"Iyun","07":"Iyul","08":"Avgust",
+  "09":"Sentabr","10":"Oktabr","11":"Noyabr","12":"Dekabr",
+};
+function fmtPeriod(ym: string) {
+  const [y, m] = ym.split("-");
+  return `${UZ_MONTH_NAMES[m] ?? m} ${y}`;
+}
+
+function TxDetailPanel({ tx, onClose, onCancelled }: {
+  tx: Transaction; onClose: () => void; onCancelled?: () => void;
+}) {
   const router = useRouter();
-  const colors = TX_COLORS[tx.transaction_type] ?? { text: "text-slate-500", bg: "bg-slate-50", arrow: "•" };
-  const label = TX_LABEL[tx.transaction_type] ?? tx.transaction_type_display;
+  const [cancelling, setCancelling] = useState(false);
+  const label  = TX_LABEL[tx.transaction_type] ?? tx.transaction_type_display;
+  const inc    = isIncome(tx.transaction_type);
+  const exp    = isExpense(tx.transaction_type);
+  const hdr    = PANEL_HDR[tx.transaction_type] ?? "bg-slate-700";
+  const iconBg = PANEL_ICON_BG[tx.transaction_type] ?? "bg-slate-600";
   const statusLabel = STATUS_LABEL[tx.status] ?? tx.status_display;
   const statusBadge = STATUS_BADGE[tx.status] ?? { bg: "bg-slate-100", text: "text-slate-500" };
-  const { full } = fmtDateTime(tx.transaction_date);
-  const inc = isIncome(tx.transaction_type);
-  const exp = isExpense(tx.transaction_type);
-  const whoLabel = tx.student?.full_name ?? tx.employee?.full_name ?? tx.third_party_name;
+  const { full, date: dStr, time: tStr } = fmtDateTime(tx.transaction_date);
+  const isCancelled = tx.status === "cancelled";
+
+  // Ko'p oylik yoki bitta oylik
+  const periods: string[] =
+    tx.period_months && tx.period_months.length > 0
+      ? tx.period_months
+      : tx.period_month ? [tx.period_month] : [];
+
   const whoHref = tx.student
     ? `/school/students/${tx.student.id}`
     : tx.employee ? `/school/staff/${tx.employee.id}` : null;
 
+  async function handleCancel() {
+    setCancelling(true);
+    try {
+      await financeApi.cancelTransaction(String(tx.id));
+      toast.success("Tranzaksiya bekor qilindi");
+      onCancelled?.();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail ?? "Xatolik yuz berdi");
+    } finally {
+      setCancelling(false);
+    }
+  }
+
   return (
-    <div className="w-[280px] shrink-0 border-l border-slate-200 flex flex-col h-full bg-white overflow-y-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-        <p className="text-sm font-bold text-slate-800">Tranzaksiya</p>
+    <div className="w-[290px] shrink-0 border-l border-slate-200 flex flex-col h-full bg-slate-50 overflow-y-auto">
+
+      {/* ── Colored header ── */}
+      <div className={cn("relative px-4 pt-4 pb-5 shrink-0", hdr, isCancelled && "opacity-60")}>
         <button
           onClick={onClose}
-          className="w-7 h-7 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+          className="absolute right-3 top-3 w-7 h-7 rounded-lg bg-white/15 flex items-center justify-center text-white/70 hover:bg-white/25 hover:text-white transition-colors"
         >
-          <X className="w-4 h-4" />
+          <X className="w-3.5 h-3.5" />
         </button>
-      </div>
 
-      {/* Amount hero */}
-      <div className={cn(
-        "mx-4 mt-4 rounded-2xl p-5 text-center",
-        inc ? "bg-emerald-50" : exp ? "bg-rose-50" : "bg-slate-50"
-      )}>
-        <p className={cn(
-          "text-3xl font-bold tabular-nums leading-none",
-          inc ? "text-emerald-600" : exp ? "text-rose-500" : "text-slate-700"
-        )}>
-          {inc ? "+" : exp ? "−" : ""}{formatCurrency(tx.amount)}
-        </p>
-        <span className={cn(
-          "inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full mt-3",
-          colors.text, colors.bg
-        )}>
-          {colors.arrow} {label}
-        </span>
-      </div>
+        <p className="text-white/50 text-[10px] font-medium uppercase tracking-widest mb-3">Tranzaksiya</p>
 
-      {/* Details */}
-      <div className="px-5 py-4 space-y-1">
-        <DetailItem label="Holat">
-          <span className={cn("inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full", statusBadge.bg, statusBadge.text)}>
-            <span className={cn("w-1.5 h-1.5 rounded-full", STATUS_DOT[tx.status] ?? "bg-slate-300")} />
+        <div className="flex items-end gap-3">
+          <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0", iconBg)}>
+            {inc
+              ? <ArrowDownRight className="w-5 h-5 text-white" />
+              : exp
+              ? <ArrowUpRight className="w-5 h-5 text-white" />
+              : <ArrowRightLeft className="w-5 h-5 text-white" />
+            }
+          </div>
+          <div className="flex-1 min-w-0 pb-0.5">
+            <p className="text-white/60 text-xs mb-0.5">{label}</p>
+            <p className="text-white font-bold text-2xl leading-none tabular-nums">
+              {inc ? "+" : exp ? "−" : ""}{formatCurrency(tx.amount)}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 mt-3.5">
+          <span className={cn(
+            "inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded-full",
+            statusBadge.bg, statusBadge.text
+          )}>
+            <span className={cn("w-1.5 h-1.5 rounded-full", STATUS_DOT[tx.status] ?? "bg-slate-400")} />
             {statusLabel}
           </span>
-        </DetailItem>
-
-        <DetailItem label="Sana">
-          <span className="text-sm text-slate-700">{full}</span>
-        </DetailItem>
-
-        <DetailItem label="To'lov usuli">
-          <span className={cn(
-            "inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full",
-            tx.payment_method === "card" ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"
-          )}>
-            {tx.payment_method === "card"
-              ? <><CreditCard className="w-3 h-3" />Plastik karta</>
-              : <><Banknote className="w-3 h-3" />Naqd pul</>
-            }
-          </span>
-        </DetailItem>
-
-        {tx.category_name && (
-          <DetailItem label="Kategoriya">
-            <span className="text-sm text-slate-700">{tx.category_name}</span>
-          </DetailItem>
-        )}
-
-        {tx.period_month && (
-          <DetailItem label="Davr">
-            <span className="text-sm text-slate-700">{tx.period_month}</span>
-          </DetailItem>
-        )}
-
-        {whoLabel && (
-          <DetailItem label="Mijoz">
-            {whoHref ? (
-              <button
-                onClick={() => router.push(whoHref)}
-                className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 hover:underline"
-              >
-                {whoLabel}
-                <ExternalLink className="w-3 h-3 shrink-0" />
-              </button>
-            ) : (
-              <span className="text-sm text-slate-700">{whoLabel}</span>
-            )}
-          </DetailItem>
-        )}
+          <span className="text-white/40 text-[10px]">{dStr} · {tStr}</span>
+        </div>
       </div>
 
-      {/* Description */}
-      {tx.description && (
-        <div className="mx-4 mb-4">
-          <div className="bg-slate-50 rounded-xl p-4">
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Izoh</p>
-            <p className="text-sm text-slate-600 leading-relaxed">{tx.description}</p>
+      {/* Cancelled banner */}
+      {isCancelled && (
+        <div className="flex items-center gap-2 px-3.5 py-2.5 bg-red-50 border-b border-red-100 shrink-0">
+          <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+          <div className="text-xs">
+            <span className="font-semibold text-red-700">Bekor qilingan</span>
+            {tx.cancelled_by_info && (
+              <span className="text-red-500"> · {tx.cancelled_by_info.full_name}</span>
+            )}
           </div>
         </div>
       )}
 
-      {/* Audit trail */}
-      <div className="mx-4 mb-5">
-        <div className="border border-slate-100 rounded-xl overflow-hidden">
-          <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center gap-1.5">
-            <UserCircle className="w-3 h-3 text-slate-400" />
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Faoliyat</p>
-          </div>
-          <AuditRow label="Yaratdi" user={tx.created_by_info} date={tx.created_at} />
-          <AuditRow label="Yangiladi" user={tx.updated_by_info} date={tx.updated_at} />
+      {/* ── Body ── */}
+      <div className="flex-1 p-3 space-y-3">
+
+        {/* To'lov ma'lumotlari */}
+        <div className="bg-white rounded-xl border border-slate-100 overflow-hidden divide-y divide-slate-50">
+          <DetailItem label="To'lov usuli">
+            <span className={cn(
+              "inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full",
+              tx.payment_method === "card" ? "bg-blue-50 text-blue-700" : tx.payment_method === "bank" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
+            )}>
+              {tx.payment_method === "card"
+                ? <><CreditCard className="w-3 h-3" />Plastik</>
+                : tx.payment_method === "bank"
+                ? <><Globe className="w-3 h-3" />Bank</>
+                : <><Banknote className="w-3 h-3" />Naqd</>
+              }
+            </span>
+          </DetailItem>
+
+          {tx.category_name && (
+            <DetailItem label="Kategoriya">
+              <span className="text-xs font-medium text-slate-700">{tx.category_name}</span>
+            </DetailItem>
+          )}
+
+          <DetailItem label="Sana">
+            <span className="text-xs text-slate-700">{full}</span>
+          </DetailItem>
+
+          {tx.reference_number && (
+            <DetailItem label="Referens">
+              <span className="font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">
+                {tx.reference_number}
+              </span>
+            </DetailItem>
+          )}
         </div>
+
+        {/* O'quvchi / Xodim */}
+        {(tx.student || tx.employee || tx.third_party_name) && (
+          <div className="bg-white rounded-xl border border-slate-100 overflow-hidden">
+            {tx.student && (
+              <>
+                <div className="flex items-center gap-2.5 px-3.5 py-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
+                    <GraduationCap className="w-3.5 h-3.5 text-emerald-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    {whoHref ? (
+                      <button
+                        onClick={() => router.push(whoHref)}
+                        className="text-xs font-semibold text-blue-600 hover:underline flex items-center gap-1 truncate max-w-full"
+                      >
+                        {tx.student.full_name}
+                        <ExternalLink className="w-2.5 h-2.5 shrink-0" />
+                      </button>
+                    ) : (
+                      <p className="text-xs font-semibold text-slate-800 truncate">{tx.student.full_name}</p>
+                    )}
+                    {tx.student.personal_number && (
+                      <p className="text-[10px] text-slate-400">#{tx.student.personal_number}</p>
+                    )}
+                  </div>
+                  {tx.student.current_class && (
+                    <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full shrink-0">
+                      {tx.student.current_class.name}
+                    </span>
+                  )}
+                </div>
+
+                {/* To'lov oylari */}
+                {periods.length > 0 && (
+                  <div className="px-3.5 py-2.5 border-t border-slate-50">
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-1.5 flex items-center gap-1">
+                      <Calendar className="w-2.5 h-2.5" />
+                      {periods.length > 1 ? "To'lov oylari" : "To'lov oyi"}
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {periods.map((ym) => (
+                        <span
+                          key={ym}
+                          className="text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-md"
+                        >
+                          {fmtPeriod(ym)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {tx.employee && (
+              <div className="flex items-center gap-2.5 px-3.5 py-2.5">
+                <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+                  <Users className="w-3.5 h-3.5 text-blue-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  {whoHref ? (
+                    <button
+                      onClick={() => router.push(whoHref)}
+                      className="text-xs font-semibold text-blue-600 hover:underline flex items-center gap-1"
+                    >
+                      {tx.employee.full_name}
+                      <ExternalLink className="w-2.5 h-2.5 shrink-0" />
+                    </button>
+                  ) : (
+                    <p className="text-xs font-semibold text-slate-800 truncate">{tx.employee.full_name}</p>
+                  )}
+                  <p className="text-[10px] text-slate-400">{tx.employee.role_display}</p>
+                </div>
+              </div>
+            )}
+
+            {tx.third_party_name && !tx.student && !tx.employee && (
+              <div className="flex items-center gap-2.5 px-3.5 py-2.5">
+                <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+                  <Globe className="w-3.5 h-3.5 text-slate-500" />
+                </div>
+                <p className="text-xs font-semibold text-slate-800">{tx.third_party_name}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Izoh */}
+        {tx.description && (
+          <div className="bg-white rounded-xl border border-slate-100 px-3.5 py-3">
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5">Izoh</p>
+            <p className="text-xs text-slate-600 leading-relaxed">{tx.description}</p>
+          </div>
+        )}
+
+        {/* Audit */}
+        <div className="bg-white rounded-xl border border-slate-100 overflow-hidden divide-y divide-slate-50">
+          <AuditRow label="Yaratdi" user={tx.created_by_info} date={tx.created_at} />
+          {isCancelled && tx.cancelled_by_info && (
+            <AuditRow label="Bekor qildi" user={tx.cancelled_by_info} date={tx.cancelled_at ?? tx.updated_at} danger />
+          )}
+        </div>
+
+        {/* Bekor qilish */}
+        {!isCancelled && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <button
+                disabled={cancelling}
+                className="w-full flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-semibold text-rose-600 hover:bg-rose-100 hover:border-rose-300 transition-colors disabled:opacity-50"
+              >
+                <AlertTriangle className="w-3.5 h-3.5" />
+                Bekor qilish
+              </button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-rose-500" />
+                  Bekor qilishni tasdiqlang
+                </AlertDialogTitle>
+                <AlertDialogDescription className="space-y-2">
+                  <span className="block">
+                    <strong>{formatCurrency(tx.amount)}</strong> miqdoridagi tranzaksiyani bekor qilmoqchisiz.
+                  </span>
+                  <span className="block font-medium text-rose-600">
+                    Bu amal ortga qaytarib bo'lmaydi. Kassa balansi teskari qaytariladi.
+                  </span>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Yo'q</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleCancel}
+                  disabled={cancelling}
+                  className="bg-rose-600 hover:bg-rose-700 focus:ring-rose-600"
+                >
+                  {cancelling ? "Bekor qilinmoqda..." : "Ha, bekor qilaman"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
       </div>
     </div>
   );
@@ -1030,22 +1452,20 @@ function DetailItem({ label, children }: { label: string; children: React.ReactN
   );
 }
 
-function AuditRow({ label, user, date }: {
+function AuditRow({ label, user, date, danger }: {
   label: string;
-  user?: { full_name: string; phone_number: string } | null;
+  user?: { full_name: string; phone_number?: string } | null;
   date: string;
+  danger?: boolean;
 }) {
   const { date: d, time: t } = fmtDateTime(date);
   return (
-    <div className="px-3 py-2.5 flex items-start justify-between gap-2 border-b border-slate-50 last:border-0">
+    <div className="px-3.5 py-2.5 flex items-center justify-between gap-2">
       <div className="min-w-0">
-        <p className="text-[10px] text-slate-400 mb-0.5">{label}</p>
-        <p className="text-xs font-medium text-slate-700 leading-tight truncate max-w-[130px]">
+        <p className={cn("text-[10px] mb-0.5", danger ? "text-red-400" : "text-slate-400")}>{label}</p>
+        <p className={cn("text-xs font-medium leading-tight truncate max-w-[140px]", danger ? "text-red-700" : "text-slate-700")}>
           {user?.full_name ?? "—"}
         </p>
-        {user && user.phone_number !== user.full_name && (
-          <p className="text-[10px] text-slate-400 mt-0.5">{user.phone_number}</p>
-        )}
       </div>
       <div className="text-right shrink-0">
         <p className="text-[10px] font-medium text-slate-600">{d}</p>

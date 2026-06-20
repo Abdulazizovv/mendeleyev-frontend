@@ -114,6 +114,7 @@ export interface Transaction {
   };
   transaction_date: string;
   period_month?: string;
+  period_months?: string[];
   third_party_name?: string;
   metadata?: {
     balance_before?: number;
@@ -122,12 +123,18 @@ export interface Transaction {
   };
   created_at: string;
   updated_at: string;
+  cancelled_at?: string | null;
   created_by_info?: {
     id: string;
     full_name: string;
     phone_number: string;
   } | null;
   updated_by_info?: {
+    id: string;
+    full_name: string;
+    phone_number: string;
+  } | null;
+  cancelled_by_info?: {
     id: string;
     full_name: string;
     phone_number: string;
@@ -146,6 +153,7 @@ export interface CreateTransactionRequest {
   student_profile?: string;
   employee_membership?: string;
   period_month?: string;
+  period_months?: string[];
   third_party_name?: string;
   transaction_date?: string;
   metadata?: Record<string, any>;
@@ -378,7 +386,7 @@ export type TransactionStatus =
   | "cancelled" 
   | "failed";
 
-export type PaymentMethod = "cash" | "card";
+export type PaymentMethod = "cash" | "card" | "bank";
 
 export type PeriodType = 
   | "monthly" 
@@ -416,6 +424,7 @@ export const TRANSACTION_STATUS_LABELS: Record<TransactionStatus, string> = {
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   cash: "Naqd pul",
   card: "Plastik karta",
+  bank: "Bank orqali",
 };
 
 export const PERIOD_TYPE_LABELS: Record<PeriodType, string> = {
@@ -551,6 +560,53 @@ export interface PaymentQueryParams extends BaseQueryParams {
   payment_date_to?: string;
 }
 
+// ==================== Revenue Plan ====================
+
+export type RevenuePlanStudentStatus = "paid" | "partial" | "unpaid" | "overdue";
+
+export interface RevenuePlanStudentClass {
+  name: string;
+  grade_level: number;
+}
+
+export interface RevenuePlanStudent {
+  student_id: string;
+  student_name: string;
+  plan_name: string;
+  plan_period: string;
+  expected: number;
+  collected: number;
+  debt: number;
+  credit: number;
+  student_class: RevenuePlanStudentClass | null;
+  next_payment_date: string | null;
+  status: RevenuePlanStudentStatus;
+}
+
+export interface RevenuePlanMonthlyHistory {
+  month: string;
+  month_label: string;
+  collected: number;
+  is_current: boolean;
+}
+
+export interface RevenuePlanSummary {
+  expected: number;
+  collected: number;
+  uncollected: number;
+  collection_rate: number;
+  total_debt: number;
+  active_subscriptions: number;
+}
+
+export interface RevenuePlan {
+  month: string;
+  month_label: string;
+  summary: RevenuePlanSummary;
+  students: RevenuePlanStudent[];
+  monthly_history: RevenuePlanMonthlyHistory[];
+}
+
 // ==================== Paginated Response ====================
 
 export interface PaginatedResponse<T> {
@@ -558,4 +614,72 @@ export interface PaginatedResponse<T> {
   next: string | null;
   previous: string | null;
   results: T[];
+}
+
+// ==================== Billing Run ====================
+
+export type BillingRunStatus = "running" | "completed" | "failed";
+
+export interface BillingRunItem {
+  id: string;
+  student_name: string;
+  student_personal_no: string;
+  student_profile_id: string;
+  subscription_plan: string;
+  status: "charged" | "debt_added" | "skipped" | "error";
+  status_display: string;
+  charged_amount: number;
+  debt_amount: number;
+  balance_before: number;
+  balance_after: number;
+  reason: string;
+  created_at: string;
+}
+
+export interface StudentBalanceTransaction {
+  id: string;
+  student_balance: string;
+  student_profile_id: string;
+  subscription: string | null;
+  transaction_type: "credit" | "debit";
+  transaction_type_display: string;
+  status: "completed" | "failed";
+  status_display: string;
+  reason: string;
+  reason_display: string;
+  amount: number;
+  previous_balance: number;
+  new_balance: number;
+  reference: string;
+  description: string;
+  metadata: Record<string, unknown>;
+  processed_by: string | null;
+  processed_by_phone: string | null;
+  occurred_at: string;
+  created_at: string;
+}
+
+export interface BillingRun {
+  id: string;
+  branch: string;
+  month: string;
+  status: BillingRunStatus;
+  status_display: string;
+  triggered_by: string | null;
+  triggered_by_name: string | null;
+  total_subscriptions: number;
+  charged_count: number;
+  charged_amount: number;
+  debt_count: number;
+  debt_amount: number;
+  skipped_count: number;
+  error_message: string;
+  created_at: string;
+  updated_at: string;
+  items?: BillingRunItem[];
+}
+
+export interface BillingRunTriggerRequest {
+  month?: string;
+  force?: boolean;
 }

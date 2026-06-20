@@ -1,189 +1,188 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ArrowUpCircle, ArrowDownCircle, Receipt, ExternalLink, User, Wallet } from "lucide-react";
+"use client";
+
 import { useRouter } from "next/navigation";
+import {
+  TrendingUp, TrendingDown, ArrowRightLeft,
+  Banknote, CreditCard, Building2,
+  GraduationCap, Calendar, Receipt, ExternalLink,
+  UserX,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface RecentTransactionsCardProps {
   transactions: any[];
   studentId: string;
   formatCurrency: (amount: number) => string;
   formatDate: (date: string) => string;
+  /** school | branch-admin | training-center */
+  role?: string;
 }
+
+const UZ_MONTH_NAMES: Record<string, string> = {
+  "01":"Yanvar","02":"Fevral","03":"Mart","04":"Aprel",
+  "05":"May","06":"Iyun","07":"Iyul","08":"Avgust",
+  "09":"Sentabr","10":"Oktabr","11":"Noyabr","12":"Dekabr",
+};
+function fmtPeriod(ym: string) {
+  const [y, m] = ym.split("-");
+  return `${UZ_MONTH_NAMES[m] ?? m} ${y}`;
+}
+
+const TYPE_CFG: Record<string, { label: string; iconBg: string; iconCls: string; amtCls: string; sign: string }> = {
+  income:   { label: "Kirim",     iconBg: "bg-emerald-100", iconCls: "text-emerald-600", amtCls: "text-emerald-600", sign: "+"  },
+  payment:  { label: "To'lov",    iconBg: "bg-emerald-100", iconCls: "text-emerald-600", amtCls: "text-emerald-600", sign: "+"  },
+  expense:  { label: "Chiqim",    iconBg: "bg-rose-100",    iconCls: "text-rose-600",    amtCls: "text-rose-600",    sign: "−"  },
+  salary:   { label: "Maosh",     iconBg: "bg-amber-100",   iconCls: "text-amber-600",   amtCls: "text-amber-600",   sign: "−"  },
+  transfer: { label: "O'tkazma",  iconBg: "bg-blue-100",    iconCls: "text-blue-600",    amtCls: "text-blue-600",    sign: "⇄" },
+  refund:   { label: "Qaytarish", iconBg: "bg-orange-100",  iconCls: "text-orange-600",  amtCls: "text-orange-600",  sign: "+"  },
+};
+
+const STATUS_CFG: Record<string, { label: string; cls: string }> = {
+  completed: { label: "Bajarilgan",     cls: "bg-emerald-100 text-emerald-700" },
+  pending:   { label: "Kutilmoqda",     cls: "bg-yellow-100 text-yellow-700"  },
+  cancelled: { label: "Bekor qilingan", cls: "bg-slate-100 text-slate-500"    },
+  failed:    { label: "Xatolik",        cls: "bg-red-100 text-red-700"        },
+};
+
+const METHOD_CFG: Record<string, { label: string; Icon: React.ElementType; cls: string }> = {
+  cash: { label: "Naqd",    Icon: Banknote,   cls: "bg-amber-50 text-amber-700 border-amber-200"   },
+  card: { label: "Plastik", Icon: CreditCard, cls: "bg-blue-50 text-blue-700 border-blue-200"      },
+  bank: { label: "Bank",    Icon: Building2,  cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+};
 
 export function RecentTransactionsCard({
   transactions,
   studentId,
   formatCurrency,
   formatDate,
+  role = "school",
 }: RecentTransactionsCardProps) {
   const router = useRouter();
 
-  const getTransactionIcon = (type: string) => {
-    const incomeTypes = ["income", "payment", "deposit"];
-    if (incomeTypes.includes(type)) {
-      return <ArrowDownCircle className="w-5 h-5 text-green-600" />;
-    }
-    return <ArrowUpCircle className="w-5 h-5 text-red-600" />;
-  };
+  const txListHref = `/${role}/finance/transactions?student=${studentId}`;
 
-  const getTransactionColor = (type: string) => {
-    const incomeTypes = ["income", "payment", "deposit"];
-    if (incomeTypes.includes(type)) {
-      return "text-green-700";
-    }
-    return "text-red-700";
-  };
-
-  const getTransactionBg = (type: string) => {
-    const incomeTypes = ["income", "payment", "deposit"];
-    if (incomeTypes.includes(type)) {
-      return "from-green-50 to-emerald-50 border-green-200";
-    }
-    return "from-red-50 to-rose-50 border-red-200";
-  };
-
-  const getStatusBadge = (status: string) => {
-    const styles: Record<string, string> = {
-      completed: "bg-green-100 text-green-800",
-      pending: "bg-yellow-100 text-yellow-800",
-      cancelled: "bg-red-100 text-red-800",
-      failed: "bg-gray-100 text-gray-800",
-    };
-    return styles[status] || "bg-gray-100 text-gray-800";
-  };
-
-  const getPaymentMethodBadge = (method: string) => {
-    const styles: Record<string, string> = {
-      cash: "bg-green-100 text-green-800 border-green-300",
-      card: "bg-blue-100 text-blue-800 border-blue-300",
-    };
-    return styles[method] || "bg-gray-100 text-gray-800 border-gray-300";
-  };
+  if (transactions.length === 0) {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-white p-6 text-center">
+        <Receipt className="w-10 h-10 text-slate-200 mx-auto mb-2" />
+        <p className="text-sm text-slate-400">Tranzaksiyalar yo'q</p>
+      </div>
+    );
+  }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Receipt className="w-5 h-5" />
-            So&apos;nggi Tranzaksiyalar
-          </CardTitle>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() =>
-              router.push(
-                `/branch-admin/finance/transactions?student=${studentId}`
-              )
-            }
-          >
-            <ExternalLink className="w-4 h-4 mr-1" />
-            Barchasi
-          </Button>
+    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+        <div className="flex items-center gap-2">
+          <Receipt className="w-4 h-4 text-slate-400" />
+          <span className="text-sm font-semibold text-slate-700">So'nggi tranzaksiyalar</span>
+          <span className="text-xs text-slate-400">({transactions.length})</span>
         </div>
-      </CardHeader>
-      <CardContent>
-        {transactions.length > 0 ? (
-          <div className="space-y-3">
-            {transactions.map((transaction: any) => {
-              const incomeTypes = ["income", "payment", "deposit"];
-              const isIncome = incomeTypes.includes(transaction.transaction_type);
-              
-              return (
-                <div
-                  key={transaction.id}
-                  className={`p-4 bg-gradient-to-r ${getTransactionBg(
-                    transaction.transaction_type
-                  )} rounded-lg border cursor-pointer hover:shadow-md transition-all`}
-                  onClick={() =>
-                    router.push(`/branch-admin/finance/transactions/${transaction.id}`)
-                  }
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    {/* Left: Icon and Details */}
-                    <div className="flex items-start gap-3 flex-1">
-                      <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center flex-shrink-0">
-                        {getTransactionIcon(transaction.transaction_type)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`font-bold text-lg ${getTransactionColor(transaction.transaction_type)}`}>
-                          {isIncome ? "+" : "-"}
-                          {formatCurrency(Math.abs(transaction.amount))}
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          {transaction.transaction_type_display} • {formatDate(transaction.transaction_date)}
-                        </p>
-                        {transaction.description && (
-                          <p className="text-xs text-gray-500 mt-1 line-clamp-1">
-                            {transaction.description}
-                          </p>
-                        )}
-                        
-                        {/* Category & Cash Register */}
-                        <div className="flex items-center gap-2 mt-2 flex-wrap">
-                          {transaction.category && (
-                            <div className="flex items-center gap-1 text-xs bg-white px-2 py-1 rounded">
-                              <Wallet className="w-3 h-3 text-gray-500" />
-                              <span className="text-gray-600">{transaction.category.name}</span>
-                            </div>
-                          )}
-                          {transaction.cash_register && (
-                            <div className="text-xs text-gray-500">
-                              {transaction.cash_register.name}
-                            </div>
-                          )}
-                        </div>
+        <button
+          onClick={() => router.push(txListHref)}
+          className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+        >
+          Barchasi
+          <ExternalLink className="w-3 h-3" />
+        </button>
+      </div>
 
-                        {/* Employee Info */}
-                        {transaction.employee && (
-                          <div className="flex items-center gap-2 mt-2 p-2 bg-white rounded border border-gray-200">
-                            <Avatar className="w-6 h-6">
-                              <AvatarImage src={transaction.employee.avatar} />
-                              <AvatarFallback className="text-xs">
-                                {transaction.employee.full_name.charAt(0)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-medium text-gray-700 truncate">
-                                {transaction.employee.full_name}
-                              </p>
-                              <p className="text-xs text-gray-500">
-                                {transaction.employee.role_display}
-                              </p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+      {/* List */}
+      <div className="divide-y divide-slate-50">
+        {transactions.map((tx: any) => {
+          const typeCfg = TYPE_CFG[tx.transaction_type] ?? TYPE_CFG.income;
+          const statusCfg = STATUS_CFG[tx.status];
+          const methodCfg = METHOD_CFG[tx.payment_method];
+          const isCancelled = tx.status === "cancelled";
 
-                    {/* Right: Badges */}
-                    <div className="flex flex-col gap-2 items-end flex-shrink-0">
-                      <Badge className={getStatusBadge(transaction.status)}>
-                        {transaction.status_display}
-                      </Badge>
-                      <Badge className={getPaymentMethodBadge(transaction.payment_method)}>
-                        {transaction.payment_method_display}
-                      </Badge>
-                      {transaction.reference_number && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          #{transaction.reference_number}
-                        </p>
-                      )}
-                    </div>
-                  </div>
+          // To'lov oylari
+          const periods: string[] =
+            tx.period_months && tx.period_months.length > 0
+              ? tx.period_months
+              : tx.period_month ? [tx.period_month] : [];
+
+          const TypeIcon = tx.transaction_type === "transfer"
+            ? ArrowRightLeft
+            : ["income","payment","refund"].includes(tx.transaction_type)
+            ? TrendingUp
+            : TrendingDown;
+
+          return (
+            <div
+              key={tx.id}
+              onClick={() => router.push(`/${role}/finance/transactions/${tx.id}`)}
+              className={cn(
+                "flex items-center gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer transition-colors",
+                isCancelled && "opacity-60"
+              )}
+            >
+              {/* Icon */}
+              <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center shrink-0", typeCfg.iconBg)}>
+                <TypeIcon className={cn("w-4 h-4", typeCfg.iconCls)} />
+              </div>
+
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-sm font-medium text-slate-800 truncate">
+                    {tx.category?.name ?? typeCfg.label}
+                  </span>
+                  {isCancelled && (
+                    <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full", statusCfg?.cls)}>
+                      <UserX className="w-2.5 h-2.5 inline mr-0.5" />
+                      {statusCfg?.label}
+                    </span>
+                  )}
+                  {tx.status === "pending" && (
+                    <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full", statusCfg?.cls)}>
+                      {statusCfg?.label}
+                    </span>
+                  )}
                 </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="text-center py-8 text-gray-500">
-            <Receipt className="w-12 h-12 mx-auto mb-2 opacity-30" />
-            <p>Tranzaksiyalar yo&apos;q</p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+
+                {/* To'lov oylari chips */}
+                {periods.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    <Calendar className="w-3 h-3 text-emerald-400 mt-0.5 shrink-0" />
+                    {periods.map((ym) => (
+                      <span
+                        key={ym}
+                        className="text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded"
+                      >
+                        {fmtPeriod(ym)}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                  <span className="text-[11px] text-slate-400">{formatDate(tx.transaction_date)}</span>
+                  {tx.cash_register && (
+                    <span className="text-[11px] text-slate-400">· {tx.cash_register.name}</span>
+                  )}
+                  {methodCfg && (
+                    <span className={cn(
+                      "inline-flex items-center gap-0.5 text-[10px] font-medium border px-1.5 py-0.5 rounded-full",
+                      methodCfg.cls
+                    )}>
+                      <methodCfg.Icon className="w-2.5 h-2.5" />
+                      {methodCfg.label}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Amount */}
+              <div className="text-right shrink-0">
+                <p className={cn("text-sm font-bold tabular-nums", typeCfg.amtCls)}>
+                  {typeCfg.sign}{formatCurrency(Math.abs(tx.amount))}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }

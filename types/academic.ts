@@ -115,30 +115,38 @@ export interface BulkCreateSlots {
 
 // ==================== LESSONS ====================
 
-export type LessonStatus = 'planned' | 'completed' | 'cancelled';
+export type LessonStatus = 'planned' | 'completed' | 'cancelled' | 'canceled' | 'in_progress';
 
 export interface LessonInstance extends BaseEntity {
-  class_id: string;
-  class_name?: string;
-  subject_id: string;
-  subject_name?: string;
-  teacher_id: string;
-  teacher_name?: string;
-  room_id?: string;
-  room_name?: string;
-  date: string; // "2024-01-15"
+  // Class lesson fields
+  class_subject?: string | null;
+  class_id?: string | null;
+  class_name?: string | null;
+  subject_name?: string | null;
+  // Group lesson fields
+  group?: string | null;
+  group_id?: string | null;
+  group_name?: string | null;
+  // Common fields
+  teacher_id?: string | null;
+  teacher_name?: string | null;
+  room?: string | null;
+  room_name?: string | null;
+  date: string;
   start_time: string;
   end_time: string;
-  lesson_number?: number; // Which lesson period (1-8)
+  lesson_number?: number;
   status: LessonStatus;
-  topic_id?: string;
-  topic?: { id: string; title: string; description?: string }; // Topic object
-  topic_name?: string;
-  notes?: string;
-  homework?: string; // Homework assignment
-  teacher_notes?: string; // Teacher's notes
-  is_auto_generated?: boolean; // Was this lesson generated automatically?
-  branch_id: string;
+  status_display?: string;
+  topic?: string | { id: string; title: string; description?: string } | null;
+  topic_title?: string | null;
+  topic_name?: string | null;
+  homework?: string | null;
+  teacher_notes?: string | null;
+  notes?: string | null;
+  attendance_count?: number | null;
+  is_auto_generated?: boolean;
+  branch_id?: string;
 }
 
 export interface LessonTopic extends BaseEntity {
@@ -164,6 +172,7 @@ export interface GenerateLessonsResponse {
 export interface CompleteLessonRequest {
   topic_id?: string;
   notes?: string;
+  attendance_count?: number | null;
 }
 
 // ==================== SCHEDULE AVAILABILITY ====================
@@ -371,6 +380,7 @@ export interface ScheduleFilters {
 
 export interface LessonFilters {
   class_id?: string;
+  group_id?: string;
   teacher_id?: string;
   subject_id?: string;
   status?: LessonStatus;

@@ -1,16 +1,17 @@
 "use client";
 
 import React from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { staffApi } from "@/lib/api";
 import type { BalanceTransaction, SalaryPayment, PaginatedResponse } from "@/types/staff";
-import { formatRelativeDateTime, formatRelativeDate, formatCurrency, uzbekMonths, cn } from "@/lib/utils";
+import { formatCurrency, formatRelativeDateTime, formatRelativeDate, uzbekMonths } from "@/lib/utils";
 import { transactionTypeLabels, paymentMethodLabels, salaryPaymentStatusLabels } from "@/types/staff";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -18,32 +19,82 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { ArrowLeft, Search, Filter, X } from "lucide-react";
+import {
+  ArrowLeft, Search, X, ArrowDownLeft, ArrowUpRight, TrendingUp,
+  CreditCard, Receipt, User,
+} from "lucide-react";
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const TX_SIGN_COLOR: Record<string, string> = {
+  salary_accrual: "text-emerald-600",
+  bonus:          "text-emerald-600",
+  other:          "text-emerald-600",
+  deduction:      "text-red-600",
+  advance:        "text-red-600",
+  fine:           "text-red-600",
+  adjustment:     "text-blue-600",
+};
+
+const TX_BG: Record<string, string> = {
+  salary_accrual: "bg-emerald-50",
+  bonus:          "bg-emerald-50",
+  other:          "bg-blue-50",
+  deduction:      "bg-red-50",
+  advance:        "bg-orange-50",
+  fine:           "bg-red-50",
+  adjustment:     "bg-gray-50",
+};
+
+const PAY_STATUS_COLOR: Record<string, string> = {
+  paid:      "bg-emerald-50 text-emerald-700 border-emerald-200",
+  pending:   "bg-amber-50 text-amber-700 border-amber-200",
+  cancelled: "bg-red-50 text-red-700 border-red-200",
+  partial:   "bg-blue-50 text-blue-700 border-blue-200",
+};
+
+function TxIcon({ type }: { type: string }) {
+  const bg = TX_BG[type] ?? "bg-gray-50";
+  const isPositive = ["salary_accrual", "bonus", "other"].includes(type);
+  return (
+    <div className={`w-8 h-8 rounded-xl ${bg} flex items-center justify-center shrink-0`}>
+      {isPositive
+        ? <TrendingUp className="w-4 h-4 text-emerald-600" />
+        : <ArrowUpRight className="w-4 h-4 text-red-500" />
+      }
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value?: string | null }) {
+  if (!value) return null;
+  return (
+    <div className="flex items-start justify-between gap-3 py-2 border-b border-gray-50 last:border-0">
+      <span className="text-xs font-medium text-gray-400 uppercase tracking-wide shrink-0">{label}</span>
+      <span className="text-sm font-medium text-gray-800 text-right">{value}</span>
+    </div>
+  );
+}
+
+function formatMonthDisplay(monthStr?: string) {
+  if (!monthStr) return "—";
+  const d = new Date(monthStr);
+  return `${uzbekMonths[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function StaffTransactionsPage() {
   const params = useParams();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const staffId = params.id as string;
 
-  // State
   const [activeTab, setActiveTab] = React.useState("transactions");
   const [searchTerm, setSearchTerm] = React.useState("");
-  const [selectedTransaction, setSelectedTransaction] = React.useState<BalanceTransaction | null>(null);
-  const [detailDialogOpen, setDetailDialogOpen] = React.useState(false);
+  const [selectedTx, setSelectedTx] = React.useState<BalanceTransaction | null>(null);
   const [selectedPayment, setSelectedPayment] = React.useState<SalaryPayment | null>(null);
-  const [paymentDetailDialogOpen, setPaymentDetailDialogOpen] = React.useState(false);
   const [filters, setFilters] = React.useState({
     transaction_type: "",
     payment_method: "",
@@ -53,670 +104,348 @@ export default function StaffTransactionsPage() {
     ordering: "-created_at",
   });
 
-  // Get staff detail for header
   const { data: staff } = useQuery({
     queryKey: ["staff", staffId],
     queryFn: () => staffApi.getStaffMember(staffId),
   });
 
-  // Get transactions
-  const { data: transactionsData, isLoading: transactionsLoading } = useQuery({
-    queryKey: ["transactions", staffId, filters, searchTerm],
+  const { data: txData, isLoading: txLoading } = useQuery<PaginatedResponse<BalanceTransaction>>({
+    queryKey: ["staff-transactions", staffId, filters, searchTerm],
     queryFn: async () => {
-      const result = await staffApi.getTransactions({
+      const res = await staffApi.getTransactions({
         membership: staffId,
-        search: searchTerm,
+        search: searchTerm || undefined,
         ordering: filters.ordering,
         transaction_type: filters.transaction_type || undefined,
         date_from: filters.date_from || undefined,
         date_to: filters.date_to || undefined,
       });
-      return result as any as PaginatedResponse<BalanceTransaction>;
+      return res as any as PaginatedResponse<BalanceTransaction>;
     },
     enabled: activeTab === "transactions",
   });
 
-  const transactions = transactionsData as PaginatedResponse<BalanceTransaction> | undefined;
-
-  // Get payments
-  const { data: paymentsData, isLoading: paymentsLoading } = useQuery({
-    queryKey: ["payments", staffId, filters, searchTerm],
+  const { data: payData, isLoading: payLoading } = useQuery<PaginatedResponse<SalaryPayment>>({
+    queryKey: ["staff-payments", staffId, filters, searchTerm],
     queryFn: async () => {
-      const result = await staffApi.getPayments({
+      const res = await staffApi.getPayments({
         membership: staffId,
-        search: searchTerm,
+        search: searchTerm || undefined,
         ordering: filters.ordering,
         payment_method: filters.payment_method || undefined,
         status: filters.status || undefined,
         payment_date_from: filters.date_from || undefined,
         payment_date_to: filters.date_to || undefined,
       });
-      return result as any as PaginatedResponse<SalaryPayment>;
+      return res as any as PaginatedResponse<SalaryPayment>;
     },
     enabled: activeTab === "payments",
   });
 
-  const payments = paymentsData as PaginatedResponse<SalaryPayment> | undefined;
-
   const clearFilters = () => {
-    setFilters({
-      transaction_type: "",
-      payment_method: "",
-      status: "",
-      date_from: "",
-      date_to: "",
-      ordering: "-created_at",
-    });
+    setFilters({ transaction_type: "", payment_method: "", status: "", date_from: "", date_to: "", ordering: "-created_at" });
     setSearchTerm("");
   };
 
+  const hasFilters = !!(filters.transaction_type || filters.payment_method || filters.status || filters.date_from || filters.date_to || searchTerm);
+
   return (
-    <div className="container mx-auto py-4 sm:py-6 px-4 sm:px-6 lg:px-8 max-w-7xl">
+    <div className="max-w-5xl mx-auto space-y-4">
+
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <Button
-            variant="ghost"
+          <button
             onClick={() => router.push(`/training-center/staff/${staffId}`)}
-            className="mb-2 -ml-2"
+            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors font-medium mb-2"
           >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Orqaga
-          </Button>
-          <h1 className="text-2xl sm:text-3xl font-bold">
-            {staff?.full_name} - Tranzaksiyalar
-          </h1>
+            <ArrowLeft className="w-4 h-4" />
+            {staff?.full_name || "Xodim"}
+          </button>
+          <h1 className="text-xl font-bold text-gray-900">Tranzaksiyalar tarixi</h1>
           {staff && (
-            <p className="text-gray-600 mt-1">
-              {staff.phone_number} • {staff.role_display}
+            <p className="text-sm text-gray-500 mt-0.5">
+              {staff.phone_number} · {staff.role_display}
             </p>
           )}
         </div>
       </div>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 max-w-md">
-          <TabsTrigger value="transactions">Tranzaksiyalar</TabsTrigger>
-          <TabsTrigger value="payments">To&apos;lovlar</TabsTrigger>
+      <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); clearFilters(); }}>
+        <TabsList className="h-9">
+          <TabsTrigger value="transactions" className="gap-1.5 text-sm">
+            <Receipt className="w-3.5 h-3.5" />
+            Tranzaksiyalar
+          </TabsTrigger>
+          <TabsTrigger value="payments" className="gap-1.5 text-sm">
+            <CreditCard className="w-3.5 h-3.5" />
+            Maosh to&apos;lovlari
+          </TabsTrigger>
         </TabsList>
 
-        {/* Filters */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Filter className="w-5 h-5" />
-              Filterlar
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Search */}
+        {/* Filter bar */}
+        <Card className="border-gray-200 shadow-none mt-4">
+          <CardContent className="p-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <div className="sm:col-span-2">
-                <Label>Qidiruv</Label>
+                <Label className="text-xs text-gray-500 mb-1.5 block">Qidiruv</Label>
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
                   <Input
-                    placeholder="Izoh, referens, telefon..."
+                    placeholder="Tavsif, referens..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
+                    className="pl-9 h-9 text-sm"
                   />
                 </div>
               </div>
 
-              {/* Transaction Type / Payment Method */}
               {activeTab === "transactions" ? (
                 <div>
-                  <Label>Tranzaksiya turi</Label>
-                  <Select
-                    value={filters.transaction_type || "all"}
-                    onValueChange={(value) =>
-                      setFilters({ ...filters, transaction_type: value === "all" ? "" : value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Hammasi" />
-                    </SelectTrigger>
+                  <Label className="text-xs text-gray-500 mb-1.5 block">Tranzaksiya turi</Label>
+                  <Select value={filters.transaction_type || "all"} onValueChange={(v) => setFilters({ ...filters, transaction_type: v === "all" ? "" : v })}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Hammasi" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Hammasi</SelectItem>
-                      {Object.entries(transactionTypeLabels).map(([key, label]) => (
-                        <SelectItem key={key} value={key}>
-                          {label}
-                        </SelectItem>
-                      ))}
+                      {Object.entries(transactionTypeLabels).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
               ) : (
                 <>
                   <div>
-                    <Label>To&apos;lov usuli</Label>
-                    <Select
-                      value={filters.payment_method || "all"}
-                      onValueChange={(value) =>
-                        setFilters({ ...filters, payment_method: value === "all" ? "" : value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Hammasi" />
-                      </SelectTrigger>
+                    <Label className="text-xs text-gray-500 mb-1.5 block">To&apos;lov usuli</Label>
+                    <Select value={filters.payment_method || "all"} onValueChange={(v) => setFilters({ ...filters, payment_method: v === "all" ? "" : v })}>
+                      <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Hammasi" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">Hammasi</SelectItem>
-                        {Object.entries(paymentMethodLabels).map(([key, label]) => (
-                          <SelectItem key={key} value={key}>
-                            {label}
-                          </SelectItem>
-                        ))}
+                        {Object.entries(paymentMethodLabels).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
-
                   <div>
-                    <Label>Holat</Label>
-                    <Select
-                      value={filters.status || "all"}
-                      onValueChange={(value) =>
-                        setFilters({ ...filters, status: value === "all" ? "" : value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Hammasi" />
-                      </SelectTrigger>
+                    <Label className="text-xs text-gray-500 mb-1.5 block">Holat</Label>
+                    <Select value={filters.status || "all"} onValueChange={(v) => setFilters({ ...filters, status: v === "all" ? "" : v })}>
+                      <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Hammasi" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">Hammasi</SelectItem>
-                        {Object.entries(salaryPaymentStatusLabels).map(([key, label]) => (
-                          <SelectItem key={key} value={key}>
-                            {label}
-                          </SelectItem>
-                        ))}
+                        {Object.entries(salaryPaymentStatusLabels).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
                 </>
               )}
 
-              {/* Date From */}
               <div>
-                <Label>Sanadan</Label>
-                <Input
-                  type="date"
-                  value={filters.date_from}
-                  onChange={(e) => setFilters({ ...filters, date_from: e.target.value })}
-                />
-              </div>
-
-              {/* Date To */}
-              <div>
-                <Label>Sanagacha</Label>
-                <Input
-                  type="date"
-                  value={filters.date_to}
-                  onChange={(e) => setFilters({ ...filters, date_to: e.target.value })}
-                />
-              </div>
-
-              {/* Clear Filters */}
-              <div className="flex items-end">
-                <Button variant="outline" onClick={clearFilters} className="w-full">
-                  <X className="w-4 h-4 mr-2" />
-                  Tozalash
-                </Button>
+                <Label className="text-xs text-gray-500 mb-1.5 block">Sana oralig&apos;i</Label>
+                <div className="flex gap-1.5">
+                  <Input type="date" value={filters.date_from} onChange={(e) => setFilters({ ...filters, date_from: e.target.value })} className="h-9 text-sm flex-1" />
+                  <Input type="date" value={filters.date_to} onChange={(e) => setFilters({ ...filters, date_to: e.target.value })} className="h-9 text-sm flex-1" />
+                </div>
               </div>
             </div>
+
+            {hasFilters && (
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                <button onClick={clearFilters} className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors">
+                  <X className="w-3.5 h-3.5" />
+                  Filtrlarni tozalash
+                </button>
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* Transactions Tab */}
-        <TabsContent value="transactions" className="space-y-4">
-          <Card>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Sana</TableHead>
-                      <TableHead>Turi</TableHead>
-                      <TableHead className="text-right">Miqdor</TableHead>
-                      <TableHead className="text-right">O&apos;zgarish</TableHead>
-                      <TableHead className="text-right">Yangi balans</TableHead>
-                      <TableHead>Tavsif</TableHead>
-                      <TableHead>Kim tomonidan</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {transactionsLoading ? (
-                      <TableRow>
-                        <TableCell colSpan={7} className="text-center py-8">
-                          Yuklanmoqda...
-                        </TableCell>
-                      </TableRow>
-                    ) : transactions && transactions.results.length > 0 ? (
-                      transactions.results.map((transaction) => (
-                        <TableRow
-                          key={transaction.id}
-                          className="cursor-pointer hover:bg-muted/50 transition-colors"
-                          onClick={() => {
-                            setSelectedTransaction(transaction);
-                            setDetailDialogOpen(true);
-                          }}
-                        >
-                          <TableCell className="whitespace-nowrap">
-                            {formatRelativeDateTime(transaction.created_at)}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline">
-                              {transaction.transaction_type_display}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right font-medium">
-                            {formatCurrency(transaction.amount)}
-                          </TableCell>
-                          <TableCell
-                            className={`text-right font-medium ${
-                              transaction.balance_change >= 0
-                                ? "text-green-600"
-                                : "text-red-600"
-                            }`}
-                          >
-                            {transaction.balance_change >= 0 ? "+" : ""}
-                            {formatCurrency(transaction.balance_change)}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {formatCurrency(transaction.new_balance)}
-                          </TableCell>
-                          <TableCell className="max-w-xs truncate">
-                            {transaction.description}
-                          </TableCell>
-                          <TableCell>{transaction.processed_by_name}</TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                          Tranzaksiyalar topilmadi
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
+        {/* Transactions tab */}
+        <TabsContent value="transactions" className="mt-4">
+          <Card className="border-gray-200 shadow-none">
+            <CardHeader className="px-5 pt-5 pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-semibold text-gray-700">Balans tranzaksiyalari</CardTitle>
+                {txData && (
+                  <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full tabular-nums">
+                    {txData.count} ta
+                  </span>
+                )}
               </div>
+            </CardHeader>
+            <CardContent className="px-5 pb-5 pt-0">
+              {txLoading ? (
+                <div className="space-y-3">{[1,2,3,4,5].map(i => <Skeleton key={i} className="h-14 w-full rounded-xl" />)}</div>
+              ) : !txData || txData.results.length === 0 ? (
+                <div className="text-center py-16">
+                  <div className="w-12 h-12 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto mb-3">
+                    <Receipt className="w-5 h-5 text-gray-300" />
+                  </div>
+                  <p className="text-sm font-medium text-gray-400">Tranzaksiya topilmadi</p>
+                  {hasFilters && <p className="text-xs text-gray-300 mt-1">Boshqa filtr tanlang</p>}
+                </div>
+              ) : (
+                <div className="space-y-0.5">
+                  {txData.results.map((tx) => {
+                    const isPositive = tx.balance_change >= 0;
+                    return (
+                      <div
+                        key={tx.id}
+                        onClick={() => setSelectedTx(tx)}
+                        className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-0 cursor-pointer hover:bg-gray-50/80 rounded-xl px-2 -mx-2 transition-colors"
+                      >
+                        <TxIcon type={tx.transaction_type} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-800">{tx.transaction_type_display}</span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-0.5 truncate">
+                            {tx.description ? tx.description : "—"}
+                            {" · "}{formatRelativeDateTime(tx.created_at)}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className={`text-sm font-bold tabular-nums ${isPositive ? "text-emerald-600" : "text-red-600"}`}>
+                            {isPositive ? "+" : ""}{formatCurrency(tx.balance_change)}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-0.5 tabular-nums">
+                            Balans: {formatCurrency(tx.new_balance)}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
-
-          {transactions && transactions.count > 0 && (
-            <div className="text-center text-sm text-gray-600">
-              Jami: {transactions.count} ta tranzaksiya
-            </div>
-          )}
         </TabsContent>
 
-        {/* Payments Tab */}
-        <TabsContent value="payments" className="space-y-4">
-          <Card>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>To&apos;lov sanasi</TableHead>
-                      <TableHead>Oy</TableHead>
-                      <TableHead className="text-right">Miqdor</TableHead>
-                      <TableHead>Usul</TableHead>
-                      <TableHead>Holat</TableHead>
-                      <TableHead>Izoh</TableHead>
-                      <TableHead>Kim tomonidan</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paymentsLoading ? (
-                      <TableRow>
-                        <TableCell colSpan={7} className="text-center py-8">
-                          Yuklanmoqda...
-                        </TableCell>
-                      </TableRow>
-                    ) : payments && payments.results.length > 0 ? (
-                      payments.results.map((payment) => (
-                        <TableRow
-                          key={payment.id}
-                          className="cursor-pointer hover:bg-muted/50 transition-colors"
-                          onClick={() => {
-                            setSelectedPayment(payment);
-                            setPaymentDetailDialogOpen(true);
-                          }}
-                        >
-                          <TableCell className="whitespace-nowrap">
-                            {formatRelativeDate(payment.payment_date)}
-                          </TableCell>
-                          <TableCell>{payment.month_display}</TableCell>
-                          <TableCell className="text-right font-medium">
-                            {formatCurrency(payment.amount)}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline">
-                              {payment.payment_method_display}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={
-                                payment.status_display === "To'langan"
-                                  ? "default"
-                                  : payment.status_display === "Bekor qilingan"
-                                  ? "destructive"
-                                  : "secondary"
-                              }
-                            >
-                              {payment.status_display}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="max-w-xs truncate">
-                            {payment.notes || "-"}
-                          </TableCell>
-                          <TableCell>{payment.processed_by_name}</TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                          To&apos;lovlar topilmadi
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
+        {/* Payments tab */}
+        <TabsContent value="payments" className="mt-4">
+          <Card className="border-gray-200 shadow-none">
+            <CardHeader className="px-5 pt-5 pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-semibold text-gray-700">Maosh to&apos;lovlari</CardTitle>
+                {payData && (
+                  <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full tabular-nums">
+                    {payData.count} ta
+                  </span>
+                )}
               </div>
+            </CardHeader>
+            <CardContent className="px-5 pb-5 pt-0">
+              {payLoading ? (
+                <div className="space-y-3">{[1,2,3,4].map(i => <Skeleton key={i} className="h-14 w-full rounded-xl" />)}</div>
+              ) : !payData || payData.results.length === 0 ? (
+                <div className="text-center py-16">
+                  <div className="w-12 h-12 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto mb-3">
+                    <CreditCard className="w-5 h-5 text-gray-300" />
+                  </div>
+                  <p className="text-sm font-medium text-gray-400">To&apos;lovlar topilmadi</p>
+                  {hasFilters && <p className="text-xs text-gray-300 mt-1">Boshqa filtr tanlang</p>}
+                </div>
+              ) : (
+                <div className="space-y-0.5">
+                  {payData.results.map((pay) => (
+                    <div
+                      key={pay.id}
+                      onClick={() => setSelectedPayment(pay)}
+                      className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-0 cursor-pointer hover:bg-gray-50/80 rounded-xl px-2 -mx-2 transition-colors"
+                    >
+                      <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
+                        <CreditCard className="w-4 h-4 text-emerald-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-medium text-gray-800">{pay.month_display}</span>
+                          <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${
+                            PAY_STATUS_COLOR[pay.status] ?? "bg-gray-50 text-gray-500 border-gray-200"
+                          }`}>
+                            {pay.status_display}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {pay.payment_method_display}
+                          {" · "}{formatRelativeDate(pay.payment_date)}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-sm font-bold text-gray-900 tabular-nums">{formatCurrency(pay.amount)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
-
-          {payments && payments.count > 0 && (
-            <div className="text-center text-sm text-gray-600">
-              Jami: {payments.count} ta to&apos;lov
-            </div>
-          )}
         </TabsContent>
       </Tabs>
 
-      {/* Transaction Detail Dialog */}
-      <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      {/* Transaction detail dialog */}
+      <Dialog open={!!selectedTx} onOpenChange={(v) => !v && setSelectedTx(null)}>
+        <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Tranzaksiya Tafsilotlari</DialogTitle>
+            <DialogTitle className="flex items-center gap-2.5 text-base">
+              {selectedTx && <TxIcon type={selectedTx.transaction_type} />}
+              Tranzaksiya tafsilotlari
+            </DialogTitle>
           </DialogHeader>
-          
-          {selectedTransaction && (
-            <div className="space-y-6">
-              {/* Header with Type Badge and Date */}
-              <div className="flex items-center justify-between pb-4 border-b">
-                <Badge variant="outline" className="text-base px-3 py-1">
-                  {selectedTransaction.transaction_type_display}
-                </Badge>
-                <span className="text-sm text-muted-foreground">
-                  {formatRelativeDateTime(selectedTransaction.created_at)}
-                </span>
+          {selectedTx && (
+            <div className="space-y-0 mt-1">
+              {/* Amount highlight */}
+              <div className={`rounded-xl px-4 py-3 mb-3 ${selectedTx.balance_change >= 0 ? "bg-emerald-50" : "bg-red-50"}`}>
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Balans o&apos;zgarishi</p>
+                <p className={`text-xl font-bold mt-0.5 tabular-nums ${selectedTx.balance_change >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                  {selectedTx.balance_change >= 0 ? "+" : ""}{formatCurrency(selectedTx.balance_change)}
+                </p>
               </div>
-
-              {/* Staff Information */}
-              <div className="space-y-3">
-                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
-                  Xodim Ma&apos;lumotlari
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Ism</p>
-                    <p className="font-medium">{selectedTransaction.staff_name}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Telefon</p>
-                    <p className="font-medium">{selectedTransaction.staff_phone}</p>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <p className="text-xs text-muted-foreground mb-1">Lavozim</p>
-                    <p className="font-medium">{selectedTransaction.staff_role}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Amount Information */}
-              <div className="space-y-3">
-                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
-                  Moliyaviy Ma&apos;lumotlar
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Miqdor</p>
-                    <p className="font-bold text-lg">{formatCurrency(selectedTransaction.amount)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Balans o&apos;zgarishi</p>
-                    <p
-                      className={`font-bold text-lg ${
-                        selectedTransaction.balance_change >= 0
-                          ? "text-green-600"
-                          : "text-red-600"
-                      }`}
-                    >
-                      {selectedTransaction.balance_change >= 0 ? "+" : ""}
-                      {formatCurrency(selectedTransaction.balance_change)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Avvalgi balans</p>
-                    <p className="font-medium">{formatCurrency(selectedTransaction.previous_balance)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Yangi balans</p>
-                    <p className="font-medium">{formatCurrency(selectedTransaction.new_balance)}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Transaction Details */}
-              <div className="space-y-3">
-                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
-                  Qo&apos;shimcha Ma&apos;lumotlar
-                </h3>
-                <div className="grid grid-cols-1 gap-4 p-4 bg-muted/50 rounded-lg">
-                  {selectedTransaction.description && (
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Tavsif</p>
-                      <p className="font-medium">{selectedTransaction.description}</p>
-                    </div>
-                  )}
-                  {selectedTransaction.reference && (
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Referens raqami</p>
-                      <p className="font-medium font-mono text-sm">{selectedTransaction.reference}</p>
-                    </div>
-                  )}
-                  {selectedTransaction.salary_payment_id && (
-                    <>
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-1">Maosh to&apos;lovi ID</p>
-                        <p className="font-medium font-mono text-sm">{selectedTransaction.salary_payment_id}</p>
-                      </div>
-                      {selectedTransaction.salary_payment_month && (
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-1">Maosh oyi</p>
-                          <p className="font-medium">
-                            {(() => {
-                              const date = new Date(selectedTransaction.salary_payment_month);
-                              const year = date.getFullYear();
-                              const month = date.getMonth();
-                              return `${uzbekMonths[month]} ${year}`;
-                            })()}
-                          </p>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Processed By */}
-              <div className="space-y-3">
-                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
-                  Qayd Qilgan
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Ism</p>
-                    <p className="font-medium">{selectedTransaction.processed_by_name}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Telefon</p>
-                    <p className="font-medium">{selectedTransaction.processed_by_phone}</p>
-                  </div>
-                </div>
-              </div>
+              <DetailRow label="Turi" value={selectedTx.transaction_type_display} />
+              <DetailRow label="Miqdor" value={formatCurrency(selectedTx.amount)} />
+              <DetailRow label="Avvalgi balans" value={formatCurrency(selectedTx.previous_balance)} />
+              <DetailRow label="Yangi balans" value={formatCurrency(selectedTx.new_balance)} />
+              <DetailRow label="Tavsif" value={selectedTx.description} />
+              <DetailRow label="Referens" value={selectedTx.reference} />
+              <DetailRow label="Sana" value={formatRelativeDateTime(selectedTx.created_at)} />
+              <DetailRow label="Qayd qilgan" value={selectedTx.processed_by_name} />
+              {selectedTx.salary_payment_month && (
+                <DetailRow label="Maosh oyi" value={formatMonthDisplay(selectedTx.salary_payment_month)} />
+              )}
             </div>
           )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDetailDialogOpen(false)}>
-              Yopish
-            </Button>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" className="w-full" onClick={() => setSelectedTx(null)}>Yopish</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Payment Detail Dialog */}
-      <Dialog open={paymentDetailDialogOpen} onOpenChange={setPaymentDetailDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      {/* Payment detail dialog */}
+      <Dialog open={!!selectedPayment} onOpenChange={(v) => !v && setSelectedPayment(null)}>
+        <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>To&apos;lov Tafsilotlari</DialogTitle>
+            <DialogTitle className="flex items-center gap-2.5 text-base">
+              <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
+                <CreditCard className="w-4 h-4 text-emerald-600" />
+              </div>
+              Maosh to&apos;lovi tafsilotlari
+            </DialogTitle>
           </DialogHeader>
-          
           {selectedPayment && (
-            <div className="space-y-6">
-              {/* Header with Status Badge and Date */}
-              <div className="flex items-center justify-between pb-4 border-b">
-                <Badge
-                  variant={
-                    selectedPayment.status_display === "To'langan"
-                      ? "default"
-                      : selectedPayment.status_display === "Bekor qilingan"
-                      ? "destructive"
-                      : "secondary"
-                  }
-                  className="text-base px-3 py-1"
-                >
-                  {selectedPayment.status_display}
-                </Badge>
-                <span className="text-sm text-muted-foreground">
-                  {formatRelativeDate(selectedPayment.payment_date)}
-                </span>
+            <div className="space-y-0 mt-1">
+              <div className="bg-emerald-50 rounded-xl px-4 py-3 mb-3">
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">To&apos;langan</p>
+                <p className="text-xl font-bold text-emerald-700 mt-0.5 tabular-nums">{formatCurrency(selectedPayment.amount)}</p>
               </div>
-
-              {/* Staff Information */}
-              <div className="space-y-3">
-                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
-                  Xodim Ma&apos;lumotlari
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Ism</p>
-                    <p className="font-medium">{selectedPayment.staff_name}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Telefon</p>
-                    <p className="font-medium">{selectedPayment.staff_phone}</p>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <p className="text-xs text-muted-foreground mb-1">Lavozim</p>
-                    <p className="font-medium">{selectedPayment.staff_role}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Payment Information */}
-              <div className="space-y-3">
-                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
-                  To&apos;lov Ma&apos;lumotlari
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Oy</p>
-                    <p className="font-bold text-lg">
-                      {(() => {
-                        const date = new Date(selectedPayment.month);
-                        const year = date.getFullYear();
-                        const month = date.getMonth();
-                        return `${uzbekMonths[month]} ${year}`;
-                      })()}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Oylik maosh</p>
-                    <p className="font-medium">{formatCurrency(selectedPayment.staff_monthly_salary)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">To&apos;langan miqdor</p>
-                    <p className="font-bold text-lg text-green-600">{formatCurrency(selectedPayment.amount)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">To&apos;lov usuli</p>
-                    <p className="font-medium">{selectedPayment.payment_method_display}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">To&apos;lov sanasi</p>
-                    <p className="font-medium">{formatRelativeDate(selectedPayment.payment_date)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Tranzaksiyalar soni</p>
-                    <p className="font-medium">{selectedPayment.transactions_count || 0} ta</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Additional Details */}
-              <div className="space-y-3">
-                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
-                  Qo&apos;shimcha Ma&apos;lumotlar
-                </h3>
-                <div className="grid grid-cols-1 gap-4 p-4 bg-muted/50 rounded-lg">
-                  {selectedPayment.notes && (
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Izoh</p>
-                      <p className="font-medium">{selectedPayment.notes}</p>
-                    </div>
-                  )}
-                  {selectedPayment.reference_number && (
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Referens raqami</p>
-                      <p className="font-medium font-mono text-sm">{selectedPayment.reference_number}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Processed By */}
-              <div className="space-y-3">
-                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
-                  Qayd Qilgan
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Ism</p>
-                    <p className="font-medium">{selectedPayment.processed_by_name}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Telefon</p>
-                    <p className="font-medium">{selectedPayment.processed_by_phone}</p>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <p className="text-xs text-muted-foreground mb-1">Yaratilgan sana</p>
-                    <p className="font-medium">{formatRelativeDateTime(selectedPayment.created_at)}</p>
-                  </div>
-                </div>
-              </div>
+              <DetailRow label="Oy" value={formatMonthDisplay(selectedPayment.month)} />
+              <DetailRow label="Oylik maosh" value={formatCurrency(selectedPayment.staff_monthly_salary)} />
+              <DetailRow label="To'lov turi" value={(selectedPayment as any).payment_type_display} />
+              <DetailRow label="To'lov usuli" value={selectedPayment.payment_method_display} />
+              <DetailRow label="Holat" value={selectedPayment.status_display} />
+              <DetailRow label="To'lov sanasi" value={formatRelativeDate(selectedPayment.payment_date)} />
+              <DetailRow label="Referens" value={selectedPayment.reference_number} />
+              <DetailRow label="Izoh" value={selectedPayment.notes} />
+              <DetailRow label="Qayd qilgan" value={selectedPayment.processed_by_name} />
             </div>
           )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPaymentDetailDialogOpen(false)}>
-              Yopish
-            </Button>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" className="w-full" onClick={() => setSelectedPayment(null)}>Yopish</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

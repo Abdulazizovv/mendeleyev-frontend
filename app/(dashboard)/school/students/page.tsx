@@ -9,6 +9,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -42,6 +48,8 @@ import {
   SlidersHorizontal,
   Filter,
   BookOpen,
+  TrendingUp,
+  TrendingDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -50,6 +58,11 @@ import { formatCurrency } from "@/lib/translations";
 
 // ─── helpers ───────────────────────────────────────────────────────────────
 
+const UZ_MONTHS = ["Yanvar","Fevral","Mart","Aprel","May","Iyun","Iyul","Avgust","Sentabr","Oktabr","Noyabr","Dekabr"];
+function formatPeriod(ym: string) {
+  const [y, m] = ym.split("-");
+  return `${UZ_MONTHS[parseInt(m) - 1]} ${y}`;
+}
 
 function formatPhoneDisplay(phone?: string | null): string {
   if (!phone) return "—";
@@ -70,13 +83,15 @@ function fmtDateShort(v?: string | null) {
   return isNaN(d.getTime()) ? "—" : format(d, "dd.MM.yyyy");
 }
 
-type SortField = "first_name" | "last_name" | "created_at" | "personal_number";
+type SortField = "first_name" | "last_name" | "created_at" | "personal_number" | "balance" | "class";
 
 const SORT_LABELS: Record<SortField, string> = {
   first_name:      "Ism",
   last_name:       "Familiya",
-  created_at:      "Qo'shilgan",
   personal_number: "Shaxsiy raqam",
+  balance:         "Balans",
+  class:           "Sinf",
+  created_at:      "Qo'shilgan",
 };
 
 // ─── component ─────────────────────────────────────────────────────────────
@@ -92,6 +107,7 @@ export default function StudentsPage() {
   const [loading,       setLoading]       = React.useState(true);
   const [refreshing,    setRefreshing]    = React.useState(false);
   const firstLoad = React.useRef(true);
+  const [stats, setStats] = React.useState<{ total_positive_balance: number; total_debt: number } | null>(null);
 
   // pagination
   const [page,     setPage]     = React.useState(1);
@@ -171,12 +187,13 @@ export default function StudentsPage() {
       if (genderFilter !== "all") params.gender   = genderFilter as "male" | "female";
       if (classFilter  !== "all") params.class_id = classFilter;
 
-      const res: PaginatedResponse<Student> = await schoolApi.getStudents(
-        currentBranch.branch_id,
-        params,
-      );
+      const [res, statsData] = await Promise.all([
+        schoolApi.getStudents(currentBranch.branch_id, params),
+        firstLoad.current ? schoolApi.getStudentStats(currentBranch.branch_id).catch(() => null) : Promise.resolve(null),
+      ]);
       setStudents(res.results);
       setTotal(res.count);
+      if (statsData) setStats(statsData);
     } catch {
       toast.error("O'quvchilarni yuklashda xatolik");
     } finally {
@@ -262,6 +279,34 @@ export default function StudentsPage() {
           </Button>
         </div>
       </div>
+
+      {/* ── Stats cards ── */}
+      {stats && (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
+              <TrendingUp className="w-4.5 h-4.5 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-xs text-emerald-600 font-medium">Umumiy haqdorlik</p>
+              <p className="text-lg font-bold text-emerald-700 tabular-nums leading-tight">
+                {formatCurrency(stats.total_positive_balance)}
+              </p>
+            </div>
+          </div>
+          <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-red-100 flex items-center justify-center shrink-0">
+              <TrendingDown className="w-4.5 h-4.5 text-red-600" />
+            </div>
+            <div>
+              <p className="text-xs text-red-600 font-medium">Umumiy qarzdorlik</p>
+              <p className="text-lg font-bold text-red-700 tabular-nums leading-tight">
+                {formatCurrency(stats.total_debt)}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Search + filter bar ── */}
       <div className="flex gap-2">
@@ -472,7 +517,12 @@ export default function StudentsPage() {
                     O'quvchi <SortIcon field="first_name" />
                   </button>
                 </TableHead>
-                <TableHead className="text-xs">Sinf</TableHead>
+                <TableHead>
+                  <button onClick={() => toggleSort("class")}
+                    className="flex items-center text-xs font-semibold hover:text-blue-600">
+                    Sinf <SortIcon field="class" />
+                  </button>
+                </TableHead>
                 <TableHead>
                   <button onClick={() => toggleSort("personal_number")}
                     className="flex items-center text-xs font-semibold hover:text-blue-600">
@@ -480,7 +530,12 @@ export default function StudentsPage() {
                   </button>
                 </TableHead>
                 <TableHead className="text-xs">Telefon</TableHead>
-                <TableHead className="text-xs text-right">Balans</TableHead>
+                <TableHead className="text-right">
+                  <button onClick={() => toggleSort("balance")}
+                    className="flex items-center justify-end text-xs font-semibold hover:text-blue-600 w-full">
+                    Balans <SortIcon field="balance" />
+                  </button>
+                </TableHead>
                 <TableHead>
                   <button onClick={() => toggleSort("created_at")}
                     className="flex items-center text-xs font-semibold hover:text-blue-600">
@@ -507,7 +562,11 @@ export default function StudentsPage() {
                 students.map((student, idx) => {
                   const fullName = student.full_name ||
                     `${student.first_name ?? ""} ${student.last_name ?? ""}`.trim() || "—";
-                  const balance = student.balance?.balance;
+                  const balance = student.balance?.balance ?? 0;
+                  const totalDebt = student.balance?.total_debt ?? 0;
+                  const netBalance = balance - totalDebt;
+                  const unpaidMonths = student.balance?.debt_subscription?.unpaid_months ?? [];
+                  const lastPayment = student.balance?.last_payment;
                   return (
                     <TableRow key={student.id}
                       className="cursor-pointer hover:bg-blue-50/40 transition-colors"
@@ -539,11 +598,51 @@ export default function StudentsPage() {
                       <TableCell>
                         <span className="text-sm text-gray-600">{formatPhoneDisplay(student.phone_number)}</span>
                       </TableCell>
-                      <TableCell className="text-right">
-                        {balance !== undefined ? (
-                          <span className={`text-sm font-semibold ${balance >= 0 ? "text-green-700" : "text-red-600"}`}>
-                            {formatCurrency(balance)}
-                          </span>
+                      <TableCell className="text-right" onClick={e => e.stopPropagation()}>
+                        {student.balance !== undefined ? (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className={`text-sm font-semibold tabular-nums cursor-default underline decoration-dotted underline-offset-2 ${
+                                  netBalance > 0 ? "text-emerald-600" : netBalance < 0 ? "text-red-600" : "text-gray-400"
+                                }`}>
+                                  {netBalance > 0 ? "+" : ""}{formatCurrency(netBalance)}
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent side="left" className="p-0 w-52 overflow-hidden rounded-xl shadow-xl border-0">
+                                <div className="bg-gray-900 text-white rounded-xl overflow-hidden text-xs">
+                                  <div className="px-3 py-2 flex justify-between items-center border-b border-white/10">
+                                    <span className="text-white/50">Oxirgi to'lov</span>
+                                    {lastPayment ? (
+                                      <div className="text-right">
+                                        <span className="font-semibold text-emerald-400 tabular-nums">{formatCurrency(lastPayment.amount)}</span>
+                                        <p className="text-white/40 text-[10px]">{fmtDateShort(lastPayment.date)}</p>
+                                      </div>
+                                    ) : (
+                                      <span className="text-white/30 italic">yo'q</span>
+                                    )}
+                                  </div>
+                                  {unpaidMonths.length > 0 ? (
+                                    <div className="px-3 py-2 space-y-1">
+                                      <p className="text-[10px] text-white/40 uppercase tracking-wide mb-1">Qarz oylar</p>
+                                      {unpaidMonths.map(m => (
+                                        <div key={m.month} className="flex justify-between items-center">
+                                          <span className={m.is_partial ? "text-orange-300" : "text-white/70"}>
+                                            {formatPeriod(m.month)}{m.is_partial ? " *" : ""}
+                                          </span>
+                                          <span className={`font-semibold tabular-nums ${m.is_partial ? "text-orange-300" : "text-red-400"}`}>
+                                            {formatCurrency(m.owed)}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className="px-3 py-2 text-emerald-400 text-center">Qarzdorlik yo'q</div>
+                                  )}
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         ) : <span className="text-gray-400 text-sm">—</span>}
                       </TableCell>
                       <TableCell>
@@ -574,7 +673,9 @@ export default function StudentsPage() {
               {students.map(student => {
                 const fullName = student.full_name ||
                   `${student.first_name ?? ""} ${student.last_name ?? ""}`.trim() || "—";
-                const balance = student.balance?.balance;
+                const mBal = student.balance?.balance ?? 0;
+                const mDebt = student.balance?.total_debt ?? 0;
+                const mNet = mBal - mDebt;
                 return (
                   <div key={student.id}
                     className="flex items-center gap-3 px-4 py-3 hover:bg-blue-50/40 active:bg-blue-50 cursor-pointer transition-colors"
@@ -593,9 +694,11 @@ export default function StudentsPage() {
                             {student.current_class.name}
                           </span>
                         )}
-                        {balance !== undefined && (
-                          <span className={`text-xs font-semibold ${balance >= 0 ? "text-green-600" : "text-red-600"}`}>
-                            {formatCurrency(balance)}
+                        {student.balance !== undefined && (
+                          <span className={`text-xs font-semibold tabular-nums ${
+                            mNet > 0 ? "text-emerald-600" : mNet < 0 ? "text-red-600" : "text-gray-400"
+                          }`}>
+                            {mNet > 0 ? "+" : ""}{formatCurrency(mNet)}
                           </span>
                         )}
                         <span className="text-xs text-gray-400 flex items-center gap-1 ml-auto">

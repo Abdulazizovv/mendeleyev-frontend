@@ -281,6 +281,16 @@ export const schoolApi = {
     await apiClient.delete(`/school/branches/${branchId}/classes/${classId}/`);
   },
 
+  archiveClass: async (branchId: string, classId: string): Promise<import('@/types/school').Class> => {
+    const res = await apiClient.post(`/school/branches/${branchId}/classes/${classId}/archive/`);
+    return res.data;
+  },
+
+  unarchiveClass: async (branchId: string, classId: string): Promise<import('@/types/school').Class> => {
+    const res = await apiClient.post(`/school/branches/${branchId}/classes/${classId}/unarchive/`);
+    return res.data;
+  },
+
   // ==================== CLASS STUDENTS ====================
 
   /**
@@ -709,6 +719,7 @@ export const schoolApi = {
       ordering?: string;
       created_at__gte?: string;
       created_at__lte?: string;
+      has_debt?: boolean;
     }
   ): Promise<PaginatedResponse<Student>> => {
     const response = await apiClient.get<PaginatedResponse<Student>>(
@@ -720,6 +731,13 @@ export const schoolApi = {
         }
       }
     );
+    return response.data;
+  },
+
+  getStudentStats: async (branchId: string): Promise<{ total_positive_balance: number; total_debt: number }> => {
+    const response = await apiClient.get(`/school/students/stats/`, {
+      params: { branch_id: branchId },
+    });
     return response.data;
   },
 
@@ -848,6 +866,27 @@ export const schoolApi = {
     await apiClient.delete(
       `/school/students/${studentId}/relatives/${relativeId}/`
     );
+  },
+
+  getStudentDocuments: async (studentId: string): Promise<import('@/types/school').StudentDocument[]> => {
+    const res = await apiClient.get(`/school/students/${studentId}/files/`);
+    return res.data?.results ?? res.data ?? [];
+  },
+
+  uploadStudentDocument: async (studentId: string, formData: FormData): Promise<import('@/types/school').StudentDocument> => {
+    const res = await apiClient.post(`/school/students/${studentId}/files/`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data;
+  },
+
+  deleteStudentDocument: async (studentId: string, fileId: string): Promise<void> => {
+    await apiClient.delete(`/school/students/${studentId}/files/${fileId}/`);
+  },
+
+  getStudentActivityLog: async (studentId: string): Promise<import('@/types/school').StudentActivityLog[]> => {
+    const res = await apiClient.get(`/school/students/${studentId}/activity/`);
+    return res.data?.results ?? res.data ?? [];
   },
 
   /**

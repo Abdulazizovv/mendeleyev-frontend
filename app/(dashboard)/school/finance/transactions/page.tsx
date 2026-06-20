@@ -522,6 +522,16 @@ function isIncomeLike(type: string) {
   return type === "income" || type === "payment";
 }
 
+const UZ_MONTH_NAMES: Record<string, string> = {
+  "01":"Yanvar","02":"Fevral","03":"Mart","04":"Aprel",
+  "05":"May","06":"Iyun","07":"Iyul","08":"Avgust",
+  "09":"Sentabr","10":"Oktabr","11":"Noyabr","12":"Dekabr",
+};
+function fmtPeriodMonth(ym: string) {
+  const [y, m] = ym.split("-");
+  return `${UZ_MONTH_NAMES[m] ?? m} ${y}`;
+}
+
 function getQuickRange(key: string): { from: string; to: string } {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -890,6 +900,12 @@ export default function TransactionsPage() {
                     Plastik karta
                   </span>
                 </SelectItem>
+                <SelectItem value="bank">
+                  <span className="flex items-center gap-2">
+                    <ArrowDownRight className="w-3.5 h-3.5 text-emerald-600" />
+                    Bank orqali
+                  </span>
+                </SelectItem>
               </SelectContent>
             </Select>
 
@@ -1025,6 +1041,13 @@ export default function TransactionsPage() {
                     : txDir === "in" ? "O'tkazma (kirim)" : "O'tkazma (chiqim)"
                   : null;
 
+                // To'lov oylari
+                const periods: string[] =
+                  tx.period_months && tx.period_months.length > 0
+                    ? tx.period_months
+                    : tx.period_month ? [tx.period_month] : [];
+                const isBank = tx.payment_method === "bank";
+
                 return (
                   <div
                     key={tx.id}
@@ -1064,6 +1087,12 @@ export default function TransactionsPage() {
                           </Badge>
                         )}
                       </div>
+                      {tx.student && (
+                        <p className="text-xs text-emerald-700 font-medium mt-0.5 truncate flex items-center gap-1">
+                          <User className="w-3 h-3 shrink-0" />
+                          {tx.student.full_name}
+                        </p>
+                      )}
                       {tx.employee && (
                         <p className="text-xs text-indigo-600 font-medium mt-0.5 truncate flex items-center gap-1">
                           <User className="w-3 h-3 shrink-0" />
@@ -1071,7 +1100,16 @@ export default function TransactionsPage() {
                           <span className="text-indigo-400">· {tx.employee.role_display}</span>
                         </p>
                       )}
-                      {tx.description && (
+                      {periods.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {periods.map((ym) => (
+                            <span key={ym} className="text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded">
+                              {fmtPeriodMonth(ym)}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {tx.description && !periods.length && (
                         <p className="text-xs text-gray-500 truncate mt-0.5">{tx.description}</p>
                       )}
                       <p className="text-xs text-gray-400 mt-0.5 truncate">
@@ -1096,16 +1134,20 @@ export default function TransactionsPage() {
                           "text-[10px] px-1.5 py-0 font-medium",
                           isCard
                             ? "border-purple-200 bg-purple-50 text-purple-700"
+                            : isBank
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                             : "border-amber-200 bg-amber-50 text-amber-700"
                         )}
                       >
                         <span className="flex items-center gap-0.5">
                           {isCard ? (
                             <CreditCard className="w-2.5 h-2.5" />
+                          ) : isBank ? (
+                            <ArrowDownRight className="w-2.5 h-2.5" />
                           ) : (
                             <Banknote className="w-2.5 h-2.5" />
                           )}
-                          {isCard ? "Plastik" : "Naqd"}
+                          {isCard ? "Plastik" : isBank ? "Bank" : "Naqd"}
                         </span>
                       </Badge>
                     </div>

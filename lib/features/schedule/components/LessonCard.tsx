@@ -66,12 +66,12 @@ export function LessonCard({ lesson, onClick, onDelete, compact = false, isCurre
           </h4>
         </div>
         <div className="flex items-center justify-between gap-2">
-          {!compact && lesson.topic?.title ? (
+          {!compact && (lesson.topic_title ?? (typeof lesson.topic === 'object' && lesson.topic?.title)) ? (
             <p className={cn(
               "text-xs truncate flex-1",
               isNow ? "text-green-700" : "text-gray-600"
             )}>
-              {lesson.topic.title}
+              {lesson.topic_title ?? (typeof lesson.topic === 'object' ? lesson.topic?.title : null)}
             </p>
           ) : (
             <div className="flex-1" />

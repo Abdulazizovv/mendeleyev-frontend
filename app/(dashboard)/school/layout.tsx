@@ -12,6 +12,7 @@ const ROUTE_PERMISSIONS: Array<{ prefix: string; module: string; action: string 
   { prefix: "/school/classes",         module: "classes",    action: "view" },
   { prefix: "/school/subjects",        module: "classes",    action: "view" },
   { prefix: "/school/academic-years",  module: "classes",    action: "view" },
+  { prefix: "/school/rooms",           module: "classes",    action: "view" },
   { prefix: "/school/schedule",        module: "schedule",   action: "view" },
   { prefix: "/school/finance",         module: "finance",    action: "view" },
   { prefix: "/school/reports",         module: "reports",    action: "view" },

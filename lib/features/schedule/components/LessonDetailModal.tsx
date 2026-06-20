@@ -176,7 +176,7 @@ export function LessonDetailModal({
           <Separator />
 
           {/* Topic Section */}
-          {lesson.topic?.title && (
+          {(lesson.topic_title ?? (typeof lesson.topic === 'object' && lesson.topic?.title)) && (
             <>
               <div>
                 <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
@@ -187,7 +187,7 @@ export function LessonDetailModal({
                     <BookOpen className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
                     <div>
                       <p className="text-base font-medium text-gray-900">
-                        {lesson.topic.title}
+                        {lesson.topic_title ?? (typeof lesson.topic === 'object' ? lesson.topic?.title : null)}
                       </p>
                     </div>
                   </div>

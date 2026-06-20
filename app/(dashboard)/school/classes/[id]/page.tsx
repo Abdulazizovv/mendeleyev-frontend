@@ -23,7 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import {
 	Plus, Trash2, Search, X, UserPlus, Phone, Wallet,
-	ArrowLeft, ArrowRightLeft, Users, BookOpen, TrendingUp, TrendingDown, AlertTriangle
+	ArrowLeft, ArrowRightLeft, Users, BookOpen, TrendingUp, TrendingDown, AlertTriangle, Archive, ArchiveRestore
 } from "lucide-react";
 
 function formatCurrency(amount: number) {
@@ -111,6 +111,16 @@ export default function ClassDetailPage() {
 			qc.invalidateQueries({ queryKey: ["classStudents"] });
 			qc.invalidateQueries({ queryKey: ["availableStudents"] });
 		},
+	});
+
+	const archiveMutation = useMutation({
+		mutationFn: () => schoolApi.archiveClass(branchId!, classId!),
+		onSuccess: () => qc.invalidateQueries({ queryKey: ["class", branchId, classId] }),
+	});
+
+	const unarchiveMutation = useMutation({
+		mutationFn: () => schoolApi.unarchiveClass(branchId!, classId!),
+		onSuccess: () => qc.invalidateQueries({ queryKey: ["class", branchId, classId] }),
 	});
 
 	// UI state
@@ -208,9 +218,36 @@ export default function ClassDetailPage() {
 						<Badge variant={cls.is_active ? "default" : "secondary"}>
 							{cls.is_active ? "Faol" : "Nofaol"}
 						</Badge>
+						{cls.is_archived && (
+							<Badge variant="outline" className="text-amber-600 border-amber-300">
+								Arxivlangan
+							</Badge>
+						)}
 					</div>
 					<p className="text-sm text-muted-foreground mt-0.5">{cls.academic_year_name}</p>
 				</div>
+				{cls.is_archived ? (
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={() => unarchiveMutation.mutate()}
+						disabled={unarchiveMutation.isPending}
+					>
+						<ArchiveRestore className="w-4 h-4 mr-2" />
+						{unarchiveMutation.isPending ? "..." : "Arxivdan chiqarish"}
+					</Button>
+				) : (
+					<Button
+						variant="outline"
+						size="sm"
+						className="text-amber-600 border-amber-300 hover:bg-amber-50"
+						onClick={() => archiveMutation.mutate()}
+						disabled={archiveMutation.isPending}
+					>
+						<Archive className="w-4 h-4 mr-2" />
+						{archiveMutation.isPending ? "..." : "Arxivlash"}
+					</Button>
+				)}
 			</div>
 
 			{/* Info Strip */}
@@ -456,7 +493,14 @@ export default function ClassDetailPage() {
 								<TableBody>
 									{classStudents.map((st) => (
 										<TableRow key={st.id}>
-											<TableCell className="font-medium">{st.student_name}</TableCell>
+											<TableCell className="font-medium">
+												<Link
+													href={`/school/students/${st.student_id}`}
+													className="hover:text-indigo-600 hover:underline transition-colors"
+												>
+													{st.student_name}
+												</Link>
+											</TableCell>
 											<TableCell>
 												<div className="flex items-center gap-1.5 text-sm text-muted-foreground">
 													<Phone className="w-3 h-3" />
@@ -808,7 +852,14 @@ export default function ClassDetailPage() {
 												.sort((a, b) => a.student_balance - b.student_balance)
 												.map((st) => (
 													<TableRow key={st.id}>
-														<TableCell className="font-medium">{st.student_name}</TableCell>
+														<TableCell className="font-medium">
+															<Link
+																href={`/school/students/${st.student_id}`}
+																className="hover:text-indigo-600 hover:underline transition-colors"
+															>
+																{st.student_name}
+															</Link>
+														</TableCell>
 														<TableCell className="text-sm text-muted-foreground">
 															{st.student_phone}
 														</TableCell>

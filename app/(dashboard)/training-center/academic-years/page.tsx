@@ -2,27 +2,11 @@
 
 import React from "react";
 import { useAuth } from "@/lib/hooks/useAuth";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  Calendar,
-  Plus,
-  Edit,
-  Trash2,
-  Loader2,
-  AlertCircle,
-  CheckCircle2,
-  Search,
-  LayoutGrid,
-  CalendarDays,
-} from "lucide-react";
-import { toast } from "sonner";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { schoolApi } from "@/lib/api/school";
-import type { AcademicYear, CreateAcademicYearRequest } from "@/types";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -31,22 +15,65 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Calendar,
+  Plus,
+  Edit,
+  Trash2,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  GraduationCap,
+  CalendarRange,
+} from "lucide-react";
+import { toast } from "sonner";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { schoolApi } from "@/lib/api/school";
+import type { AcademicYear, Quarter, CreateAcademicYearRequest } from "@/types";
+
+function formatDate(dateStr: string) {
+  return new Date(dateStr + "T00:00:00").toLocaleDateString("uz-UZ", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
 
 export default function AcademicYearsPage() {
   const { currentBranch } = useAuth();
   const queryClient = useQueryClient();
   const branchId = currentBranch?.branch_id;
 
-  const [searchQuery, setSearchQuery] = React.useState("");
-  const [createDialogOpen, setCreateDialogOpen] = React.useState(false);
-  const [editDialogOpen, setEditDialogOpen] = React.useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
-  const [selectedYear, setSelectedYear] = React.useState<AcademicYear | null>(null);
-  const [quartersDialogOpen, setQuartersDialogOpen] = React.useState(false);
+  const [expandedYear, setExpandedYear] = React.useState<string | null>(null);
+  const [yearDialog, setYearDialog] = React.useState<{
+    open: boolean;
+    mode: "create" | "edit";
+    data?: AcademicYear;
+  }>({ open: false, mode: "create" });
+  const [quarterDialog, setQuarterDialog] = React.useState<{
+    open: boolean;
+    mode: "create" | "edit";
+    academicYear?: AcademicYear;
+    data?: Quarter;
+  }>({ open: false, mode: "create" });
+  const [deleteDialog, setDeleteDialog] = React.useState<{
+    open: boolean;
+    id?: string;
+    name?: string;
+  }>({ open: false });
 
-  // Fetch academic years
   const {
     data: academicYears = [],
     isLoading,
@@ -57,64 +84,78 @@ export default function AcademicYearsPage() {
     enabled: !!branchId,
   });
 
-  // Create mutation
-  const createMutation = useMutation({
+  const createYearMutation = useMutation({
     mutationFn: (data: CreateAcademicYearRequest) =>
       schoolApi.createAcademicYear(branchId!, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["academic-years", branchId] });
-      toast.success("Akademik yil muvaffaqiyatli yaratildi");
-      setCreateDialogOpen(false);
+      toast.success("Akademik yil yaratildi");
+      setYearDialog({ open: false, mode: "create" });
     },
-    onError: (error: any) => {
-      const message = error.response?.data?.detail || "Xatolik yuz berdi";
-      toast.error(message);
-    },
+    onError: (e: any) => toast.error(e.response?.data?.detail || "Xatolik yuz berdi"),
   });
 
-  // Update mutation
-  const updateMutation = useMutation({
-    mutationFn: ({ yearId, data }: { yearId: string; data: Partial<CreateAcademicYearRequest> }) =>
-      schoolApi.updateAcademicYear(branchId!, yearId, data),
+  const updateYearMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<CreateAcademicYearRequest> }) =>
+      schoolApi.updateAcademicYear(branchId!, id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["academic-years", branchId] });
-      toast.success("Akademik yil muvaffaqiyatli yangilandi");
-      setEditDialogOpen(false);
-      setSelectedYear(null);
+      toast.success("Akademik yil yangilandi");
+      setYearDialog({ open: false, mode: "create" });
     },
-    onError: (error: any) => {
-      const message = error.response?.data?.detail || "Xatolik yuz berdi";
-      toast.error(message);
-    },
+    onError: (e: any) => toast.error(e.response?.data?.detail || "Xatolik yuz berdi"),
   });
 
-  // Delete mutation
-  const deleteMutation = useMutation({
-    mutationFn: (yearId: string) => schoolApi.deleteAcademicYear(branchId!, yearId),
+  const deleteYearMutation = useMutation({
+    mutationFn: (id: string) => schoolApi.deleteAcademicYear(branchId!, id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["academic-years", branchId] });
       toast.success("Akademik yil o'chirildi");
-      setDeleteDialogOpen(false);
-      setSelectedYear(null);
+      setDeleteDialog({ open: false });
     },
-    onError: (error: any) => {
-      const message = error.response?.data?.detail || "Xatolik yuz berdi";
-      toast.error(message);
-    },
+    onError: (e: any) => toast.error(e.response?.data?.detail || "Xatolik yuz berdi"),
   });
 
-  // Filter academic years
-  const filteredYears = academicYears.filter((year) =>
-    year.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const createQuarterMutation = useMutation({
+    mutationFn: ({ academicYearId, data }: { academicYearId: string; data: any }) =>
+      schoolApi.createQuarter(academicYearId, data),
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["academic-years", branchId] });
+      queryClient.invalidateQueries({ queryKey: ["quarters", vars.academicYearId] });
+      toast.success("Chorak yaratildi");
+      setQuarterDialog({ open: false, mode: "create" });
+    },
+    onError: (e: any) => toast.error(e.response?.data?.detail || "Xatolik yuz berdi"),
+  });
+
+  const updateQuarterMutation = useMutation({
+    mutationFn: ({ academicYearId, quarterId, data }: { academicYearId: string; quarterId: string; data: any }) =>
+      schoolApi.updateQuarter(academicYearId, quarterId, data),
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["academic-years", branchId] });
+      queryClient.invalidateQueries({ queryKey: ["quarters", vars.academicYearId] });
+      toast.success("Chorak yangilandi");
+      setQuarterDialog({ open: false, mode: "create" });
+    },
+    onError: (e: any) => toast.error(e.response?.data?.detail || "Xatolik yuz berdi"),
+  });
+
+  const handleDeleteConfirm = () => {
+    if (deleteDialog.id) {
+      deleteYearMutation.mutate(deleteDialog.id);
+    }
+  };
+
+  const activeYear = academicYears.find((y) => y.is_active);
+  const totalQuarters = academicYears.reduce((sum, y) => sum + (y.quarters?.length || 0), 0);
 
   if (!branchId) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
-        <Alert className="max-w-md">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>Filial tanlanmagan</AlertDescription>
-        </Alert>
+        <div className="text-center space-y-2">
+          <AlertCircle className="w-12 h-12 text-gray-300 mx-auto" />
+          <p className="text-gray-600">Filial tanlanmagan</p>
+        </div>
       </div>
     );
   }
@@ -124,7 +165,7 @@ export default function AcademicYearsPage() {
       <div className="flex items-center justify-center h-[60vh]">
         <div className="text-center space-y-4">
           <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto" />
-          <p className="text-gray-600">Akademik yillar yuklanmoqda...</p>
+          <p className="text-gray-500 text-sm">Akademik yillar yuklanmoqda...</p>
         </div>
       </div>
     );
@@ -133,10 +174,10 @@ export default function AcademicYearsPage() {
   if (error) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
-        <Alert variant="destructive" className="max-w-md">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>Akademik yillarni yuklashda xatolik yuz berdi</AlertDescription>
-        </Alert>
+        <div className="text-center space-y-2">
+          <AlertCircle className="w-12 h-12 text-red-400 mx-auto" />
+          <p className="text-gray-600">Yuklashda xatolik yuz berdi</p>
+        </div>
       </div>
     );
   }
@@ -146,13 +187,11 @@ export default function AcademicYearsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Akademik Yillar</h1>
-          <p className="text-gray-600 mt-1">
-            O'quv yillari va choraklarni boshqarish
-          </p>
+          <h1 className="text-2xl font-bold text-gray-900">Akademik Yillar</h1>
+          <p className="text-sm text-gray-500 mt-0.5">O'quv yillari va choraklarni boshqarish</p>
         </div>
         <Button
-          onClick={() => setCreateDialogOpen(true)}
+          onClick={() => setYearDialog({ open: true, mode: "create" })}
           className="bg-blue-600 hover:bg-blue-700"
         >
           <Plus className="w-4 h-4 mr-2" />
@@ -160,335 +199,311 @@ export default function AcademicYearsPage() {
         </Button>
       </div>
 
-      {/* Search */}
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <Input
-            type="text"
-            placeholder="Akademik yil qidirish..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+            <GraduationCap className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-gray-900">{academicYears.length}</p>
+            <p className="text-xs text-gray-500">Jami o'quv yillari</p>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center">
+            <CheckCircle2 className="w-5 h-5 text-green-600" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-gray-900">{activeYear?.name || "—"}</p>
+            <p className="text-xs text-gray-500">Joriy o'quv yili</p>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center">
+            <CalendarRange className="w-5 h-5 text-purple-600" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-gray-900">{totalQuarters}</p>
+            <p className="text-xs text-gray-500">Jami choraklar</p>
+          </div>
         </div>
       </div>
 
-      {/* Academic Years Grid */}
-      {filteredYears.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Calendar className="w-12 h-12 text-gray-400 mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              Akademik yillar topilmadi
-            </h3>
-            <p className="text-gray-600 mb-4">
-              Yangi akademik yil yaratish uchun yuqoridagi tugmani bosing
-            </p>
-            <Button onClick={() => setCreateDialogOpen(true)} variant="outline">
-              <Plus className="w-4 h-4 mr-2" />
-              Birinchi yilni yaratish
-            </Button>
-          </CardContent>
-        </Card>
+      {/* Academic Years List */}
+      {academicYears.length === 0 ? (
+        <div className="bg-white rounded-xl border border-dashed border-gray-200 flex flex-col items-center justify-center py-16">
+          <Calendar className="w-12 h-12 text-gray-300 mb-4" />
+          <h3 className="text-base font-semibold text-gray-700 mb-1">Akademik yillar topilmadi</h3>
+          <p className="text-sm text-gray-500 mb-4">Yangi o'quv yilini qo'shing</p>
+          <Button onClick={() => setYearDialog({ open: true, mode: "create" })} variant="outline" size="sm">
+            <Plus className="w-4 h-4 mr-2" />
+            Yaratish
+          </Button>
+        </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredYears.map((year) => (
-            <Card
-              key={year.id}
-              className={`hover:shadow-lg transition-shadow ${
-                year.is_active ? "border-blue-500 border-2" : ""
-              }`}
-            >
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="text-xl">{year.name}</CardTitle>
-                    <CardDescription className="mt-1">
-                      {new Date(year.start_date).toLocaleDateString("uz-UZ")} -{" "}
-                      {new Date(year.end_date).toLocaleDateString("uz-UZ")}
-                    </CardDescription>
+        <div className="space-y-3">
+          {academicYears.map((year) => {
+            const isExpanded = expandedYear === year.id;
+            const quarters = year.quarters || [];
+            return (
+              <div
+                key={year.id}
+                className={`bg-white rounded-xl border transition-all ${
+                  year.is_active ? "border-blue-200 shadow-sm" : "border-gray-100"
+                }`}
+              >
+                {/* Year Header Row */}
+                <div className="flex items-center gap-3 p-4">
+                  <button
+                    onClick={() => setExpandedYear(isExpanded ? null : year.id)}
+                    className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                  >
+                    <div
+                      className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                        year.is_active ? "bg-blue-600" : "bg-gray-100"
+                      }`}
+                    >
+                      {isExpanded ? (
+                        <ChevronDown className={`w-4 h-4 ${year.is_active ? "text-white" : "text-gray-400"}`} />
+                      ) : (
+                        <ChevronRight className={`w-4 h-4 ${year.is_active ? "text-white" : "text-gray-400"}`} />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-gray-900">{year.name}</span>
+                        {year.is_active && (
+                          <Badge className="bg-blue-100 text-blue-700 border-0 text-xs px-2">Faol</Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {formatDate(year.start_date)} — {formatDate(year.end_date)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 rounded-lg mr-2">
+                      <CalendarRange className="w-3.5 h-3.5 text-gray-400" />
+                      <span className="text-sm text-gray-600">{quarters.length} ta chorak</span>
+                    </div>
+                  </button>
+
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-gray-400 hover:text-gray-700"
+                      onClick={() => setYearDialog({ open: true, mode: "edit", data: year })}
+                    >
+                      <Edit className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-gray-400 hover:text-red-600"
+                      onClick={() =>
+                        setDeleteDialog({ open: true, id: year.id, name: year.name })
+                      }
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
                   </div>
-                  {year.is_active && (
-                    <Badge className="bg-green-100 text-green-800 border-green-300">
-                      <CheckCircle2 className="w-3 h-3 mr-1" />
-                      Faol
-                    </Badge>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Quarters */}
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <CalendarDays className="w-4 h-4" />
-                  <span>
-                    {year.quarters?.length || 0} ta chorak
-                  </span>
                 </div>
 
-                {/* Actions */}
-                <div className="flex gap-2 pt-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setSelectedYear(year);
-                      setQuartersDialogOpen(true);
-                    }}
-                    className="flex-1"
-                  >
-                    <LayoutGrid className="w-4 h-4 mr-2" />
-                    Choraklar
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setSelectedYear(year);
-                      setEditDialogOpen(true);
-                    }}
-                  >
-                    <Edit className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setSelectedYear(year);
-                      setDeleteDialogOpen(true);
-                    }}
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                {/* Expanded: Quarters */}
+                {isExpanded && (
+                  <div className="border-t border-gray-100 px-4 pb-4 pt-3">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-sm font-medium text-gray-700">Choraklar</p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs"
+                        onClick={() =>
+                          setQuarterDialog({ open: true, mode: "create", academicYear: year })
+                        }
+                      >
+                        <Plus className="w-3 h-3 mr-1" />
+                        Chorak qo'shish
+                      </Button>
+                    </div>
+
+                    {quarters.length === 0 ? (
+                      <div className="text-center py-8 border-2 border-dashed border-gray-100 rounded-lg">
+                        <Calendar className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                        <p className="text-sm text-gray-500">Choraklar yo'q</p>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="mt-2 text-xs text-blue-600"
+                          onClick={() =>
+                            setQuarterDialog({ open: true, mode: "create", academicYear: year })
+                          }
+                        >
+                          <Plus className="w-3 h-3 mr-1" />
+                          Birinchi chorakni qo'shing
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {quarters
+                          .slice()
+                          .sort((a, b) => (a.number ?? 0) - (b.number ?? 0))
+                          .map((quarter) => (
+                            <div
+                              key={quarter.id}
+                              className={`flex items-center gap-3 p-3 rounded-lg ${
+                                quarter.is_active ? "bg-blue-50 border border-blue-100" : "bg-gray-50"
+                              }`}
+                            >
+                              <div
+                                className={`w-8 h-8 rounded-md flex items-center justify-center text-sm font-bold flex-shrink-0 ${
+                                  quarter.is_active
+                                    ? "bg-blue-600 text-white"
+                                    : "bg-white text-gray-600 border border-gray-200"
+                                }`}
+                              >
+                                {quarter.number}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-medium text-gray-800">{quarter.name}</span>
+                                  {quarter.is_active && (
+                                    <Badge className="bg-blue-100 text-blue-700 border-0 text-xs px-1.5 py-0">Faol</Badge>
+                                  )}
+                                </div>
+                                <p className="text-xs text-gray-500">
+                                  {formatDate(quarter.start_date)} — {formatDate(quarter.end_date)}
+                                </p>
+                              </div>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7 text-gray-400 hover:text-gray-700 flex-shrink-0"
+                                onClick={() =>
+                                  setQuarterDialog({
+                                    open: true,
+                                    mode: "edit",
+                                    academicYear: year,
+                                    data: quarter,
+                                  })
+                                }
+                              >
+                                <Edit className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
-      {/* Create Dialog */}
-      <CreateAcademicYearDialog
-        open={createDialogOpen}
-        onOpenChange={setCreateDialogOpen}
-        onSubmit={(data) => createMutation.mutate(data)}
-        isPending={createMutation.isPending}
+      {/* Academic Year Dialog */}
+      <AcademicYearDialog
+        open={yearDialog.open}
+        mode={yearDialog.mode}
+        academicYear={yearDialog.data}
+        onOpenChange={(open) => setYearDialog((s) => ({ ...s, open }))}
+        onSubmit={(data) => {
+          if (yearDialog.mode === "create") {
+            createYearMutation.mutate(data as CreateAcademicYearRequest);
+          } else if (yearDialog.data) {
+            updateYearMutation.mutate({ id: yearDialog.data.id, data });
+          }
+        }}
+        isPending={createYearMutation.isPending || updateYearMutation.isPending}
       />
 
-      {/* Edit Dialog */}
-      {selectedYear && (
-        <EditAcademicYearDialog
-          open={editDialogOpen}
-          onOpenChange={setEditDialogOpen}
-          academicYear={selectedYear}
-          onSubmit={(data) =>
-            updateMutation.mutate({ yearId: selectedYear.id, data })
-          }
-          isPending={updateMutation.isPending}
+      {/* Quarter Dialog */}
+      {quarterDialog.academicYear && (
+        <QuarterDialog
+          open={quarterDialog.open}
+          mode={quarterDialog.mode}
+          academicYear={quarterDialog.academicYear}
+          quarter={quarterDialog.data}
+          onOpenChange={(open) => setQuarterDialog((s) => ({ ...s, open }))}
+          onSubmit={(data) => {
+            const ayId = quarterDialog.academicYear!.id;
+            if (quarterDialog.mode === "create") {
+              createQuarterMutation.mutate({ academicYearId: ayId, data });
+            } else if (quarterDialog.data) {
+              updateQuarterMutation.mutate({
+                academicYearId: ayId,
+                quarterId: quarterDialog.data.id,
+                data,
+              });
+            }
+          }}
+          isPending={createQuarterMutation.isPending || updateQuarterMutation.isPending}
         />
       )}
 
-      {/* Delete Dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Akademik yilni o'chirish</DialogTitle>
-            <DialogDescription>
-              <span className="font-semibold">{selectedYear?.name}</span> akademik yilini o'chirishni xohlaysizmi?
-              Bu amaldan qaytarib bo'lmaydi.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setDeleteDialogOpen(false);
-                setSelectedYear(null);
-              }}
+      {/* Delete Confirmation */}
+      <AlertDialog
+        open={deleteDialog.open}
+        onOpenChange={(open) => setDeleteDialog((s) => ({ ...s, open }))}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>O'chirishni tasdiqlang</AlertDialogTitle>
+            <AlertDialogDescription>
+              &quot;{deleteDialog.name}&quot; akademik yili o&apos;chiriladi. Barcha choraklar ham o&apos;chadi.
+              Bu amalni qaytarib bo&apos;lmaydi.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Bekor qilish</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={deleteYearMutation.isPending}
             >
-              Bekor qilish
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => selectedYear && deleteMutation.mutate(selectedYear.id)}
-              disabled={deleteMutation.isPending}
-            >
-              {deleteMutation.isPending ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  O'chirilmoqda...
-                </>
-              ) : (
-                "O'chirish"
+              {deleteYearMutation.isPending && (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Quarters Dialog */}
-      {selectedYear && (
-        <ManageQuartersDialog
-          open={quartersDialogOpen}
-          onOpenChange={setQuartersDialogOpen}
-          academicYear={selectedYear}
-        />
-      )}
+              O'chirish
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
 
-// Create Academic Year Dialog Component
-function CreateAcademicYearDialog({
+// Academic Year Dialog
+function AcademicYearDialog({
   open,
+  mode,
+  academicYear,
   onOpenChange,
   onSubmit,
   isPending,
 }: {
   open: boolean;
+  mode: "create" | "edit";
+  academicYear?: AcademicYear;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: CreateAcademicYearRequest) => void;
+  onSubmit: (data: Partial<CreateAcademicYearRequest>) => void;
   isPending: boolean;
 }) {
-  const [formData, setFormData] = React.useState<CreateAcademicYearRequest>({
+  const [form, setForm] = React.useState({
     name: "",
     start_date: "",
     end_date: "",
     is_active: false,
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSubmit(formData);
-  };
-
-  React.useEffect(() => {
-    if (!open) {
-      setFormData({
-        name: "",
-        start_date: "",
-        end_date: "",
-        is_active: false,
-      });
-    }
-  }, [open]);
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Yangi Akademik Yil</DialogTitle>
-          <DialogDescription>
-            Yangi o'quv yilini yaratish uchun ma'lumotlarni kiriting
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Akademik yil nomi *</Label>
-            <Input
-              id="name"
-              placeholder="2024-2025"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              required
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="start_date">Boshlanish sanasi *</Label>
-              <Input
-                id="start_date"
-                type="date"
-                value={formData.start_date}
-                onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="end_date">Tugash sanasi *</Label>
-              <Input
-                id="end_date"
-                type="date"
-                value={formData.end_date}
-                onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                required
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-            <div className="space-y-1">
-              <Label htmlFor="is_active">Faol akademik yil</Label>
-              <p className="text-xs text-gray-600">
-                Agar faol qilsangiz, boshqa yillar nofaol bo'ladi
-              </p>
-            </div>
-            <Switch
-              id="is_active"
-              checked={formData.is_active}
-              onCheckedChange={(checked: boolean) =>
-                setFormData({ ...formData, is_active: checked })
-              }
-            />
-          </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Bekor qilish
-            </Button>
-            <Button type="submit" disabled={isPending} className="bg-blue-600 hover:bg-blue-700">
-              {isPending ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Yaratilmoqda...
-                </>
-              ) : (
-                "Yaratish"
-              )}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// Edit Academic Year Dialog Component
-function EditAcademicYearDialog({
-  open,
-  onOpenChange,
-  academicYear,
-  onSubmit,
-  isPending,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  academicYear: AcademicYear;
-  onSubmit: (data: Partial<CreateAcademicYearRequest>) => void;
-  isPending: boolean;
-}) {
-  const [formData, setFormData] = React.useState<Partial<CreateAcademicYearRequest>>({
-    name: academicYear.name,
-    start_date: academicYear.start_date,
-    end_date: academicYear.end_date,
-    is_active: academicYear.is_active,
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSubmit(formData);
-  };
-
   React.useEffect(() => {
     if (open) {
-      setFormData({
-        name: academicYear.name,
-        start_date: academicYear.start_date,
-        end_date: academicYear.end_date,
-        is_active: academicYear.is_active,
+      setForm({
+        name: academicYear?.name || "",
+        start_date: academicYear?.start_date || "",
+        end_date: academicYear?.end_date || "",
+        is_active: academicYear?.is_active || false,
       });
     }
   }, [open, academicYear]);
@@ -497,76 +512,64 @@ function EditAcademicYearDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Akademik Yilni Tahrirlash</DialogTitle>
+          <DialogTitle>{mode === "create" ? "Yangi Akademik Yil" : "Akademik Yilni Tahrirlash"}</DialogTitle>
           <DialogDescription>
-            {academicYear.name} akademik yil ma'lumotlarini yangilash
+            {mode === "create" ? "Yangi o'quv yili ma'lumotlarini kiriting" : `${academicYear?.name} ma'lumotlarini yangilash`}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            onSubmit(form);
+          }}
+          className="space-y-4"
+        >
           <div className="space-y-2">
-            <Label htmlFor="edit_name">Akademik yil nomi *</Label>
+            <Label>Nomi *</Label>
             <Input
-              id="edit_name"
               placeholder="2024-2025"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              value={form.name}
+              onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))}
               required
             />
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label htmlFor="edit_start_date">Boshlanish sanasi *</Label>
+              <Label>Boshlanish *</Label>
               <Input
-                id="edit_start_date"
                 type="date"
-                value={formData.start_date}
-                onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                value={form.start_date}
+                onChange={(e) => setForm((s) => ({ ...s, start_date: e.target.value }))}
                 required
               />
             </div>
-
             <div className="space-y-2">
-              <Label htmlFor="edit_end_date">Tugash sanasi *</Label>
+              <Label>Tugash *</Label>
               <Input
-                id="edit_end_date"
                 type="date"
-                value={formData.end_date}
-                onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                value={form.end_date}
+                onChange={(e) => setForm((s) => ({ ...s, end_date: e.target.value }))}
                 required
               />
             </div>
           </div>
-
-          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-            <div className="space-y-1">
-              <Label htmlFor="edit_is_active">Faol akademik yil</Label>
-              <p className="text-xs text-gray-600">
-                Agar faol qilsangiz, boshqa yillar nofaol bo'ladi
-              </p>
+          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div>
+              <p className="text-sm font-medium text-gray-700">Faol o'quv yili</p>
+              <p className="text-xs text-gray-500">Boshqa yillar nofaol bo'ladi</p>
             </div>
             <Switch
-              id="edit_is_active"
-              checked={formData.is_active}
-              onCheckedChange={(checked: boolean) =>
-                setFormData({ ...formData, is_active: checked })
-              }
+              checked={form.is_active}
+              onCheckedChange={(v) => setForm((s) => ({ ...s, is_active: v }))}
             />
           </div>
-
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Bekor qilish
             </Button>
             <Button type="submit" disabled={isPending} className="bg-blue-600 hover:bg-blue-700">
-              {isPending ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Saqlanmoqda...
-                </>
-              ) : (
-                "Saqlash"
-              )}
+              {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              {mode === "create" ? "Yaratish" : "Saqlash"}
             </Button>
           </DialogFooter>
         </form>
@@ -575,396 +578,128 @@ function EditAcademicYearDialog({
   );
 }
 
-// Manage Quarters Dialog Component
-function ManageQuartersDialog({
+// Quarter Dialog
+function QuarterDialog({
   open,
-  onOpenChange,
+  mode,
   academicYear,
+  quarter,
+  onOpenChange,
+  onSubmit,
+  isPending,
 }: {
   open: boolean;
-  onOpenChange: (open: boolean) => void;
+  mode: "create" | "edit";
   academicYear: AcademicYear;
+  quarter?: Quarter;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (data: any) => void;
+  isPending: boolean;
 }) {
-  const queryClient = useQueryClient();
-  const [createQuarterOpen, setCreateQuarterOpen] = React.useState(false);
-  const [editQuarterOpen, setEditQuarterOpen] = React.useState(false);
-  const [selectedQuarter, setSelectedQuarter] = React.useState<any>(null);
-  const [deleteQuarterOpen, setDeleteQuarterOpen] = React.useState(false);
-
-  // Fetch quarters
-  const {
-    data: quarters = [],
-    isLoading: quartersLoading,
-    error: quartersError,
-  } = useQuery({
-    queryKey: ["quarters", academicYear.id],
-    queryFn: async () => {
-      const result = await schoolApi.getQuarters(academicYear.id);
-      console.log("Quarters response:", result);
-      return result;
-    },
-    enabled: open,
+  const [form, setForm] = React.useState({
+    name: "",
+    number: 1,
+    start_date: "",
+    end_date: "",
+    is_active: false,
   });
 
-  // Create quarter mutation
-  const createQuarterMutation = useMutation({
-    mutationFn: (data: any) => schoolApi.createQuarter(academicYear.id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["quarters", academicYear.id] });
-      toast.success("Chorak muvaffaqiyatli yaratildi");
-      setCreateQuarterOpen(false);
-    },
-    onError: (error: any) => {
-      const message = error.response?.data?.detail || "Xatolik yuz berdi";
-      toast.error(message);
-    },
-  });
-
-  // Update quarter mutation
-  const updateQuarterMutation = useMutation({
-    mutationFn: ({ quarterId, data }: { quarterId: string; data: any }) =>
-      schoolApi.updateQuarter(academicYear.id, quarterId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["quarters", academicYear.id] });
-      toast.success("Chorak muvaffaqiyatli yangilandi");
-      setEditQuarterOpen(false);
-      setSelectedQuarter(null);
-    },
-    onError: (error: any) => {
-      const message = error.response?.data?.detail || "Xatolik yuz berdi";
-      toast.error(message);
-    },
-  });
-
-  // Delete quarter mutation
-  const deleteQuarterMutation = useMutation({
-    mutationFn: (quarterId: string) => schoolApi.deleteQuarter(academicYear.id, quarterId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["quarters", academicYear.id] });
-      toast.success("Chorak o'chirildi");
-      setDeleteQuarterOpen(false);
-      setSelectedQuarter(null);
-    },
-    onError: (error: any) => {
-      const message = error.response?.data?.detail || "Xatolik yuz berdi";
-      toast.error(message);
-    },
-  });
+  React.useEffect(() => {
+    if (open) {
+      setForm({
+        name: quarter?.name || "",
+        number: quarter?.number || 1,
+        start_date: quarter?.start_date || "",
+        end_date: quarter?.end_date || "",
+        is_active: quarter?.is_active || false,
+      });
+    }
+  }, [open, quarter]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{academicYear.name} - Choraklar</DialogTitle>
+          <DialogTitle>
+            {mode === "create" ? "Yangi Chorak" : "Chorakni Tahrirlash"} — {academicYear.name}
+          </DialogTitle>
           <DialogDescription>
-            Akademik yil uchun choraklarni boshqarish
+            Chorak sanasi {formatDate(academicYear.start_date)} — {formatDate(academicYear.end_date)} oralig'ida bo'lishi kerak
           </DialogDescription>
         </DialogHeader>
-
-        <div className="space-y-4">
-          {/* Add Quarter Button */}
-          <div className="flex justify-end">
-            <Button
-              size="sm"
-              onClick={() => setCreateQuarterOpen(true)}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Chorak qo'shish
-            </Button>
-          </div>
-
-          {/* Quarters List */}
-          {quartersLoading ? (
-            <div className="text-center py-8">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto" />
-            </div>
-          ) : quartersError ? (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                Choraklarni yuklashda xatolik yuz berdi
-              </AlertDescription>
-            </Alert>
-          ) : !Array.isArray(quarters) ? (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                Backend noto'g'ri format qaytardi. Console'ni tekshiring.
-              </AlertDescription>
-            </Alert>
-          ) : quarters.length === 0 ? (
-            <div className="text-center py-12 border-2 border-dashed rounded-lg">
-              <CalendarDays className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600 mb-4">Choraklar topilmadi</p>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setCreateQuarterOpen(true)}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Birinchi chorakni yaratish
-              </Button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {quarters.map((quarter: any) => (
-                <Card
-                  key={quarter.id}
-                  className={`${quarter.is_active ? "border-green-500 border-2" : ""}`}
-                >
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <CardTitle className="text-lg">{quarter.name}</CardTitle>
-                        <CardDescription className="mt-1">
-                          {new Date(quarter.start_date).toLocaleDateString("uz-UZ")} -{" "}
-                          {new Date(quarter.end_date).toLocaleDateString("uz-UZ")}
-                        </CardDescription>
-                      </div>
-                      {quarter.is_active && (
-                        <Badge className="bg-green-100 text-green-800 border-green-300">
-                          Faol
-                        </Badge>
-                      )}
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setSelectedQuarter(quarter);
-                          setEditQuarterOpen(true);
-                        }}
-                        className="flex-1"
-                      >
-                        <Edit className="w-4 h-4 mr-2" />
-                        Tahrirlash
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setSelectedQuarter(quarter);
-                          setDeleteQuarterOpen(true);
-                        }}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Create Quarter Dialog */}
-        <Dialog open={createQuarterOpen} onOpenChange={setCreateQuarterOpen}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Yangi Chorak</DialogTitle>
-              <DialogDescription>Chorak ma'lumotlarini kiriting</DialogDescription>
-            </DialogHeader>
-            <QuarterForm
-              onSubmit={(data) => createQuarterMutation.mutate(data)}
-              isPending={createQuarterMutation.isPending}
-              onCancel={() => setCreateQuarterOpen(false)}
-              academicYear={academicYear}
-            />
-          </DialogContent>
-        </Dialog>
-
-        {/* Edit Quarter Dialog */}
-        {selectedQuarter && (
-          <Dialog open={editQuarterOpen} onOpenChange={setEditQuarterOpen}>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>Chorakni Tahrirlash</DialogTitle>
-                <DialogDescription>{selectedQuarter.name}</DialogDescription>
-              </DialogHeader>
-              <QuarterForm
-                quarter={selectedQuarter}
-                onSubmit={(data) =>
-                  updateQuarterMutation.mutate({ quarterId: selectedQuarter.id, data })
-                }
-                isPending={updateQuarterMutation.isPending}
-                onCancel={() => {
-                  setEditQuarterOpen(false);
-                  setSelectedQuarter(null);
-                }}
-                academicYear={academicYear}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            onSubmit(form);
+          }}
+          className="space-y-4"
+        >
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Nomi *</Label>
+              <Input
+                placeholder="1-chorak"
+                value={form.name}
+                onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))}
+                required
               />
-            </DialogContent>
-          </Dialog>
-        )}
-
-        {/* Delete Quarter Dialog */}
-        <Dialog open={deleteQuarterOpen} onOpenChange={setDeleteQuarterOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Chorakni o'chirish</DialogTitle>
-              <DialogDescription>
-                <span className="font-semibold">{selectedQuarter?.name}</span> chorakni o'chirishni
-                xohlaysizmi? Bu amaldan qaytarib bo'lmaydi.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setDeleteQuarterOpen(false);
-                  setSelectedQuarter(null);
-                }}
+            </div>
+            <div className="space-y-2">
+              <Label>Raqami *</Label>
+              <select
+                className="w-full h-10 px-3 rounded-md border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={form.number}
+                onChange={(e) => setForm((s) => ({ ...s, number: parseInt(e.target.value) }))}
               >
-                Bekor qilish
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => selectedQuarter && deleteQuarterMutation.mutate(selectedQuarter.id)}
-                disabled={deleteQuarterMutation.isPending}
-              >
-                {deleteQuarterMutation.isPending ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    O'chirilmoqda...
-                  </>
-                ) : (
-                  "O'chirish"
-                )}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+                {[1, 2, 3, 4].map((n) => (
+                  <option key={n} value={n}>
+                    {n}-chorak
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Boshlanish *</Label>
+              <Input
+                type="date"
+                value={form.start_date}
+                onChange={(e) => setForm((s) => ({ ...s, start_date: e.target.value }))}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Tugash *</Label>
+              <Input
+                type="date"
+                value={form.end_date}
+                onChange={(e) => setForm((s) => ({ ...s, end_date: e.target.value }))}
+                required
+              />
+            </div>
+          </div>
+          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div>
+              <p className="text-sm font-medium text-gray-700">Faol chorak</p>
+              <p className="text-xs text-gray-500">Joriy chorak sifatida belgilash</p>
+            </div>
+            <Switch
+              checked={form.is_active}
+              onCheckedChange={(v) => setForm((s) => ({ ...s, is_active: v }))}
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Bekor qilish
+            </Button>
+            <Button type="submit" disabled={isPending} className="bg-blue-600 hover:bg-blue-700">
+              {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              {mode === "create" ? "Yaratish" : "Saqlash"}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
-  );
-}
-
-// Quarter Form Component
-function QuarterForm({
-  quarter,
-  onSubmit,
-  isPending,
-  onCancel,
-  academicYear,
-}: {
-  quarter?: any;
-  onSubmit: (data: any) => void;
-  isPending: boolean;
-  onCancel: () => void;
-  academicYear: AcademicYear;
-}) {
-  const [formData, setFormData] = React.useState({
-    name: quarter?.name || "",
-    number: quarter?.number || 1,
-    start_date: quarter?.start_date || "",
-    end_date: quarter?.end_date || "",
-    is_active: quarter?.is_active || false,
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSubmit(formData);
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="quarter_name">Chorak nomi *</Label>
-        <Input
-          id="quarter_name"
-          placeholder="1-chorak"
-          value={formData.name}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-          required
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="quarter_number">Chorak raqami *</Label>
-        <select
-          id="quarter_number"
-          className="w-full h-10 px-3 rounded-md border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-          value={formData.number}
-          onChange={(e) => setFormData({ ...formData, number: parseInt(e.target.value) })}
-          required
-        >
-          <option value={1}>1-chorak</option>
-          <option value={2}>2-chorak</option>
-          <option value={3}>3-chorak</option>
-          <option value={4}>4-chorak</option>
-        </select>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="quarter_start_date">Boshlanish *</Label>
-          <Input
-            id="quarter_start_date"
-            type="date"
-            value={formData.start_date}
-            onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-            min={academicYear.start_date}
-            max={academicYear.end_date}
-            required
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="quarter_end_date">Tugash *</Label>
-          <Input
-            id="quarter_end_date"
-            type="date"
-            value={formData.end_date}
-            onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-            min={academicYear.start_date}
-            max={academicYear.end_date}
-            required
-          />
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-        <div className="space-y-1">
-          <Label htmlFor="quarter_is_active">Faol chorak</Label>
-          <p className="text-xs text-gray-600">Joriy chorak sifatida belgilash</p>
-        </div>
-        <Switch
-          id="quarter_is_active"
-          checked={formData.is_active}
-          onCheckedChange={(checked: boolean) => setFormData({ ...formData, is_active: checked })}
-        />
-      </div>
-
-      <Alert>
-        <AlertCircle className="h-4 w-4" />
-        <AlertDescription className="text-xs">
-          Chorak sanalari {new Date(academicYear.start_date).toLocaleDateString("uz-UZ")} dan{" "}
-          {new Date(academicYear.end_date).toLocaleDateString("uz-UZ")} gacha bo'lishi kerak
-        </AlertDescription>
-      </Alert>
-
-      <DialogFooter>
-        <Button type="button" variant="outline" onClick={onCancel}>
-          Bekor qilish
-        </Button>
-        <Button type="submit" disabled={isPending} className="bg-blue-600 hover:bg-blue-700">
-          {isPending ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              {quarter ? "Saqlanmoqda..." : "Yaratilmoqda..."}
-            </>
-          ) : quarter ? (
-            "Saqlash"
-          ) : (
-            "Yaratish"
-          )}
-        </Button>
-      </DialogFooter>
-    </form>
   );
 }

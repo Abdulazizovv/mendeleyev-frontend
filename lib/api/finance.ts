@@ -1,13 +1,14 @@
 import apiClient from "./client"; // Direct client without interceptor
-import type { 
+import type {
   FinanceCategory,
   CreateFinanceCategoryRequest,
   UpdateFinanceCategoryRequest,
-  CashRegister, 
+  CashRegister,
   CreateCashRegisterRequest,
   Transaction,
   CreateTransactionRequest,
   StudentBalance,
+  StudentBalanceTransaction,
   SubscriptionPlan,
   CreateSubscriptionPlanRequest,
   Discount,
@@ -23,7 +24,10 @@ import type {
   ExportTaskStatusResponse,
   TransactionQueryParams,
   PaymentQueryParams,
-  PaginatedResponse 
+  PaginatedResponse,
+  RevenuePlan,
+  BillingRun,
+  BillingRunTriggerRequest,
 } from "@/types/finance";
 
 /**
@@ -197,6 +201,13 @@ export const financeApi = {
     return response.data;
   },
 
+  cancelTransaction: async (id: string): Promise<Transaction> => {
+    const response = await apiClient.post<Transaction>(
+      `/school/finance/transactions/${id}/cancel/`
+    );
+    return response.data;
+  },
+
   internalTransfer: async (data: {
     cash_register: string;
     from_method: "cash" | "card";
@@ -217,6 +228,7 @@ export const financeApi = {
     register_name: string;
     cash_net: number;
     card_net: number;
+    bank_net: number;
     total: number;
   }> => {
     const response = await apiClient.get(
@@ -572,5 +584,50 @@ export const financeApi = {
       `/school/finance/export/task-status/${taskId}/`
     );
     return response.data;
+  },
+
+  // ==================== REVENUE PLAN ====================
+
+  /**
+   * Get revenue plan for a given month
+   * GET /api/v1/school/finance/revenue-plan/
+   */
+  getRevenuePlan: async (params?: {
+    branch_id?: string;
+    month?: string;
+  }): Promise<RevenuePlan> => {
+    const response = await apiClient.get<RevenuePlan>(
+      `/school/finance/revenue-plan/`,
+      { params }
+    );
+    return response.data;
+  },
+
+  // ==================== BILLING RUNS ====================
+
+  getBillingRuns: async (params?: { branch_id?: string }): Promise<BillingRun[]> => {
+    const response = await apiClient.get<BillingRun[]>(`/school/finance/billing-runs/`, { params });
+    return response.data;
+  },
+
+  triggerBillingRun: async (data: BillingRunTriggerRequest & { branch_id?: string }): Promise<BillingRun> => {
+    const response = await apiClient.post<BillingRun>(`/school/finance/billing-runs/`, data);
+    return response.data;
+  },
+
+  getBillingRunDetail: async (id: string, params?: { branch_id?: string }): Promise<BillingRun> => {
+    const response = await apiClient.get<BillingRun>(`/school/finance/billing-runs/${id}/`, { params });
+    return response.data;
+  },
+
+  getStudentBalanceTransactions: async (
+    balanceId: string,
+    params?: { branch_id?: string; ordering?: string }
+  ): Promise<StudentBalanceTransaction[]> => {
+    const response = await apiClient.get(
+      `/school/finance/student-balances/${balanceId}/transactions/`,
+      { params }
+    );
+    return Array.isArray(response.data) ? response.data : (response.data as any)?.results ?? [];
   },
 };

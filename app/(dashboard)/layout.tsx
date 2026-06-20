@@ -38,6 +38,8 @@ import {
   BarChart2,
   Key,
   Users2,
+  AlertCircle,
+  Play,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -304,17 +306,26 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     if (isBranchStaff) {
       if (branchType === "school") {
         const schoolNavItems: NavItem[] = [
-          { name: "Topshiriqlar", href: "/school/tasks",  icon: CheckSquare },
-          { name: "Lidlar",       href: "/school/leads",  icon: Target },
-          { name: "Guruh",        href: "/school/groups", icon: Users2,      permission: "students.view" },
+          { name: "Topshiriqlar", href: "/school/tasks", icon: CheckSquare },
+          { name: "Lidlar",       href: "/school/leads", icon: Target },
           {
             name: "O'quvchilar",
             icon: GraduationCap,
             permission: "students.view",
             children: [
-              { name: "Barcha o'quvchilar", href: "/school/students",         icon: GraduationCap },
-              { name: "Yangi o'quvchilar",  href: "/school/students/new",     icon: Users },
-              { name: "Arxiv",              href: "/school/students/archive", icon: Award },
+              { name: "Aktiv o'quvchilar", href: "/school/students",         icon: GraduationCap },
+              { name: "Yangi o'quvchilar", href: "/school/students/new",     icon: Users },
+              { name: "Qarzdorlar",        href: "/school/students/debtors", icon: AlertCircle },
+              { name: "Arxiv",             href: "/school/students/archive", icon: Award },
+            ],
+          },
+          {
+            name: "O'quv bo'limi",
+            icon: BookOpen,
+            permission: "students.view",
+            children: [
+              { name: "Sinflar",  href: "/school/classes", icon: ClipboardList },
+              { name: "Guruhlar", href: "/school/groups",  icon: Users2 },
             ],
           },
           {
@@ -322,20 +333,23 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             icon: Briefcase,
             permission: "staff.view",
             children: [
-              { name: "Xodimlar",   href: "/school/staff",           icon: Users },
-              { name: "Rollar",     href: "/school/roles",           icon: Key },
-              { name: "Sinflar",    href: "/school/classes",         icon: ClipboardList },
-              { name: "Fanlar",     href: "/school/subjects",        icon: BookOpen },
-              { name: "O'quv yili", href: "/school/academic-years",  icon: Calendar },
+              { name: "Xodimlar",   href: "/school/staff",          icon: Users },
+              { name: "Rollar",     href: "/school/roles",          icon: Key },
+              { name: "Fanlar",     href: "/school/subjects",       icon: BookOpen },
+              { name: "O'quv yili", href: "/school/academic-years", icon: Calendar },
+              { name: "Xonalar",    href: "/school/rooms",          icon: Building2 },
             ],
           },
-          { name: "Nazorat",    href: "/school/schedule", icon: Shield,   permission: "schedule.view" },
+          { name: "Dars jadvali", href: "/school/schedule", icon: Calendar, permission: "schedule.view" },
           {
             name: "Moliya",
             icon: Wallet,
             permission: "finance.view",
             children: [
               { name: "Kassalar",                   href: "/school/finance/cash-registers",    icon: Wallet },
+              { name: "Kirim-Chiqim",               href: "/school/finance/income-expense",    icon: BarChart2 },
+              { name: "Tushum rejasi",               href: "/school/finance/revenue-plan",      icon: Target },
+              { name: "Billing",                     href: "/school/finance/billing",            icon: Play },
               { name: "Abonementlar & Chegirmalar",  href: "/school/finance/subscription-plans", icon: FileText },
               { name: "Tranzaksiya turlari",         href: "/school/finance/transaction-types", icon: ClipboardList },
               { name: "Hisobotlar",                  href: "/school/finance/statistics",        icon: BarChart2 },

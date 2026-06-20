@@ -42,6 +42,16 @@ const STATUS_CONFIG: Record<LessonStatus, { label: string; color: string; icon: 
     color: 'bg-red-100 text-red-800 border-red-300',
     icon: <XCircle className="h-3 w-3" />,
   },
+  canceled: {
+    label: 'Canceled',
+    color: 'bg-red-100 text-red-800 border-red-300',
+    icon: <XCircle className="h-3 w-3" />,
+  },
+  in_progress: {
+    label: 'In Progress',
+    color: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+    icon: <Clock className="h-3 w-3" />,
+  },
 };
 
 export const LessonList: React.FC<LessonListProps> = ({
@@ -70,7 +80,7 @@ export const LessonList: React.FC<LessonListProps> = ({
         lesson.subject_name?.toLowerCase().includes(query) ||
         lesson.class_name?.toLowerCase().includes(query) ||
         lesson.teacher_name?.toLowerCase().includes(query) ||
-        lesson.topic_name?.toLowerCase().includes(query)
+        (lesson.topic_name ?? lesson.topic_title)?.toLowerCase().includes(query)
       );
     }
 
@@ -198,13 +208,13 @@ export const LessonList: React.FC<LessonListProps> = ({
                               <div>Class: {lesson.class_name}</div>
                               <div>Teacher: {lesson.teacher_name}</div>
                               {lesson.room_name && <div>Room: {lesson.room_name}</div>}
-                              {lesson.topic_name && (
+                              {(lesson.topic_name ?? lesson.topic_title) && (
                                 <div className="mt-2">
-                                  <Badge variant="secondary">Topic: {lesson.topic_name}</Badge>
+                                  <Badge variant="secondary">Topic: {lesson.topic_name ?? lesson.topic_title}</Badge>
                                 </div>
                               )}
-                              {lesson.notes && (
-                                <div className="mt-2 text-xs italic">{lesson.notes}</div>
+                              {(lesson.notes ?? lesson.teacher_notes) && (
+                                <div className="mt-2 text-xs italic">{lesson.notes ?? lesson.teacher_notes}</div>
                               )}
                             </div>
                           </div>

@@ -52,6 +52,7 @@ export interface Class {
   room?: string;
   room_name?: string;
   is_active: boolean;
+  is_archived: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -441,6 +442,21 @@ export interface Student {
   balance?: {
     id: string;
     balance: number;
+    total_debt?: number;
+    debt_subscription?: {
+      price: number;
+      next_payment_date: string | null;
+      unpaid_months: Array<{
+        month: string;
+        owed: number;
+        paid: number;
+        is_partial: boolean;
+      }>;
+    } | null;
+    last_payment?: {
+      amount: number;
+      date: string;
+    } | null;
     notes?: string;
     updated_at?: string;
     transactions_summary?: {
@@ -1267,4 +1283,35 @@ export interface StudentImportStatusResponse {
   message?: string;
   result?: StudentImportResult;
   error?: string;
+}
+
+export type StudentDocumentType = 'passport' | 'birth_certificate' | 'certificate' | 'photo' | 'other';
+
+export interface StudentDocument {
+  id: string;
+  student: string;
+  document_type: StudentDocumentType;
+  document_type_display: string;
+  name: string;
+  file: string;
+  file_url: string | null;
+  file_size: number | null;
+  file_extension: string;
+  notes: string;
+  uploaded_by: string | null;
+  uploaded_by_name: string | null;
+  created_at: string;
+}
+
+export interface StudentActivityLog {
+  id: string;
+  student: string;
+  activity_type: string;
+  activity_type_display: string;
+  description: string;
+  old_value: Record<string, unknown> | null;
+  new_value: Record<string, unknown> | null;
+  performed_by: string | null;
+  performed_by_name: string | null;
+  created_at: string;
 }
