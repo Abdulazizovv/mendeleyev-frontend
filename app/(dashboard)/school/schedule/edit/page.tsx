@@ -1,30 +1,30 @@
 'use client';
 
-import React, { useState, useCallback, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
-  useTimetableTemplates,
-  useTimetableSlots,
-  useCreateTimetableSlot,
-  useUpdateTimetableSlot,
-  useDeleteTimetableSlot,
-} from '@/lib/features/schedule/hooks';
-import { WeeklyClassGrid } from '@/lib/features/schedule/components/WeeklyClassGrid';
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core';
+import { useAuth } from '@/lib/hooks/useAuth';
+import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Label } from '@/components/ui/label';
 import {
-  ArrowLeft,
-  Calendar,
-  AlertCircle,
-  Loader2,
-  ChevronLeft,
-  ChevronRight,
-  BookOpen,
-  GraduationCap,
-  CheckCircle2,
-} from 'lucide-react';
-import Link from 'next/link';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,21 +35,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { createSlotPayload, type TimeSlotDefinition } from '@/lib/features/schedule/utils/lessonNumberMapping';
-import type { TimetableSlot } from '@/types/academic';
-import type { Class, ClassSubject, Room } from '@/types/school';
-import { toast } from 'sonner';
-import { schoolApi, branchApi } from '@/lib/api';
-import { parse, addMinutes, format as formatDate } from 'date-fns';
-import { useAuth } from '@/lib/hooks/useAuth';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -57,250 +42,422 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
+import Link from 'next/link';
+import {
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Loader2,
+  AlertCircle,
+  Edit2,
+  Trash2,
+  Calendar,
+  BookOpen,
+  GraduationCap,
+  CheckCircle2,
+  Sparkles,
+  GripVertical,
+} from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { parse, addMinutes, format as fmtDate } from 'date-fns';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+import { schoolApi, branchApi } from '@/lib/api';
+import {
+  useTimetableTemplates,
+  useTimetableSlots,
+  useCreateTimetableSlot,
+  useUpdateTimetableSlot,
+  useDeleteTimetableSlot,
+  useGenerateLessons,
+} from '@/lib/features/schedule/hooks';
+import { GenerateLessonsDialog } from '@/lib/features/schedule/components/GenerateLessonsDialog';
+import type { GenerateLessonsData } from '@/lib/features/schedule/components/GenerateLessonsDialog';
+import type { TimetableSlot, CreateTimetableSlot } from '@/types/academic';
+import type { ClassSubject, Room, BranchSettings, Group } from '@/types/school';
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ── Constants ──────────────────────────────────────────────────────────────────
 
-interface CreateDialogState {
-  open: boolean;
-  classId?: string;
-  dayOfWeek?: number;
-  timeSlot?: TimeSlotDefinition;
+const DAY_KEYS = [
+  'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday',
+] as const;
+type DayKey = typeof DAY_KEYS[number];
+
+const DAY_SHORT = ['Du', 'Se', 'Cho', 'Pay', 'Ju', 'Shan'];
+const DAY_FULL  = ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba'];
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+interface TimeSlot {
+  lesson_number: number; // 0 = tushlik
+  start_time: string;   // "08:00"
+  end_time: string;     // "08:45"
 }
 
-interface EditDialogState {
-  open: boolean;
-  slot?: TimetableSlot;
+function computeTimeSlots(s: BranchSettings): TimeSlot[] {
+  const result: TimeSlot[] = [];
+  const startRaw = s.daily_lesson_start_time || s.school_start_time;
+  const start  = parse(startRaw.substring(0, 5), 'HH:mm', new Date());
+  const endRaw = s.daily_lesson_end_time || s.school_end_time;
+  const end    = parse(endRaw.substring(0, 5), 'HH:mm', new Date());
+  const lS     = s.lunch_break_start ? parse(s.lunch_break_start.substring(0, 5), 'HH:mm', new Date()) : null;
+  const lE     = s.lunch_break_end   ? parse(s.lunch_break_end.substring(0, 5),   'HH:mm', new Date()) : null;
+
+  let cur = start, num = 1, lunchAdded = false;
+
+  while (cur < end) {
+    const slotEnd = addMinutes(cur, s.lesson_duration_minutes);
+    if (slotEnd > end) break;
+
+    if (lS && lE && !lunchAdded && cur < lE && slotEnd > lS) {
+      if (cur < lS) {
+        result.push({ lesson_number: 0, start_time: fmtDate(lS, 'HH:mm'), end_time: fmtDate(lE, 'HH:mm') });
+        lunchAdded = true;
+      }
+      cur = lE;
+      continue;
+    }
+
+    result.push({ lesson_number: num, start_time: fmtDate(cur, 'HH:mm'), end_time: fmtDate(slotEnd, 'HH:mm') });
+    num++;
+    cur = addMinutes(slotEnd, s.break_duration_minutes);
+  }
+  return result;
 }
 
-interface DeleteDialogState {
-  open: boolean;
-  slot?: TimetableSlot;
+// Fan rangi (nom bo'yicha deterministik)
+const SLOT_COLORS = [
+  'border-l-blue-500 bg-blue-50 hover:bg-blue-100/80',
+  'border-l-emerald-500 bg-emerald-50 hover:bg-emerald-100/80',
+  'border-l-violet-500 bg-violet-50 hover:bg-violet-100/80',
+  'border-l-rose-500 bg-rose-50 hover:bg-rose-100/80',
+  'border-l-amber-500 bg-amber-50 hover:bg-amber-100/80',
+  'border-l-cyan-500 bg-cyan-50 hover:bg-cyan-100/80',
+  'border-l-orange-500 bg-orange-50 hover:bg-orange-100/80',
+  'border-l-teal-500 bg-teal-50 hover:bg-teal-100/80',
+  'border-l-indigo-500 bg-indigo-50 hover:bg-indigo-100/80',
+  'border-l-pink-500 bg-pink-50 hover:bg-pink-100/80',
+];
+
+function subjectColor(name: string): string {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) {
+    h = (h << 5) - h + name.charCodeAt(i);
+    h |= 0;
+  }
+  return SLOT_COLORS[Math.abs(h) % SLOT_COLORS.length];
 }
+
+function toApiTime(t: string): string {
+  return t.length === 5 ? `${t}:00` : t;
+}
+
+// ── Dialog state ──────────────────────────────────────────────────────────────
+
+interface CreateClassState {
+  mode: 'create';
+  slotType: 'class';
+  classId: string;
+  className: string;
+  timeSlot: TimeSlot;
+}
+interface CreateGroupState {
+  mode: 'create';
+  slotType: 'group';
+  groupId: string;
+  groupName: string;
+  timeSlot: TimeSlot;
+}
+interface EditState {
+  mode: 'edit';
+  slot: TimetableSlot;
+}
+type DialogState = CreateClassState | CreateGroupState | EditState | null;
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function TimetableEditPage() {
   const { currentBranch } = useAuth();
-  const branchId = currentBranch?.branch_id || '';
-  const userRole = currentBranch?.role ?? '';
-  const scheduleBase = userRole === 'branch_admin' ? '/branch-admin/schedule' : '/school/schedule';
 
-  // Selected class index (navigate with arrows)
-  const [selectedClassIndex, setSelectedClassIndex] = useState(0);
+  const pathname   = usePathname();
+  const branchId   = currentBranch?.branch_id ?? '';
+  const userRole   = currentBranch?.role ?? '';
+  // Hozirgi URL dan /edit ni olib tashlash — har qanday base path uchun ishlaydi
+  const backPath   = pathname.replace(/\/edit\/?$/, '');
 
-  // Dialog states
-  const [createDialog, setCreateDialog] = useState<CreateDialogState>({ open: false });
-  const [editDialog, setEditDialog]     = useState<EditDialogState>({ open: false });
-  const [deleteDialog, setDeleteDialog] = useState<DeleteDialogState>({ open: false });
-  const [selectedSubjectId, setSelectedSubjectId] = useState<string | undefined>();
-  const [selectedRoomId, setSelectedRoomId]       = useState<string | undefined>();
+  // ── Day state ─────────────────────────────────────────────────────────────────
+  const [dayIdx, setDayIdx] = useState(0);
+  const selectedDayKey: DayKey = DAY_KEYS[dayIdx];
 
-  // ── Fetch data ──────────────────────────────────────────────────────────────
+  // ── Dialog state ──────────────────────────────────────────────────────────────
+  const [dialog, setDialog] = useState<DialogState>(null);
+  const [deleteTarget, setDeleteTarget] = useState<TimetableSlot | null>(null);
+  const [subjectId, setSubjectId] = useState<string | undefined>();
+  const [roomId, setRoomId]       = useState<string | undefined>();
+  const [generateOpen, setGenerateOpen]       = useState(false);
+  const [generationResult, setGenerationResult] = useState<{ created: number; updated: number; skipped: number } | null>(null);
+  const [draggingSlot, setDraggingSlot]         = useState<TimetableSlot | null>(null);
+  const [conflictErrors, setConflictErrors]     = useState<Array<{ type: string; message: string; details: Record<string, string> }> | null>(null);
 
+  const closeDialog = () => { setDialog(null); setSubjectId(undefined); setRoomId(undefined); };
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
+  // ── Data ──────────────────────────────────────────────────────────────────────
   const { data: branchSettings } = useQuery({
     queryKey: ['branch-settings', branchId],
-    queryFn: () => branchApi.getBranchSettings(branchId),
-    enabled: !!branchId,
+    queryFn:  () => branchApi.getBranchSettings(branchId),
+    enabled:  !!branchId,
+    staleTime: 0,
+    refetchOnMount: 'always' as const,
   });
 
-  const { data: templatesResponse, isLoading: templatesLoading } = useTimetableTemplates(branchId);
-  const activeTemplate = templatesResponse?.results?.find((t) => t.is_active) ?? templatesResponse?.results?.[0];
+  const { data: templatesResp, isLoading: templatesLoading } = useTimetableTemplates(branchId);
+  const activeTemplate =
+    templatesResp?.results?.find(t => t.is_active) ?? templatesResp?.results?.[0];
 
-  const { data: slotsResponse, isLoading: slotsLoading } = useTimetableSlots(
+  const { data: slotsResp, isLoading: slotsLoading } = useTimetableSlots(
     branchId,
     activeTemplate?.id ?? '',
+    { page_size: 500 } as any,
   );
-  const allSlots: TimetableSlot[] = slotsResponse?.results ?? [];
+  const allSlots: TimetableSlot[] = slotsResp?.results ?? [];
 
   const { data: classesData, isLoading: classesLoading } = useQuery({
     queryKey: ['classes', branchId, 'active'],
-    queryFn: () => schoolApi.getClassesPaginated(branchId, { is_active: true, page_size: 100, ordering: 'grade_level,section' }),
+    queryFn:  () =>
+      schoolApi.getClassesPaginated(branchId, {
+        is_active: true, page_size: 100, ordering: 'grade_level,section',
+      }),
     enabled: !!branchId,
   });
-  const classesRaw: Class[] = classesData?.results ?? [];
+  const classes = classesData?.results ?? [];
 
+  const { data: groupsRaw = [], isLoading: groupsLoading } = useQuery<Group[]>({
+    queryKey: ['groups', branchId],
+    queryFn:  () => schoolApi.getGroups(branchId, { is_active: true }),
+    enabled:  !!branchId,
+  });
+  const groups = groupsRaw.filter(g => g.is_active);
+
+  // Faqat dialog ochiq bo'lganda class subjects va rooms yuklanadi
   const activeClassId =
-    createDialog.open ? createDialog.classId
-    : editDialog.open  ? editDialog.slot?.class_obj
-    : undefined;
+    dialog?.mode === 'create' && dialog.slotType === 'class' ? dialog.classId :
+    dialog?.mode === 'edit'   ? dialog.slot.class_obj ?? undefined :
+    undefined;
 
-  const { data: classSubjects = [], isLoading: subjectsLoading } = useQuery<ClassSubject[]>({
+  const { data: classSubjects = [], isFetching: subjectsLoading } = useQuery<ClassSubject[]>({
     queryKey: ['class-subjects', branchId, activeClassId],
-    queryFn: () => schoolApi.getClassSubjects(activeClassId!, { is_active: true }),
-    enabled: !!activeClassId,
+    queryFn:  () => schoolApi.getClassSubjects(activeClassId!, { is_active: true }),
+    enabled:  !!activeClassId,
   });
 
-  const { data: rooms = [], isLoading: roomsLoading } = useQuery<Room[]>({
+  const { data: rooms = [], isFetching: roomsLoading } = useQuery<Room[]>({
     queryKey: ['rooms', branchId],
-    queryFn: () => schoolApi.getRooms(branchId, { is_active: true }),
-    enabled: !!branchId,
+    queryFn:  () => schoolApi.getRooms(branchId, { is_active: true }),
+    enabled:  !!branchId,
   });
 
-  // ── Time slots from branch settings ────────────────────────────────────────
+  // ── Computed ──────────────────────────────────────────────────────────────────
+  const timeSlots = useMemo(
+    () => (branchSettings ? computeTimeSlots(branchSettings) : []),
+    [branchSettings]
+  );
 
-  const timeSlots = useMemo<TimeSlotDefinition[]>(() => {
-    if (!branchSettings) return [];
+  // "class-classId-dayKey-lessonNum" | "group-groupId-dayKey-lessonNum" → TimetableSlot
+  const slotMap = useMemo(() => {
+    const m = new Map<string, TimetableSlot>();
+    allSlots.forEach(s => {
+      if (s.class_obj)
+        m.set(`class-${s.class_obj}-${s.day_of_week}-${s.lesson_number}`, s);
+      if (s.group)
+        m.set(`group-${s.group}-${s.day_of_week}-${s.lesson_number}`, s);
+    });
+    return m;
+  }, [allSlots]);
 
-    const slots: TimeSlotDefinition[] = [];
-    const startTime = parse(branchSettings.school_start_time.substring(0, 5), 'HH:mm', new Date());
-    const endTimeStr = branchSettings.daily_lesson_end_time || branchSettings.school_end_time;
-    const endTime   = parse(endTimeStr.substring(0, 5), 'HH:mm', new Date());
-    const lunchStart = branchSettings.lunch_break_start
-      ? parse(branchSettings.lunch_break_start.substring(0, 5), 'HH:mm', new Date())
-      : null;
-    const lunchEnd = branchSettings.lunch_break_end
-      ? parse(branchSettings.lunch_break_end.substring(0, 5), 'HH:mm', new Date())
-      : null;
+  const classCount = classes.length;
+  const dayCount   = allSlots.filter(s => s.day_of_week === selectedDayKey).length;
+  const totalCount = allSlots.length;
 
-    let current = startTime;
-    let num = 1;
-    let lunchAdded = false;
+  // ── Mutations ─────────────────────────────────────────────────────────────────
+  const createMutation   = useCreateTimetableSlot(branchId, activeTemplate?.id ?? '');
+  const updateMutation   = useUpdateTimetableSlot(branchId, activeTemplate?.id ?? '');
+  const deleteMutation   = useDeleteTimetableSlot(branchId, activeTemplate?.id ?? '');
+  const generateMutation = useGenerateLessons(branchId);
 
-    while (current < endTime) {
-      const slotEnd = addMinutes(current, branchSettings.lesson_duration_minutes);
-      if (slotEnd > endTime) break;
+  // ── DnD handlers ──────────────────────────────────────────────────────────────
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    const slot = allSlots.find(s => s.id === event.active.id);
+    setDraggingSlot(slot ?? null);
+  }, [allSlots]);
 
-      if (lunchStart && lunchEnd && !lunchAdded && slotEnd > lunchStart && current < lunchEnd) {
-        if (current < lunchStart) {
-          slots.push({ lesson_number: 0, start_time: formatDate(lunchStart, 'HH:mm:ss'), end_time: formatDate(lunchEnd, 'HH:mm:ss'), label: 'Tushlik' });
-          lunchAdded = true;
-        }
-        current = lunchEnd;
-        continue;
-      }
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    setDraggingSlot(null);
+    const { active, over } = event;
+    if (!over || !activeTemplate) return;
 
-      slots.push({
-        lesson_number: num,
-        start_time: formatDate(current, 'HH:mm:ss'),
-        end_time:   formatDate(slotEnd, 'HH:mm:ss'),
-        label: `${num}-dars`,
-      });
-      num++;
-      current = addMinutes(slotEnd, branchSettings.break_duration_minutes);
+    const slotId = active.id as string;
+    const [targetClassId, targetDay, targetNumStr] = (over.id as string).split('||');
+    const targetNum = Number(targetNumStr);
+    const slot = allSlots.find(s => s.id === slotId);
+    if (!slot || !targetClassId || !targetDay || isNaN(targetNum)) return;
+
+    if (slot.class_obj === targetClassId && slot.day_of_week === targetDay && slot.lesson_number === targetNum) return;
+
+    // Boshqa sinfga ko'chirish mumkin emas — class_subject bog'liq bo'ladi
+    if (slot.class_obj !== targetClassId) {
+      toast.error('Darsni boshqa sinfga ko\'chirish mumkin emas');
+      return;
     }
 
-    return slots;
-  }, [branchSettings]);
+    const occupied = slotMap.get(`class-${targetClassId}-${targetDay}-${targetNum}`);
+    if (occupied && occupied.id !== slotId) {
+      toast.error('Bu katakda allaqachon dars bor');
+      return;
+    }
 
-  // ── Derived: classes with slot counts ──────────────────────────────────────
+    const targetTs = timeSlots.find(t => t.lesson_number === targetNum);
+    if (!targetTs) return;
 
-  const classes = useMemo(() => {
-    const lessonCount = timeSlots.filter((t) => t.lesson_number > 0).length;
-    const maxSlots = lessonCount * 6; // 6 days
+    updateMutation.mutate(
+      {
+        slotId,
+        data: {
+          day_of_week:   targetDay as DayKey,
+          lesson_number: targetNum,
+          start_time:    toApiTime(targetTs.start_time),
+          end_time:      toApiTime(targetTs.end_time),
+        } as any,
+      },
+      {
+        onError: (err: any) => {
+          const conflicts = err?.response?.data?.conflicts;
+          if (conflicts?.length) setConflictErrors(conflicts);
+        },
+      }
+    );
+  }, [allSlots, activeTemplate, slotMap, timeSlots, updateMutation]);
 
-    return classesRaw.map((cls) => {
-      const count = allSlots.filter((s) => s.class_obj === cls.id).length;
-      return { id: cls.id, name: cls.name, slotCount: count, maxSlots };
-    });
-  }, [classesRaw, allSlots, timeSlots]);
-
-  const selectedClass = classes[selectedClassIndex] ?? classes[0];
-
-  // ── Mutations ───────────────────────────────────────────────────────────────
-
-  const createMutation = useCreateTimetableSlot(branchId, activeTemplate?.id ?? '');
-  const updateMutation = useUpdateTimetableSlot(branchId, activeTemplate?.id ?? '');
-  const deleteMutation = useDeleteTimetableSlot(branchId, activeTemplate?.id ?? '');
-
-  // ── Handlers ────────────────────────────────────────────────────────────────
-
-  const openCreate = useCallback((dayOfWeek: number, timeSlot: TimeSlotDefinition) => {
-    if (!selectedClass) return;
-    setCreateDialog({ open: true, classId: selectedClass.id, dayOfWeek, timeSlot });
-    setSelectedSubjectId(undefined);
-    setSelectedRoomId(undefined);
-  }, [selectedClass]);
-
-  const openEdit = useCallback((slot: TimetableSlot) => {
-    setEditDialog({ open: true, slot });
-    setSelectedSubjectId(slot.class_subject);
-    setSelectedRoomId(slot.room ?? undefined);
+  // ── Handlers ──────────────────────────────────────────────────────────────────
+  const openCreate = useCallback((
+    type: 'class' | 'group',
+    id: string,
+    name: string,
+    ts: TimeSlot,
+  ) => {
+    if (type === 'class') {
+      setDialog({ mode: 'create', slotType: 'class', classId: id, className: name, timeSlot: ts });
+    } else {
+      setDialog({ mode: 'create', slotType: 'group', groupId: id, groupName: name, timeSlot: ts });
+    }
+    setSubjectId(undefined);
+    setRoomId(undefined);
   }, []);
 
-  const handleCreate = useCallback(async () => {
-    if (!activeTemplate || !createDialog.classId || !createDialog.dayOfWeek || !createDialog.timeSlot || !selectedSubjectId) return;
+  const openEdit = useCallback((slot: TimetableSlot) => {
+    setDialog({ mode: 'edit', slot });
+    setSubjectId(slot.class_subject ?? undefined);
+    setRoomId(slot.room ?? undefined);
+  }, []);
 
-    const payload = createSlotPayload(
-      createDialog.classId,
-      selectedSubjectId,
-      createDialog.dayOfWeek,
-      createDialog.timeSlot.start_time,
-      createDialog.timeSlot.end_time,
-      activeTemplate.id,
-      selectedRoomId,
-    );
-    if (!payload) { toast.error("Noto'g'ri sozlamalar"); return; }
+  const handleSave = useCallback(async () => {
+    if (!activeTemplate || !dialog) return;
 
-    try {
-      await createMutation.mutateAsync(payload);
-      toast.success('Dars qo\'shildi');
-      setCreateDialog({ open: false });
-    } catch (err: any) {
-      const d = err.response?.data;
-      if (d?.conflicts)    toast.error(`Vaqt to'qnashuvi: ${d.conflicts.join(', ')}`);
-      else if (d?.detail)  toast.error(d.detail);
-      else                 toast.error("Dars qo'shishda xatolik");
+    if (dialog.mode === 'create') {
+      const isGroup = dialog.slotType === 'group';
+      // For group slots no subject needed; for class slots subjectId required
+      if (!isGroup && !subjectId) return;
+
+      const payload: CreateTimetableSlot = {
+        timetable:    activeTemplate.id,
+        day_of_week:  selectedDayKey,
+        lesson_number: dialog.timeSlot.lesson_number,
+        start_time:   toApiTime(dialog.timeSlot.start_time),
+        end_time:     toApiTime(dialog.timeSlot.end_time),
+        ...(roomId ? { room: roomId } : {}),
+        ...(isGroup
+          ? { group: dialog.groupId }
+          : { class_obj: dialog.classId, class_subject: subjectId }),
+      };
+      try {
+        await createMutation.mutateAsync(payload);
+        toast.success('Dars qo\'shildi');
+        closeDialog();
+      } catch (err: any) {
+        const d = err.response?.data;
+        toast.error(d?.non_field_errors?.[0] ?? d?.detail ?? 'Dars qo\'shishda xatolik');
+      }
+    } else {
+      const payload: Partial<CreateTimetableSlot> = {
+        ...(subjectId ? { class_subject: subjectId } : {}),
+        ...(roomId ? { room: roomId } : { room: null }),
+      };
+      try {
+        await updateMutation.mutateAsync({ slotId: dialog.slot.id, data: payload });
+        toast.success('Dars yangilandi');
+        closeDialog();
+      } catch (err: any) {
+        const d = err.response?.data;
+        toast.error(d?.detail ?? 'Darsni yangilashda xatolik');
+      }
     }
-  }, [activeTemplate, createDialog, selectedSubjectId, selectedRoomId, createMutation]);
-
-  const handleUpdate = useCallback(async () => {
-    if (!activeTemplate || !editDialog.slot || !selectedSubjectId) return;
-    const slot = editDialog.slot;
-
-    const payload = createSlotPayload(
-      slot.class_obj!,
-      selectedSubjectId,
-      dayOfWeekToNumber(slot.day_of_week),
-      slot.start_time,
-      slot.end_time,
-      activeTemplate.id,
-      selectedRoomId,
-    );
-    if (!payload) { toast.error("Noto'g'ri sozlamalar"); return; }
-
-    try {
-      await updateMutation.mutateAsync({ slotId: slot.id, data: payload });
-      toast.success('Dars yangilandi');
-      setEditDialog({ open: false });
-    } catch (err: any) {
-      const d = err.response?.data;
-      if (d?.conflicts)   toast.error(`Vaqt to'qnashuvi: ${d.conflicts.join(', ')}`);
-      else if (d?.detail) toast.error(d.detail);
-      else                toast.error('Darsni yangilashda xatolik');
-    }
-  }, [activeTemplate, editDialog, selectedSubjectId, selectedRoomId, updateMutation]);
+  }, [activeTemplate, dialog, subjectId, roomId, selectedDayKey, createMutation, updateMutation]);
 
   const handleDelete = useCallback(async () => {
-    if (!deleteDialog.slot) return;
+    if (!deleteTarget) return;
     try {
-      await deleteMutation.mutateAsync(deleteDialog.slot.id);
-      toast.success("Dars o'chirildi");
-      setDeleteDialog({ open: false });
+      await deleteMutation.mutateAsync(deleteTarget.id);
+      toast.success('Dars o\'chirildi');
+      setDeleteTarget(null);
     } catch (err: any) {
-      toast.error(err.response?.data?.detail ?? "O'chirishda xatolik");
+      toast.error(err.response?.data?.detail ?? 'O\'chirishda xatolik');
     }
-  }, [deleteDialog, deleteMutation]);
+  }, [deleteTarget, deleteMutation]);
 
-  // ── Loading ─────────────────────────────────────────────────────────────────
+  const isSaving = createMutation.isPending || updateMutation.isPending;
 
-  const isLoading = templatesLoading || classesLoading;
+  const handleGenerateSubmit = useCallback((data: GenerateLessonsData) => {
+    generateMutation.mutate(
+      { timetable_id: data.timetable_id, start_date: data.start_date, end_date: data.end_date, skip_existing: data.skip_existing, force_update: data.force_update } as any,
+      {
+        onSuccess: (result: any) => {
+          setGenerationResult({
+            created: result.created_count ?? result.generated_count ?? 0,
+            updated: result.updated_count ?? 0,
+            skipped: result.skipped_count ?? 0,
+          });
+        },
+      }
+    );
+  }, [generateMutation]);
 
-  if (isLoading) {
+  // ── Guards ────────────────────────────────────────────────────────────────────
+  if (!branchId) {
     return (
-      <div className="space-y-4 p-6 max-w-7xl mx-auto">
-        <Skeleton className="h-10 w-72" />
-        <Skeleton className="h-[600px] w-full" />
+      <div className="flex items-center justify-center h-[60vh]">
+        <p className="text-gray-500">Filial tanlanmagan</p>
+      </div>
+    );
+  }
+
+  if (templatesLoading || classesLoading || groupsLoading) {
+    return (
+      <div className="space-y-4 p-6">
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-[500px] w-full" />
       </div>
     );
   }
 
   if (!activeTemplate) {
     return (
-      <div className="p-6 max-w-7xl mx-auto space-y-4">
+      <div className="p-6 space-y-4">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" asChild>
-            <Link href={scheduleBase}><ArrowLeft className="h-5 w-5" /></Link>
+            <Link href={backPath}><ArrowLeft className="h-5 w-5" /></Link>
           </Button>
           <h1 className="text-xl font-bold">Jadval sozlash</h1>
         </div>
@@ -311,154 +468,394 @@ export default function TimetableEditPage() {
             <p className="text-sm text-gray-500">Avval "Dars Jadvali" sahifasida shablon yarating</p>
           </div>
           <Button asChild>
-            <Link href={scheduleBase}>Dars jadvaliga qaytish</Link>
+            <Link href={backPath}>Dars jadvaliga qaytish</Link>
           </Button>
         </div>
       </div>
     );
   }
 
-  if (classes.length === 0) {
+  if (classes.length === 0 && groups.length === 0) {
     return (
-      <div className="p-6 max-w-7xl mx-auto space-y-4">
+      <div className="p-6 space-y-4">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" asChild>
-            <Link href={scheduleBase}><ArrowLeft className="h-5 w-5" /></Link>
+            <Link href={backPath}><ArrowLeft className="h-5 w-5" /></Link>
           </Button>
           <h1 className="text-xl font-bold">Jadval sozlash</h1>
         </div>
         <div className="bg-gray-50 border border-dashed border-gray-200 rounded-xl p-8 flex flex-col items-center text-center gap-3">
           <GraduationCap className="w-10 h-10 text-gray-300" />
-          <p className="text-gray-500 text-sm">Faol sinflar topilmadi</p>
+          <p className="text-gray-500 text-sm">Faol sinf yoki guruhlar topilmadi</p>
         </div>
       </div>
     );
   }
 
-  const lessonSlotCount = timeSlots.filter((t) => t.lesson_number > 0).length;
-
+  // ── Render ────────────────────────────────────────────────────────────────────
   return (
-    <div className="pb-8">
-      {/* ── Header ── */}
-      <div className="sticky top-0 z-20 bg-white border-b border-gray-100 px-4 sm:px-6 py-3">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" asChild className="shrink-0">
-              <Link href={scheduleBase}><ArrowLeft className="h-4 w-4" /></Link>
+    <div className="pb-10">
+
+      {/* Sticky header */}
+      <div className="sticky top-0 z-30 bg-white border-b border-gray-100 shadow-sm">
+        <div className="max-w-full px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <Button variant="ghost" size="icon" className="shrink-0" asChild>
+              <Link href={backPath}><ArrowLeft className="h-4 w-4" /></Link>
             </Button>
-            <div>
+            <div className="min-w-0">
               <h1 className="font-bold text-gray-900 text-base sm:text-lg leading-tight">
                 Jadval Sozlash
               </h1>
-              <p className="text-xs text-gray-400 hidden sm:block">
+              <p className="text-xs text-gray-400 truncate">
                 <Calendar className="inline h-3 w-3 mr-1" />
                 {activeTemplate.name}
               </p>
             </div>
           </div>
 
-          {/* Quick stats */}
-          <div className="hidden md:flex items-center gap-4 text-sm text-gray-500">
+          {/* Stats */}
+          <div className="hidden md:flex items-center gap-5 text-sm text-gray-500">
             <span className="flex items-center gap-1.5">
               <BookOpen className="h-4 w-4 text-blue-500" />
-              {lessonSlotCount} dars / kun
-            </span>
-            <span className="flex items-center gap-1.5">
-              <GraduationCap className="h-4 w-4 text-purple-500" />
-              {classes.length} sinf
+              {dayCount} dars (bu kun)
             </span>
             <span className="flex items-center gap-1.5">
               <CheckCircle2 className="h-4 w-4 text-green-500" />
-              {allSlots.length} slot kiritilgan
+              {totalCount} jami dars
             </span>
           </div>
 
-          <Button asChild size="sm">
-            <Link href={scheduleBase}>Tayyor</Link>
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0 text-purple-600 border-purple-200 hover:bg-purple-50"
+            onClick={() => { setGenerationResult(null); setGenerateOpen(true); }}
+            disabled={!activeTemplate}
+          >
+            <Sparkles className="h-4 w-4 mr-1.5" />
+            <span className="hidden sm:inline">Darslar yaratish</span>
+          </Button>
+          <Button asChild size="sm" className="shrink-0">
+            <Link href={backPath}>Tayyor</Link>
           </Button>
         </div>
-      </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 mt-5 flex gap-5">
-
-        {/* ── Left sidebar: class list ── */}
-        <aside className="hidden lg:flex flex-col w-52 shrink-0 gap-1">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 px-2">
-            Sinflar
-          </p>
-          {classes.map((cls, idx) => {
-            const pct = cls.maxSlots > 0 ? Math.round((cls.slotCount / cls.maxSlots) * 100) : 0;
-            const isSelected = idx === selectedClassIndex;
+        {/* Day tabs */}
+        <div className="flex border-t border-gray-100">
+          {DAY_KEYS.map((key, idx) => {
+            const isSelected = idx === dayIdx;
+            const count = allSlots.filter(s => s.day_of_week === key).length;
             return (
               <button
-                key={cls.id}
-                onClick={() => setSelectedClassIndex(idx)}
+                key={key}
+                onClick={() => setDayIdx(idx)}
                 className={cn(
-                  'w-full text-left px-3 py-2.5 rounded-lg transition-all text-sm',
+                  'flex-1 py-2.5 px-2 text-center text-xs font-medium transition-all border-b-2',
                   isSelected
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-700 hover:bg-gray-100'
+                    ? 'border-blue-600 text-blue-700 bg-blue-50'
+                    : 'border-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700'
                 )}
               >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-medium">{cls.name}</span>
-                  <span className={cn('text-xs', isSelected ? 'text-blue-100' : 'text-gray-400')}>
-                    {cls.slotCount}
+                <span className="block">{DAY_SHORT[idx]}</span>
+                {count > 0 && (
+                  <span className={cn(
+                    'inline-block mt-0.5 text-[10px] font-bold px-1.5 rounded-full',
+                    isSelected ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500'
+                  )}>
+                    {count}
                   </span>
-                </div>
-                <div className={cn('h-1 rounded-full', isSelected ? 'bg-blue-400' : 'bg-gray-200')}>
-                  <div
-                    className={cn('h-1 rounded-full transition-all', isSelected ? 'bg-white' : 'bg-blue-500')}
-                    style={{ width: `${Math.min(pct, 100)}%` }}
-                  />
-                </div>
+                )}
               </button>
             );
           })}
-        </aside>
+        </div>
+      </div>
 
-        {/* ── Main area ── */}
-        <div className="flex-1 min-w-0 space-y-4">
+      {/* Grid container */}
+      <div className="px-4 sm:px-6 mt-5">
 
-          {/* Class selector (mobile + navigation) */}
-          <div className="flex items-center gap-3">
-            {/* Mobile: arrows */}
-            <button
-              onClick={() => setSelectedClassIndex((i) => Math.max(0, i - 1))}
-              disabled={selectedClassIndex === 0}
-              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-30 transition-colors"
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </button>
+        {/* Legend */}
+        <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-3 px-0.5">
+          <span className="font-semibold text-gray-600 text-sm mr-1">{DAY_FULL[dayIdx]}</span>
+          <span className="text-gray-200">·</span>
+          <span>Bo'sh katak → qo'shish</span>
+          <span className="text-gray-200">·</span>
+          <span>To'liq katak → tahrirlash</span>
+          <span className="text-gray-200">·</span>
+          <span className="flex items-center gap-0.5"><GripVertical className="h-3 w-3" />Sudrab o'tkazish</span>
+        </div>
 
-            <div className="flex-1">
-              <h2 className="text-xl font-bold text-gray-900">{selectedClass?.name ?? '—'}</h2>
-              <p className="text-sm text-gray-500">
-                {selectedClass?.slotCount ?? 0} ta slot kiritilgan
-              </p>
+        {slotsLoading ? (
+          <Skeleton className="h-[500px] w-full rounded-xl" />
+        ) : timeSlots.length === 0 ? (
+          <div className="bg-white rounded-xl border border-dashed border-gray-200 p-10 text-center">
+            <p className="text-gray-400 text-sm">Dars vaqtlari sozlanmagan.</p>
+            <p className="text-gray-400 text-xs mt-1">
+              Filial sozlamalaridan dars boshlanish vaqti va davomiyligini belgilang.
+            </p>
+          </div>
+        ) : (
+          <DndContext
+            sensors={sensors}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          >
+            <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+              <table
+                className="border-collapse"
+                style={{ minWidth: `${80 + (classes.length + groups.length) * 150}px` }}
+              >
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="sticky left-0 z-20 bg-gray-50 w-[80px] min-w-[80px] px-2 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wide border-r border-gray-200">
+                      Vaqt
+                    </th>
+                    {/* Class columns */}
+                    {classes.map(cls => (
+                      <th
+                        key={cls.id}
+                        className="px-2 py-2.5 text-center text-xs font-semibold border-r border-gray-100 last:border-r-0 min-w-[150px] bg-blue-50/60 text-blue-900"
+                      >
+                        <div className="truncate max-w-[130px] mx-auto" title={cls.name}>
+                          {cls.name}
+                        </div>
+                        <div className="text-[9px] font-normal text-blue-400 mt-0.5 opacity-70">
+                          {allSlots.filter(s => s.class_obj === cls.id && s.day_of_week === selectedDayKey).length} dars · Sinf
+                        </div>
+                      </th>
+                    ))}
+                    {/* Group columns */}
+                    {groups.map((grp, gIdx) => (
+                      <th
+                        key={grp.id}
+                        className={cn(
+                          'px-2 py-2.5 text-center text-xs font-semibold border-r border-gray-100 last:border-r-0 min-w-[150px] bg-violet-50/60 text-violet-900',
+                          gIdx === 0 && classes.length > 0 && 'border-l-2 border-l-violet-200'
+                        )}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          <GraduationCap className="w-3 h-3 text-violet-400 shrink-0" />
+                          <span className="truncate max-w-[110px]" title={grp.name}>{grp.name}</span>
+                        </div>
+                        <div className="text-[9px] font-normal text-violet-400 mt-0.5 opacity-70">
+                          {allSlots.filter(s => s.group === grp.id && s.day_of_week === selectedDayKey).length} dars · Guruh
+                        </div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {timeSlots.map((ts, rowIdx) => {
+                    if (ts.lesson_number === 0) {
+                      return (
+                        <tr key="lunch" className="border-y border-amber-100 bg-amber-50/60">
+                          <td className="sticky left-0 bg-amber-50 px-2 py-2 border-r border-amber-100 text-center">
+                            <div className="text-[10px] font-semibold text-amber-700">{ts.start_time}</div>
+                            <div className="text-[10px] text-amber-500">{ts.end_time}</div>
+                          </td>
+                          <td
+                            colSpan={classes.length + groups.length}
+                            className="px-4 py-2 text-center text-xs font-medium text-amber-700"
+                          >
+                            Tushlik — {ts.start_time} – {ts.end_time}
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    const rowBg = rowIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30';
+
+                    return (
+                      <tr
+                        key={ts.lesson_number}
+                        className={cn('border-b border-gray-100 last:border-b-0', rowBg)}
+                      >
+                        <td
+                          className={cn(
+                            'sticky left-0 z-10 px-2 py-2 border-r border-gray-200 text-center align-middle w-[80px] min-w-[80px]',
+                            rowBg
+                          )}
+                        >
+                          <div className="text-xs font-bold text-gray-700">
+                            {ts.lesson_number}-dars
+                          </div>
+                          <div className="text-[10px] text-gray-500 mt-0.5">{ts.start_time}</div>
+                          <div className="text-[10px] text-gray-400">{ts.end_time}</div>
+                        </td>
+
+                        {/* Class cells */}
+                        {classes.map(cls => {
+                          const slot = slotMap.get(`class-${cls.id}-${selectedDayKey}-${ts.lesson_number}`);
+                          const cellId = `${cls.id}||${selectedDayKey}||${ts.lesson_number}`;
+                          const isOtherClass = !!draggingSlot && cls.id !== draggingSlot.class_obj;
+                          return (
+                            <td
+                              key={cls.id}
+                              className={cn(
+                                'border-r border-gray-100 last:border-r-0 min-w-[150px] p-1.5 align-top transition-opacity',
+                                isOtherClass && 'opacity-30 pointer-events-none'
+                              )}
+                            >
+                              <DroppableCell cellId={cellId} isDragging={!!draggingSlot && !isOtherClass}>
+                                {slot ? (
+                                  <DraggableFilledCell
+                                    slot={slot}
+                                    onClick={() => openEdit(slot)}
+                                    onDelete={() => setDeleteTarget(slot)}
+                                    isDraggingThis={draggingSlot?.id === slot.id}
+                                  />
+                                ) : (
+                                  <EmptyCell
+                                    onClick={() => openCreate('class', cls.id, cls.name, ts)}
+                                    variant="class"
+                                  />
+                                )}
+                              </DroppableCell>
+                            </td>
+                          );
+                        })}
+
+                        {/* Group cells */}
+                        {groups.map((grp, gIdx) => {
+                          const slot = slotMap.get(`group-${grp.id}-${selectedDayKey}-${ts.lesson_number}`);
+                          return (
+                            <td
+                              key={grp.id}
+                              className={cn(
+                                'border-r border-gray-100 last:border-r-0 min-w-[150px] p-1.5 align-top',
+                                gIdx === 0 && classes.length > 0 && 'border-l-2 border-l-violet-200'
+                              )}
+                            >
+                              {slot ? (
+                                <DraggableFilledCell
+                                  slot={slot}
+                                  onClick={() => openEdit(slot)}
+                                  onDelete={() => setDeleteTarget(slot)}
+                                  isDraggingThis={false}
+                                />
+                              ) : (
+                                <EmptyCell
+                                  onClick={() => openCreate('group', grp.id, grp.name, ts)}
+                                  variant="group"
+                                />
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
 
-            <button
-              onClick={() => setSelectedClassIndex((i) => Math.min(classes.length - 1, i + 1))}
-              disabled={selectedClassIndex >= classes.length - 1}
-              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-30 transition-colors"
-            >
-              <ChevronRight className="h-5 w-5" />
-            </button>
+            <DragOverlay>
+              {draggingSlot && (
+                <div className={cn(
+                  'rounded-lg border-l-[3px] px-2 py-2 text-xs shadow-xl opacity-95 w-[150px]',
+                  subjectColor(draggingSlot.subject_name ?? draggingSlot.group_name ?? '')
+                )}>
+                  <div className="font-semibold text-gray-800 truncate">
+                    {draggingSlot.subject_name ?? draggingSlot.group_name ?? 'Fan'}
+                  </div>
+                  {draggingSlot.teacher_name && (
+                    <div className="text-gray-500 truncate text-[10px]">{draggingSlot.teacher_name}</div>
+                  )}
+                </div>
+              )}
+            </DragOverlay>
+          </DndContext>
+        )}
+      </div>
 
-            {/* Mobile: class selector dropdown */}
-            <div className="lg:hidden">
+      {/* ── Slot Dialog (Create / Edit) ── */}
+      <Dialog open={!!dialog} onOpenChange={open => { if (!open) closeDialog(); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {dialog?.mode === 'create' ? 'Dars qo\'shish' : 'Darsni tahrirlash'}
+            </DialogTitle>
+            <DialogDescription>
+              {dialog?.mode === 'create' && dialog.slotType === 'class'
+                ? `${dialog.className} · ${DAY_FULL[dayIdx]} · ${dialog.timeSlot.start_time}–${dialog.timeSlot.end_time}`
+                : dialog?.mode === 'create' && dialog.slotType === 'group'
+                ? `${dialog.groupName} (guruh) · ${DAY_FULL[dayIdx]} · ${dialog.timeSlot.start_time}–${dialog.timeSlot.end_time}`
+                : dialog?.mode === 'edit'
+                ? `${dialog.slot.class_name ?? dialog.slot.group_name ?? ''} · ${DAY_FULL[dayIdx]} · ${dialog.slot.lesson_number}-dars`
+                : ''}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Fan — only for class slots */}
+            {(dialog?.mode === 'edit' && dialog.slot.class_obj) || (dialog?.mode === 'create' && dialog.slotType === 'class') ? (
+              <div className="space-y-1.5">
+                <Label>
+                  Fan <span className="text-red-500">*</span>
+                </Label>
+                <Select
+                  value={subjectId}
+                  onValueChange={setSubjectId}
+                  disabled={subjectsLoading || isSaving}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={subjectsLoading ? 'Yuklanmoqda…' : 'Fanni tanlang'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {subjectsLoading ? (
+                      <div className="py-4 flex justify-center">
+                        <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                      </div>
+                    ) : classSubjects.length === 0 ? (
+                      <div className="py-4 text-center text-xs text-gray-400">
+                        Bu sinf uchun fan biriktirilmagan
+                      </div>
+                    ) : (
+                      classSubjects.map(cs => (
+                        <SelectItem key={cs.id} value={cs.id}>
+                          {cs.subject_name}
+                          {cs.teacher_name ? ` — ${cs.teacher_name}` : ''}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              /* Group slot info */
+              dialog?.mode === 'create' && dialog.slotType === 'group' && (
+                <div className="flex items-center gap-2 bg-violet-50 rounded-lg px-3 py-2 border border-violet-100">
+                  <GraduationCap className="w-4 h-4 text-violet-500 shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-violet-800">{dialog.groupName}</p>
+                    <p className="text-[11px] text-violet-500">Guruh darsi — fan guruhga biriktirilgan</p>
+                  </div>
+                </div>
+              )
+            )}
+
+            {/* Xona */}
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1">
+                Xona
+                <span className="text-[11px] text-gray-400 font-normal">(ixtiyoriy)</span>
+              </Label>
               <Select
-                value={selectedClassIndex.toString()}
-                onValueChange={(v) => setSelectedClassIndex(Number(v))}
+                value={roomId ?? '_none'}
+                onValueChange={v => setRoomId(v === '_none' ? undefined : v)}
+                disabled={roomsLoading || isSaving}
               >
-                <SelectTrigger className="w-36 h-8 text-sm">
-                  <SelectValue />
+                <SelectTrigger>
+                  <SelectValue placeholder="Xona tanlang" />
                 </SelectTrigger>
                 <SelectContent>
-                  {classes.map((cls, idx) => (
-                    <SelectItem key={cls.id} value={idx.toString()}>
-                      {cls.name}
+                  <SelectItem value="_none">Xonasiz</SelectItem>
+                  {rooms.filter(r => r?.id).map(r => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.name}
+                      {r.room_type_display ? ` (${r.room_type_display})` : ''}
+                      {r.capacity ? ` · ${r.capacity} o'rin` : ''}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -466,126 +863,111 @@ export default function TimetableEditPage() {
             </div>
           </div>
 
-          {/* Grid */}
-          {slotsLoading ? (
-            <Skeleton className="h-[500px] w-full rounded-xl" />
-          ) : selectedClass ? (
-            <WeeklyClassGrid
-              slots={allSlots}
-              timeSlots={timeSlots}
-              classId={selectedClass.id}
-              onCellClick={openCreate}
-              onSlotEdit={openEdit}
-              onSlotDelete={(slot) => setDeleteDialog({ open: true, slot })}
-            />
-          ) : null}
-
-          {/* Legend */}
-          <div className="text-xs text-gray-400 flex items-center gap-4 px-1">
-            <span>Katakchani bosing → dars qo'shish</span>
-            <span>•</span>
-            <span>Kalamush belgisini olib boring → tahrirlash</span>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Create Slot Dialog ── */}
-      <Dialog
-        open={createDialog.open}
-        onOpenChange={(o) => { if (!o) setCreateDialog({ open: false }); }}
-      >
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Dars qo'shish</DialogTitle>
-            <DialogDescription>
-              {selectedClass?.name} · {dayLabel(createDialog.dayOfWeek)} · {createDialog.timeSlot?.label}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            <SubjectSelect
-              subjects={classSubjects}
-              loading={subjectsLoading}
-              value={selectedSubjectId}
-              onChange={setSelectedSubjectId}
-            />
-            <RoomSelect
-              rooms={rooms}
-              loading={roomsLoading}
-              value={selectedRoomId}
-              onChange={(v) => setSelectedRoomId(v === '_none' ? undefined : v)}
-            />
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateDialog({ open: false })}>
-              Bekor qilish
+          <DialogFooter className="gap-2">
+            {dialog?.mode === 'edit' && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-red-600 hover:text-red-700 border-red-200 mr-auto"
+                onClick={() => {
+                  if (dialog.slot) setDeleteTarget(dialog.slot);
+                  closeDialog();
+                }}
+                disabled={isSaving}
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                O'chirish
+              </Button>
+            )}
+            <Button variant="outline" onClick={closeDialog} disabled={isSaving}>
+              Bekor
             </Button>
             <Button
-              onClick={handleCreate}
-              disabled={!selectedSubjectId || createMutation.isPending}
+              onClick={handleSave}
+              disabled={
+                isSaving ||
+                (dialog?.mode === 'create' && dialog.slotType === 'class' && !subjectId) ||
+                (dialog?.mode === 'edit' && !!dialog.slot.class_obj && !subjectId)
+              }
             >
-              {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Qo'shish
+              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {dialog?.mode === 'create' ? 'Qo\'shish' : 'Saqlash'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ── Edit Slot Dialog ── */}
-      <Dialog
-        open={editDialog.open}
-        onOpenChange={(o) => { if (!o) setEditDialog({ open: false }); }}
-      >
-        <DialogContent className="max-w-sm">
+      {/* ── Conflict errors dialog ── */}
+      <Dialog open={!!conflictErrors} onOpenChange={open => { if (!open) setConflictErrors(null); }}>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Darsni tahrirlash</DialogTitle>
+            <DialogTitle className="flex items-center gap-2 text-red-700">
+              <AlertCircle className="h-5 w-5" />
+              Jadval konflikti
+            </DialogTitle>
             <DialogDescription>
-              {editDialog.slot?.class_name} · {dayLabelFromStr(editDialog.slot?.day_of_week)} · {editDialog.slot?.lesson_number}-dars
+              Darsni ko'chirib bo'lmadi — quyidagi to'qnashuvlar aniqlandi
             </DialogDescription>
           </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            <SubjectSelect
-              subjects={classSubjects}
-              loading={subjectsLoading}
-              value={selectedSubjectId}
-              onChange={setSelectedSubjectId}
-            />
-            <RoomSelect
-              rooms={rooms}
-              loading={roomsLoading}
-              value={selectedRoomId}
-              onChange={(v) => setSelectedRoomId(v === '_none' ? undefined : v)}
-            />
+          <div className="space-y-3 py-2">
+            {conflictErrors?.map((c, i) => (
+              <div key={i} className="p-3 rounded-lg border bg-red-50 border-red-200">
+                <div className="flex items-start gap-2">
+                  <span className={cn(
+                    'text-[10px] font-bold px-1.5 py-0.5 rounded uppercase shrink-0 mt-0.5',
+                    c.type === 'teacher' ? 'bg-orange-100 text-orange-700' :
+                    c.type === 'room'    ? 'bg-blue-100 text-blue-700' :
+                    'bg-gray-100 text-gray-700'
+                  )}>
+                    {c.type === 'teacher' ? 'O\'qituvchi' : c.type === 'room' ? 'Xona' : c.type}
+                  </span>
+                  <div>
+                    <p className="text-sm text-gray-800">{c.message}</p>
+                    {c.details && Object.keys(c.details).length > 0 && (
+                      <div className="mt-1 text-xs text-gray-500 space-y-0.5">
+                        {Object.entries(c.details).map(([k, v]) => (
+                          <div key={k}>
+                            <span className="font-medium capitalize">{k}:</span> {String(v)}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
-
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditDialog({ open: false })}>
-              Bekor qilish
-            </Button>
-            <Button
-              onClick={handleUpdate}
-              disabled={!selectedSubjectId || updateMutation.isPending}
-            >
-              {updateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Saqlash
-            </Button>
+            <Button onClick={() => setConflictErrors(null)}>Tushunarli</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ── Delete Dialog ── */}
+      {/* ── Generate lessons ── */}
+      {activeTemplate && (
+        <GenerateLessonsDialog
+          open={generateOpen}
+          onOpenChange={(open) => { setGenerateOpen(open); if (!open) setGenerationResult(null); }}
+          currentTemplateId={activeTemplate.id}
+          currentTemplateName={activeTemplate.name}
+          onSubmit={handleGenerateSubmit}
+          isGenerating={generateMutation.isPending}
+          generationResult={generationResult}
+        />
+      )}
+
+      {/* ── Delete confirm ── */}
       <AlertDialog
-        open={deleteDialog.open}
-        onOpenChange={(o) => { if (!o) setDeleteDialog({ open: false }); }}
+        open={!!deleteTarget}
+        onOpenChange={open => { if (!open) setDeleteTarget(null); }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Darsni o'chirish</AlertDialogTitle>
             <AlertDialogDescription>
-              <span className="font-semibold">{deleteDialog.slot?.subject_name}</span> darsini{' '}
-              {dayLabelFromStr(deleteDialog.slot?.day_of_week)}, {deleteDialog.slot?.lesson_number}-dars vaqtidan olib tashlansinmi?
+              <span className="font-semibold">{deleteTarget?.subject_name}</span>{' '}
+              darsi {deleteTarget?.class_name && `(${deleteTarget.class_name})`} jadvaldan olib tashlanadi.
+              Bu kun uchun rejalashtirilgan kelajakdagi darslar ham o'chirilishi mumkin.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -605,110 +987,120 @@ export default function TimetableEditPage() {
   );
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
+// ── DroppableCell ─────────────────────────────────────────────────────────────
 
-function SubjectSelect({
-  subjects,
-  loading,
-  value,
-  onChange,
+function DroppableCell({
+  cellId,
+  isDragging,
+  children,
 }: {
-  subjects: ClassSubject[];
-  loading: boolean;
-  value?: string;
-  onChange: (v: string) => void;
+  cellId: string;
+  isDragging: boolean;
+  children: React.ReactNode;
 }) {
-  const valid = subjects.filter((cs) => cs?.id);
+  const { setNodeRef, isOver } = useDroppable({ id: cellId });
   return (
-    <div className="space-y-1.5">
-      <Label>Fan <span className="text-red-500">*</span></Label>
-      <Select value={value} onValueChange={onChange} disabled={loading}>
-        <SelectTrigger>
-          <SelectValue placeholder={loading ? 'Yuklanmoqda...' : 'Fanni tanlang'} />
-        </SelectTrigger>
-        <SelectContent>
-          {loading ? (
-            <div className="py-4 text-center text-sm text-gray-400">
-              <Loader2 className="h-4 w-4 animate-spin mx-auto" />
-            </div>
-          ) : valid.length === 0 ? (
-            <div className="py-4 text-center text-sm text-gray-400">
-              Bu sinf uchun fan biriktirilmagan
-            </div>
-          ) : (
-            valid.map((cs) => (
-              <SelectItem key={cs.id} value={cs.id}>
-                {cs.subject_name ?? "Fan"}{cs.teacher_name ? ` — ${cs.teacher_name}` : ''}
-              </SelectItem>
-            ))
-          )}
-        </SelectContent>
-      </Select>
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'min-h-[60px] rounded-lg transition-colors',
+        isDragging && !isOver && 'bg-blue-50/20',
+        isOver && 'bg-blue-100/60 ring-2 ring-blue-300 ring-inset'
+      )}
+    >
+      {children}
     </div>
   );
 }
 
-function RoomSelect({
-  rooms,
-  loading,
-  value,
-  onChange,
+// ── DraggableFilledCell ───────────────────────────────────────────────────────
+
+function DraggableFilledCell({
+  slot,
+  onClick,
+  onDelete,
+  isDraggingThis,
 }: {
-  rooms: Room[];
-  loading: boolean;
-  value?: string;
-  onChange: (v: string) => void;
+  slot: TimetableSlot;
+  onClick: () => void;
+  onDelete: () => void;
+  isDraggingThis: boolean;
 }) {
+  const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: slot.id });
+  const color = subjectColor(slot.subject_name ?? '');
+
+  const style = transform
+    ? { transform: `translate(${transform.x}px, ${transform.y}px)` }
+    : undefined;
+
   return (
-    <div className="space-y-1.5">
-      <Label>Xona <span className="text-xs text-gray-400 font-normal">(ixtiyoriy)</span></Label>
-      <Select value={value ?? '_none'} onValueChange={onChange} disabled={loading}>
-        <SelectTrigger>
-          <SelectValue placeholder="Xona tanlang" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="_none">Xonasiz</SelectItem>
-          {rooms
-            .filter((r) => r?.id)
-            .map((r) => (
-              <SelectItem key={r.id} value={r.id}>
-                {r.name}{r.room_type_display ? ` (${r.room_type_display})` : ''}{r.capacity ? ` · ${r.capacity} o'rin` : ''}
-              </SelectItem>
-            ))}
-        </SelectContent>
-      </Select>
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      onClick={onClick}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); }}
+      className={cn(
+        'group relative w-full text-left rounded-lg border-l-[3px] px-2 py-2 text-xs transition-all min-h-[60px]',
+        'cursor-grab active:cursor-grabbing select-none',
+        color,
+        isDraggingThis && 'opacity-30'
+      )}
+    >
+      {/* Delete button — stopPropagation both click and pointerDown so it doesn't start a drag */}
+      <button
+        type="button"
+        onClick={e => { e.stopPropagation(); onDelete(); }}
+        onPointerDown={e => e.stopPropagation()}
+        className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-red-100 text-red-500 z-10"
+        title="O'chirish"
+      >
+        <Trash2 className="h-3 w-3" />
+      </button>
+
+      {/* Edit icon hint */}
+      <div className="absolute top-1 right-6 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-blue-100 text-blue-500 pointer-events-none">
+        <Edit2 className="h-3 w-3" />
+      </div>
+
+      <div className="font-semibold text-gray-800 leading-tight pr-8 truncate">
+        {slot.subject_name ?? slot.group_name ?? 'Fan'}
+      </div>
+      {slot.teacher_name && (
+        <div className="text-gray-500 truncate text-[10px] mt-0.5">
+          {slot.teacher_name}
+        </div>
+      )}
+      {slot.room_name && (
+        <div className="text-gray-400 truncate text-[10px]">
+          {slot.room_name}
+        </div>
+      )}
     </div>
   );
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── EmptyCell ─────────────────────────────────────────────────────────────────
 
-function cn(...classes: (string | boolean | undefined)[]) {
-  return classes.filter(Boolean).join(' ');
-}
-
-const DAY_LABELS: Record<number, string> = {
-  1: 'Dushanba', 2: 'Seshanba', 3: 'Chorshanba',
-  4: 'Payshanba', 5: 'Juma', 6: 'Shanba', 7: 'Yakshanba',
-};
-
-const DAY_STR_LABELS: Record<string, string> = {
-  monday: 'Dushanba', tuesday: 'Seshanba', wednesday: 'Chorshanba',
-  thursday: 'Payshanba', friday: 'Juma', saturday: 'Shanba', sunday: 'Yakshanba',
-};
-
-function dayLabel(day?: number) {
-  return day ? (DAY_LABELS[day] ?? '') : '';
-}
-
-function dayLabelFromStr(day?: string) {
-  return day ? (DAY_STR_LABELS[day] ?? day) : '';
-}
-
-function dayOfWeekToNumber(day?: string): number {
-  const map: Record<string, number> = {
-    monday: 1, tuesday: 2, wednesday: 3,
-    thursday: 4, friday: 5, saturday: 6, sunday: 7,
-  };
-  return day ? (map[day] ?? 1) : 1;
+function EmptyCell({ onClick, variant = 'class' }: { onClick: () => void; variant?: 'class' | 'group' }) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'w-full min-h-[60px] rounded-lg border-2 border-dashed flex items-center justify-center transition-all group',
+        variant === 'class'
+          ? 'border-gray-200 hover:border-blue-300 hover:bg-blue-50/60'
+          : 'border-violet-100 hover:border-violet-300 hover:bg-violet-50/40'
+      )}
+      title="Dars qo'shish"
+    >
+      <Plus className={cn(
+        'h-4 w-4 transition-colors',
+        variant === 'class'
+          ? 'text-gray-300 group-hover:text-blue-500'
+          : 'text-violet-200 group-hover:text-violet-500'
+      )} />
+    </button>
+  );
 }

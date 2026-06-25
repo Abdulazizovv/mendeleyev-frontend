@@ -63,6 +63,7 @@ export interface ClassStudent {
   membership: string;
   membership_id: string;
   student_id: string;
+  student_profile_id?: string | null;
   student_name: string;
   student_phone: string;
   student_balance: number;
@@ -210,44 +211,47 @@ export interface BranchSettings {
   id: string;
   branch_id: string;
   branch_name: string;
-  
-  // Dars jadvali sozlamalari
+
+  // Dars jadvali
   lesson_duration_minutes: number;
   break_duration_minutes: number;
-  school_start_time: string; // HH:MM:SS
-  school_end_time: string; // HH:MM:SS
-  daily_lesson_start_time?: string; // HH:MM:SS - darslar boshlanish vaqti
-  daily_lesson_end_time?: string; // HH:MM:SS - darslar tugash vaqti (school_end_time dan kech bo'lishi mumkin)
-  max_lessons_per_day?: number; // Kunlik maksimal darslar soni
-  
-  // Tushlik vaqti sozlamalari
-  lunch_break_start?: string; // HH:MM:SS, masalan "12:25:00"
-  lunch_break_end?: string; // HH:MM:SS, masalan "13:00:00"
-  
-  // Akademik sozlamalar
-  academic_year_start_month: number; // 1-12
-  academic_year_end_month: number; // 1-12
-  
-  // Moliya sozlamalari
+  school_start_time: string;        // HH:MM:SS — umumiy maktab boshlanishi
+  school_end_time: string;          // HH:MM:SS — umumiy maktab tugashi
+  daily_lesson_start_time: string;  // HH:MM:SS — 1-dars boshlanish vaqti
+  daily_lesson_end_time: string;    // HH:MM:SS — oxirgi dars tugash vaqti
+  max_lessons_per_day: number;
+
+  // Tushlik
+  lunch_break_start: string | null; // HH:MM:SS
+  lunch_break_end: string | null;   // HH:MM:SS
+
+  // Ish kunlari
+  working_days: string[]; // ['monday','tuesday',...]
+
+  // Akademik
+  academic_year_start_month: number;
+  academic_year_end_month: number;
+
+  // Moliya
   currency: string;
   currency_symbol: string;
-  
-  // Maosh hisoblash sozlamalari
-  salary_calculation_time: string; // HH:MM:SS
+
+  // Maosh
+  salary_calculation_time: string;
   auto_calculate_salary: boolean;
-  salary_calculation_day: number; // 1-31
-  
+  salary_calculation_day: number;
+
   // To'lov va chegirmalar
-  late_payment_penalty_percent: string; // decimal
-  early_payment_discount_percent: string; // decimal
-  
-  // Ish vaqti sozlamalari
-  work_days_per_week: number; // 1-7
+  late_payment_penalty_percent: string;
+  early_payment_discount_percent: string;
+
+  // Ish vaqti
+  work_days_per_week: number;
   work_hours_per_day: number;
-  
-  // Qo'shimcha sozlamalar
+
+  // Qo'shimcha
   additional_settings: Record<string, any>;
-  
+
   created_at: string;
   updated_at: string;
 }
@@ -260,8 +264,9 @@ export interface UpdateBranchSettingsPayload {
   daily_lesson_start_time?: string;
   daily_lesson_end_time?: string;
   max_lessons_per_day?: number;
-  lunch_break_start?: string;
-  lunch_break_end?: string;
+  lunch_break_start?: string | null;
+  lunch_break_end?: string | null;
+  working_days?: string[];
   academic_year_start_month?: number;
   academic_year_end_month?: number;
   currency?: string;
@@ -1100,6 +1105,7 @@ export interface StudentGradeStatistics {
 
 export type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused' | 'sick';
 
+
 export interface StudentAttendanceRecord {
   id: string;
   attendance: string;
@@ -1107,22 +1113,27 @@ export interface StudentAttendanceRecord {
   student_name?: string;
   status: AttendanceStatus;
   notes?: string;
+  grade?: number | null;
   marked_at: string;
   created_at: string;
 }
 
 export interface LessonAttendance {
   id: string;
-  class_subject: string;
+  class_subject?: string | null;
   class_subject_name?: string;
   class_name?: string;
+  group?: string | null;
+  group_name?: string;
   subject_name?: string;
-  lesson?: string;
+  teacher_name?: string;
+  lesson?: string | null;
   date: string;
   lesson_number?: number;
   is_locked: boolean;
   locked_at?: string;
   locked_by?: string;
+  notes?: string;
   records: StudentAttendanceRecord[];
   total_count?: number;
   present_count?: number;
@@ -1136,11 +1147,13 @@ export interface BulkAttendanceRecord {
   student_id: string;
   status: AttendanceStatus;
   notes?: string;
+  grade?: number;
 }
 
 export interface BulkAttendanceMarkRequest {
   attendance_id?: string;
   class_subject_id?: string;
+  group_id?: string;
   date?: string;
   lesson_number?: number;
   lesson_id?: string;

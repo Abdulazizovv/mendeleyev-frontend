@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useMemo } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/hooks/useAuth";
 import {
@@ -12,9 +12,16 @@ import {
 import { formatCurrency, formatRelativeDate } from "@/lib/translations";
 import type { BranchType } from "@/types/auth";
 import type { Transaction } from "@/types/finance";
+import type { BranchSettings } from "@/types/school";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { format, addDays, startOfWeek } from "date-fns";
+import { uz } from "date-fns/locale";
+import { parse, addMinutes, format as fmtDate } from "date-fns";
+import { branchApi } from "@/lib/api";
+import { useLessonInstances } from "@/lib/features/schedule/hooks";
+import { useQuery } from "@tanstack/react-query";
 import {
   Users,
   GraduationCap,
@@ -99,6 +106,208 @@ const TX_TYPE: Record<string, { label: string; icon: React.ElementType; iconCls:
   refund:   { label: "Qaytarish", icon: RotateCcw,       iconCls: "text-purple-600",  amountCls: "text-purple-700",  sign: "+" },
   transfer: { label: "O'tkazma",  icon: ArrowLeftRight,  iconCls: "text-gray-600",    amountCls: "text-gray-700",    sign: "" },
 };
+
+// ── Dashboard Schedule Widget ─────────────────────────────────────────────────
+
+const SCHED_DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
+const SCHED_DAY_SHORT = ['Du', 'Se', 'Cho', 'Pay', 'Ju', 'Shan'];
+
+interface SchedTimeSlot { lesson_number: number; start_time: string; end_time: string; }
+
+function computeSchedSlots(s: BranchSettings): SchedTimeSlot[] {
+  const result: SchedTimeSlot[] = [];
+  try {
+    const startRaw = s.daily_lesson_start_time || s.school_start_time;
+    const endRaw   = s.daily_lesson_end_time   || s.school_end_time;
+    const start  = parse(startRaw.substring(0, 5), 'HH:mm', new Date());
+    const end    = parse(endRaw.substring(0, 5),   'HH:mm', new Date());
+    const lStart = s.lunch_break_start ? parse(s.lunch_break_start.substring(0, 5), 'HH:mm', new Date()) : null;
+    const lEnd   = s.lunch_break_end   ? parse(s.lunch_break_end.substring(0, 5),   'HH:mm', new Date()) : null;
+    let cur = start; let num = 1; let lunchAdded = false;
+    while (cur < end) {
+      const slotEnd = addMinutes(cur, s.lesson_duration_minutes);
+      if (slotEnd > end) break;
+      if (lStart && lEnd && !lunchAdded && cur >= lStart) {
+        lunchAdded = true; cur = lEnd; continue;
+      }
+      if (lStart && lEnd && !lunchAdded && slotEnd > lStart) {
+        lunchAdded = true; cur = lEnd; continue;
+      }
+      result.push({ lesson_number: num, start_time: fmtDate(cur, 'HH:mm'), end_time: fmtDate(slotEnd, 'HH:mm') });
+      num++;
+      cur = addMinutes(slotEnd, s.break_duration_minutes);
+    }
+  } catch { /* */ }
+  return result;
+}
+
+const SCHED_COLORS = [
+  'border-l-blue-400 bg-blue-50/70',
+  'border-l-emerald-400 bg-emerald-50/70',
+  'border-l-violet-400 bg-violet-50/70',
+  'border-l-rose-400 bg-rose-50/70',
+  'border-l-amber-400 bg-amber-50/70',
+  'border-l-cyan-400 bg-cyan-50/70',
+  'border-l-orange-400 bg-orange-50/70',
+  'border-l-teal-400 bg-teal-50/70',
+];
+function schedColor(name: string) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = ((h << 5) - h + name.charCodeAt(i)) | 0;
+  return SCHED_COLORS[Math.abs(h) % SCHED_COLORS.length];
+}
+
+function DashboardScheduleWidget({ branchId }: { branchId: string }) {
+  const today = new Date();
+  const weekStart = startOfWeek(today, { weekStartsOn: 1 });
+  const [dayIdx, setDayIdx] = useState<number>(() => {
+    const d = today.getDay();
+    return d === 0 ? 5 : Math.min(d - 1, 5);
+  });
+
+  const weekDays = useMemo(() => Array.from({ length: 6 }, (_, i) => addDays(weekStart, i)), []);
+  const selectedDateStr = format(weekDays[dayIdx], 'yyyy-MM-dd');
+  const todayStr        = format(today, 'yyyy-MM-dd');
+
+  const { data: branchSettings } = useQuery({
+    queryKey: ['branch-settings', branchId],
+    queryFn:  () => branchApi.getBranchSettings(branchId),
+    enabled:  !!branchId,
+  });
+
+  const { data: lessonsData, isLoading } = useLessonInstances(branchId, {
+    date_from: selectedDateStr,
+    date_to:   selectedDateStr,
+  });
+  const lessons = lessonsData?.results ?? [];
+
+  const timeSlots = useMemo(
+    () => (branchSettings ? computeSchedSlots(branchSettings) : []),
+    [branchSettings]
+  );
+
+  const lessonByNum = useMemo(() => {
+    const m = new Map<number, typeof lessons[0]>();
+    lessons.forEach(l => { if (l.lesson_number) m.set(l.lesson_number, l); });
+    return m;
+  }, [lessons]);
+
+  return (
+    <Card className="overflow-hidden">
+      <CardHeader className="pb-0 pt-4 px-5">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-blue-500" />
+            Dars jadvali
+          </CardTitle>
+          <Link href="/school/schedule" className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+            To'liq jadval <ArrowRight className="w-3 h-3" />
+          </Link>
+        </div>
+
+        {/* Day tabs */}
+        <div className="grid grid-cols-6 mt-3 gap-1">
+          {SCHED_DAY_KEYS.map((_, idx) => {
+            const day        = weekDays[idx];
+            const isSelected = idx === dayIdx;
+            const isTodayTab = format(day, 'yyyy-MM-dd') === todayStr;
+            return (
+              <button
+                key={idx}
+                onClick={() => setDayIdx(idx)}
+                className={`relative flex flex-col items-center py-2 rounded-xl transition-all text-center ${
+                  isSelected
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : isTodayTab
+                    ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                    : 'hover:bg-gray-50 text-gray-500'
+                }`}
+              >
+                <span className="text-[9px] font-bold uppercase tracking-wider opacity-80">
+                  {SCHED_DAY_SHORT[idx]}
+                </span>
+                <span className="text-base font-bold leading-tight tabular-nums">
+                  {format(day, 'd')}
+                </span>
+                {isTodayTab && !isSelected && (
+                  <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-blue-500" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </CardHeader>
+
+      <CardContent className="px-4 pb-4 pt-3">
+        {isLoading ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}
+          </div>
+        ) : timeSlots.length === 0 || lessons.length === 0 ? (
+          <div className="text-center py-8 text-gray-400">
+            <Calendar className="w-8 h-8 mx-auto mb-2 opacity-30" />
+            <p className="text-xs">
+              {lessons.length === 0 ? 'Bu kunda dars rejalashtirilmagan' : 'Dars vaqtlari sozlanmagan'}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            {timeSlots.map(ts => {
+              const lesson = lessonByNum.get(ts.lesson_number);
+              if (!lesson) return null;
+              const isCancelled = lesson.status === 'cancelled' || lesson.status === 'canceled';
+              const isLive      = lesson.status === 'in_progress';
+              const isDone      = lesson.status === 'completed';
+              return (
+                <div
+                  key={ts.lesson_number}
+                  className={`flex items-center gap-2.5 border-l-[3px] rounded-r-lg px-2.5 py-2 transition-colors ${
+                    isCancelled ? 'border-l-red-300 bg-red-50/40 opacity-60' :
+                    isLive      ? `${schedColor(lesson.subject_name ?? '')} ring-1 ring-blue-200` :
+                    isDone      ? `${schedColor(lesson.subject_name ?? '')} opacity-60` :
+                                  schedColor(lesson.subject_name ?? '')
+                  }`}
+                >
+                  {/* Lesson number badge */}
+                  <span className={`text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
+                    isLive ? 'bg-blue-600 text-white' :
+                    isDone ? 'bg-gray-200 text-gray-500' :
+                             'bg-white/70 text-gray-600'
+                  }`}>
+                    {ts.lesson_number}
+                  </span>
+
+                  {/* Time */}
+                  <span className="text-[10px] font-mono text-gray-400 w-[68px] shrink-0">
+                    {ts.start_time} – {ts.end_time}
+                  </span>
+
+                  {/* Subject + class */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-gray-800 truncate">
+                      {lesson.subject_name ?? 'Dars'}
+                    </p>
+                    <p className="text-[10px] text-gray-500 truncate">
+                      {[lesson.class_name, lesson.teacher_name, lesson.room_name].filter(Boolean).join(' · ')}
+                    </p>
+                  </div>
+
+                  {/* Status dot */}
+                  {isLive && (
+                    <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shrink-0" />
+                  )}
+                  {isDone && (
+                    <span className="text-[9px] text-gray-400 shrink-0">✓</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 // ── Quick actions ─────────────────────────────────────────────────────────────
 
@@ -430,39 +639,8 @@ export default function SchoolDashboard() {
         </CardContent>
       </Card>
 
-      {/* ── Dars jadvali (placeholder) ── */}
-      <Card className="overflow-hidden">
-        <CardHeader className="pb-0 pt-4 px-5">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-blue-500" />
-              Dars jadvali
-            </CardTitle>
-            <Link href="/school/schedule" className="text-xs text-blue-600 hover:underline flex items-center gap-1">
-              To'liq jadval <ArrowRight className="w-3 h-3" />
-            </Link>
-          </div>
-        </CardHeader>
-        <CardContent className="px-5 pb-5 pt-3">
-          <div className="border border-dashed border-amber-200 bg-amber-50/50 rounded-xl flex items-center gap-4 px-5 py-4">
-            <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center shrink-0 text-lg">
-              🚧
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-amber-900">Bu bo'lim ishlab chiqilmoqda</p>
-              <p className="text-xs text-amber-700 mt-0.5">
-                Tez orada bugungi darslar, vaqt jadvali va dars holatlari shu yerda ko'rinadi
-              </p>
-            </div>
-            <Link
-              href="/school/schedule"
-              className="shrink-0 text-xs bg-white border border-amber-200 text-amber-800 hover:bg-amber-50 px-3 py-1.5 rounded-lg transition-colors font-medium"
-            >
-              Jadvalga o'tish
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
+      {/* ── Dars jadvali widget ── */}
+      {branchId && <DashboardScheduleWidget branchId={branchId} />}
 
       {/* ── Finance (full width) ── */}
       <Card>

@@ -1,9 +1,11 @@
 "use client";
 
-import React from "react";
+import React, { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/hooks";
 import { schoolApi } from "@/lib/api";
+import { branchApi } from "@/lib/api";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Group, Subject, SubjectLevel, CreateGroupRequest } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -50,22 +52,22 @@ import {
   Trash2,
   Search,
   Loader2,
-  BookOpen,
   User,
   RefreshCcw,
   ChevronRight,
   CheckCircle2,
   XCircle,
   GraduationCap,
+  AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
-import { extractApiError } from "@/lib/error-messages";
 import { formatCurrency } from "@/lib/utils";
-import { staffApi } from "@/lib/api";
-import type { StaffMember } from "@/types/staff";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 type FormState = {
   name: string;
+  selectedSubjectId: string;
   subject_level: string;
   teacher: string;
   description: string;
@@ -75,6 +77,7 @@ type FormState = {
 
 const EMPTY_FORM: FormState = {
   name: "",
+  selectedSubjectId: "",
   subject_level: "",
   teacher: "",
   description: "",
@@ -82,165 +85,155 @@ const EMPTY_FORM: FormState = {
   is_active: true,
 };
 
+// ── Page ──────────────────────────────────────────────────────────────────────
+
 export default function GroupsPage() {
   const router = useRouter();
   const { currentBranch } = useAuth();
-  const branchId = currentBranch?.branch_id;
+  const branchId = currentBranch?.branch_id ?? "";
+  const queryClient = useQueryClient();
 
-  const [groups, setGroups] = React.useState<Group[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [searchQuery, setSearchQuery] = React.useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [editingGroup, setEditingGroup] = useState<Group | null>(null);
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [deleteTarget, setDeleteTarget] = useState<Group | null>(null);
 
-  const [subjects, setSubjects] = React.useState<Subject[]>([]);
-  const [levels, setLevels] = React.useState<SubjectLevel[]>([]);
-  const [teachers, setTeachers] = React.useState<StaffMember[]>([]);
+  // ── Data fetches ──────────────────────────────────────────────────────────
 
-  const [sheetOpen, setSheetOpen] = React.useState(false);
-  const [editingGroup, setEditingGroup] = React.useState<Group | null>(null);
-  const [form, setForm] = React.useState<FormState>(EMPTY_FORM);
-  const [saving, setSaving] = React.useState(false);
+  const { data: groups = [], isLoading: groupsLoading, refetch: refetchGroups } = useQuery({
+    queryKey: ["groups", branchId],
+    queryFn: () => schoolApi.getGroups(branchId),
+    enabled: !!branchId,
+  });
 
-  const [deleteTarget, setDeleteTarget] = React.useState<Group | null>(null);
-  const [deleting, setDeleting] = React.useState(false);
+  const { data: subjectsData = [] } = useQuery<Subject[]>({
+    queryKey: ["subjects", branchId, "active"],
+    queryFn: () => schoolApi.getSubjects(branchId, { is_active: true }),
+    enabled: !!branchId,
+  });
 
-  const fetchGroups = React.useCallback(async () => {
-    if (!branchId) return;
-    try {
-      setLoading(true);
-      const data = await schoolApi.getGroups(branchId);
-      setGroups(data);
-    } catch {
-      toast.error("Guruhlarni yuklashda xatolik");
-    } finally {
-      setLoading(false);
-    }
-  }, [branchId]);
+  // Faqat o'qituvchilarni olish — branchApi.getMemberships(branchId, { role: 'teacher' })
+  const { data: teachersPage } = useQuery({
+    queryKey: ["branch-teachers", branchId],
+    queryFn: () => branchApi.getMemberships(branchId, { role: "teacher", page_size: 200 }),
+    enabled: !!branchId,
+  });
+  const teachers = teachersPage?.results ?? [];
 
-  const fetchSubjects = React.useCallback(async () => {
-    if (!branchId) return;
-    try {
-      const data = await schoolApi.getSubjects(branchId, { is_active: true });
-      setSubjects(data);
-    } catch {
-      // ignore
-    }
-  }, [branchId]);
+  // Fan darajalari — faqat tanlangan fan bo'lganda yuklanadi
+  const { data: levels = [], isLoading: levelsLoading } = useQuery<SubjectLevel[]>({
+    queryKey: ["subject-levels", branchId, form.selectedSubjectId],
+    queryFn: () => schoolApi.getSubjectLevels(branchId, form.selectedSubjectId),
+    enabled: !!branchId && !!form.selectedSubjectId,
+  });
 
-  const fetchTeachers = React.useCallback(async () => {
-    if (!branchId) return;
-    try {
-      const data = await staffApi.getStaff({ branch: branchId, role: "teacher" });
-      setTeachers(data);
-    } catch {
-      // ignore
-    }
-  }, [branchId]);
+  // ── Mutations ─────────────────────────────────────────────────────────────
 
-  React.useEffect(() => {
-    fetchGroups();
-    fetchSubjects();
-    fetchTeachers();
-  }, [fetchGroups, fetchSubjects, fetchTeachers]);
+  const createMutation = useMutation({
+    mutationFn: (data: CreateGroupRequest) => schoolApi.createGroup(branchId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["groups", branchId] });
+      toast.success("Guruh yaratildi");
+      setSheetOpen(false);
+    },
+    onError: (err: any) => {
+      const detail = err?.response?.data;
+      if (typeof detail === "object") {
+        const msgs = Object.values(detail).flat().join(" ");
+        toast.error(msgs || "Yaratishda xatolik");
+      } else {
+        toast.error(detail ?? "Yaratishda xatolik");
+      }
+    },
+  });
 
-  // Load levels when subject_level subject changes
-  const selectedSubjectId = React.useMemo(() => {
-    if (!form.subject_level) return null;
-    const level = levels.find((l) => l.id === form.subject_level);
-    if (level) return level.subject;
-    return null;
-  }, [form.subject_level, levels]);
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<CreateGroupRequest> }) =>
+      schoolApi.updateGroup(branchId, id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["groups", branchId] });
+      toast.success("Guruh yangilandi");
+      setSheetOpen(false);
+    },
+    onError: (err: any) => {
+      const detail = err?.response?.data;
+      if (typeof detail === "object") {
+        const msgs = Object.values(detail).flat().join(" ");
+        toast.error(msgs || "Yangilashda xatolik");
+      } else {
+        toast.error(detail ?? "Yangilashda xatolik");
+      }
+    },
+  });
 
-  const loadLevelsForSubject = React.useCallback(async (subjectId: string) => {
-    if (!branchId || !subjectId) return;
-    try {
-      const data = await schoolApi.getSubjectLevels(branchId, subjectId);
-      setLevels(data);
-    } catch {
-      setLevels([]);
-    }
-  }, [branchId]);
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => schoolApi.deleteGroup(branchId, id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["groups", branchId] });
+      toast.success(`"${deleteTarget?.name}" guruhi o'chirildi`);
+      setDeleteTarget(null);
+    },
+    onError: () => toast.error("O'chirishda xatolik"),
+  });
 
-  const handleSubjectChange = async (subjectId: string) => {
-    setForm((f) => ({ ...f, subject_level: "" }));
-    if (subjectId === "none") {
-      setLevels([]);
-      return;
-    }
-    await loadLevelsForSubject(subjectId);
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  const handleSubjectChange = (subjectId: string) => {
+    setForm((f) => ({
+      ...f,
+      selectedSubjectId: subjectId === "none" ? "" : subjectId,
+      subject_level: "",
+    }));
   };
 
   const openCreate = () => {
     setEditingGroup(null);
     setForm(EMPTY_FORM);
-    setLevels([]);
     setSheetOpen(true);
   };
 
-  const openEdit = async (group: Group) => {
+  const openEdit = (group: Group) => {
     setEditingGroup(group);
     setForm({
       name: group.name,
+      selectedSubjectId: group.subject_level_detail?.subject ?? "",
       subject_level: group.subject_level ?? "",
       teacher: group.teacher ?? "",
       description: group.description ?? "",
       max_students: group.max_students,
       is_active: group.is_active,
     });
-    // Load levels for existing subject
-    if (group.subject_level_detail?.subject) {
-      await loadLevelsForSubject(group.subject_level_detail.subject);
-    }
     setSheetOpen(true);
   };
 
-  const handleSave = async () => {
-    if (!branchId || !form.name.trim()) {
+  const handleSave = () => {
+    if (!form.name.trim()) {
       toast.error("Guruh nomi kiritilishi shart");
       return;
     }
-    try {
-      setSaving(true);
-      const payload: CreateGroupRequest = {
-        name: form.name.trim(),
-        subject_level: form.subject_level || null,
-        teacher: form.teacher || null,
-        description: form.description,
-        max_students: form.max_students,
-        is_active: form.is_active,
-      };
-      if (editingGroup) {
-        await schoolApi.updateGroup(branchId, editingGroup.id, payload);
-        toast.success("Guruh yangilandi");
-      } else {
-        await schoolApi.createGroup(branchId, payload);
-        toast.success("Guruh yaratildi");
-      }
-      setSheetOpen(false);
-      fetchGroups();
-    } catch (err) {
-      toast.error(extractApiError(err) ?? "Saqlashda xatolik");
-    } finally {
-      setSaving(false);
+    const payload: CreateGroupRequest = {
+      name: form.name.trim(),
+      subject_level: form.subject_level || null,
+      teacher: form.teacher || null,
+      description: form.description,
+      max_students: form.max_students,
+      is_active: form.is_active,
+    };
+    if (editingGroup) {
+      updateMutation.mutate({ id: editingGroup.id, data: payload });
+    } else {
+      createMutation.mutate(payload);
     }
   };
 
-  const handleDelete = async () => {
-    if (!branchId || !deleteTarget) return;
-    try {
-      setDeleting(true);
-      await schoolApi.deleteGroup(branchId, deleteTarget.id);
-      setGroups((prev) => prev.filter((g) => g.id !== deleteTarget.id));
-      toast.success(`"${deleteTarget.name}" guruhi o'chirildi`);
-      setDeleteTarget(null);
-    } catch (err) {
-      toast.error(extractApiError(err) ?? "O'chirishda xatolik");
-    } finally {
-      setDeleting(false);
-    }
-  };
+  const saving = createMutation.isPending || updateMutation.isPending;
 
-  const filtered = React.useMemo(() => {
+  // ── Filtered list ─────────────────────────────────────────────────────────
+
+  const filtered = useMemo(() => {
     const q = searchQuery.toLowerCase();
+    if (!q) return groups;
     return groups.filter(
       (g) =>
         g.name.toLowerCase().includes(q) ||
@@ -249,17 +242,8 @@ export default function GroupsPage() {
     );
   }, [groups, searchQuery]);
 
-  const activeCount = groups.filter((g) => g.is_active).length;
-  const totalMembers = groups.reduce((sum, g) => sum + g.members_count, 0);
-
-  // Derive current subject from form.subject_level
-  const currentSubjectId = React.useMemo(() => {
-    if (!form.subject_level) return "";
-    const found = levels.find((l) => l.id === form.subject_level);
-    if (found) return found.subject;
-    if (editingGroup?.subject_level_detail?.subject) return editingGroup.subject_level_detail.subject;
-    return "";
-  }, [form.subject_level, levels, editingGroup]);
+  const activeCount  = groups.filter((g) => g.is_active).length;
+  const totalMembers = groups.reduce((s, g) => s + g.members_count, 0);
 
   if (!branchId) {
     return (
@@ -268,6 +252,8 @@ export default function GroupsPage() {
       </div>
     );
   }
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="container mx-auto px-4 py-6 space-y-6">
@@ -281,8 +267,8 @@ export default function GroupsPage() {
           <p className="text-sm text-gray-500">Filial guruhlarini boshqaring</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="default" onClick={fetchGroups} disabled={loading}>
-            <RefreshCcw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+          <Button variant="outline" onClick={() => refetchGroups()} disabled={groupsLoading}>
+            <RefreshCcw className={`w-4 h-4 mr-2 ${groupsLoading ? "animate-spin" : ""}`} />
             Yangilash
           </Button>
           <Button onClick={openCreate}>
@@ -348,7 +334,7 @@ export default function GroupsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {loading ? (
+          {groupsLoading ? (
             <div className="flex justify-center py-12">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
@@ -433,30 +419,21 @@ export default function GroupsPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openEdit(group);
-                            }}
+                            onClick={(e) => { e.stopPropagation(); openEdit(group); }}
                           >
                             <Edit className="w-4 h-4" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeleteTarget(group);
-                            }}
+                            onClick={(e) => { e.stopPropagation(); setDeleteTarget(group); }}
                           >
                             <Trash2 className="w-4 h-4 text-red-500" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              router.push(`/school/groups/${group.id}`);
-                            }}
+                            onClick={(e) => { e.stopPropagation(); router.push(`/school/groups/${group.id}`); }}
                           >
                             <ChevronRight className="w-4 h-4" />
                           </Button>
@@ -472,7 +449,7 @@ export default function GroupsPage() {
       </Card>
 
       {/* Create / Edit Sheet */}
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+      <Sheet open={sheetOpen} onOpenChange={(o) => { if (!saving) setSheetOpen(o); }}>
         <SheetContent className="w-full sm:max-w-md overflow-y-auto">
           <SheetHeader>
             <SheetTitle>{editingGroup ? "Guruhni tahrirlash" : "Yangi guruh"}</SheetTitle>
@@ -483,8 +460,8 @@ export default function GroupsPage() {
 
           <div className="mt-6 space-y-4">
             {/* Name */}
-            <div className="space-y-2">
-              <Label>Guruh nomi *</Label>
+            <div className="space-y-1.5">
+              <Label>Guruh nomi <span className="text-red-500">*</span></Label>
               <Input
                 placeholder="Masalan: Fizika-A, Matematika ilg'or"
                 value={form.name}
@@ -492,72 +469,92 @@ export default function GroupsPage() {
               />
             </div>
 
-            {/* Subject selector */}
-            <div className="space-y-2">
+            {/* Subject */}
+            <div className="space-y-1.5">
               <Label>Fan</Label>
               <Select
-                value={currentSubjectId || "none"}
+                value={form.selectedSubjectId || "none"}
                 onValueChange={handleSubjectChange}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Fan tanlang" />
+                  <SelectValue placeholder="Fan tanlang (ixtiyoriy)" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">— Tanlanmagan —</SelectItem>
-                  {subjects.map((s) => (
+                  {subjectsData.map((s) => (
                     <SelectItem key={s.id} value={s.id}>
-                      {s.name} {s.code ? `(${s.code})` : ""}
+                      {s.name}{s.code ? ` (${s.code})` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Level selector */}
-            <div className="space-y-2">
-              <Label>Daraja / Narx</Label>
-              <Select
-                value={form.subject_level || "none"}
-                onValueChange={(v) => setForm((f) => ({ ...f, subject_level: v === "none" ? "" : v }))}
-                disabled={levels.length === 0}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={levels.length === 0 ? "Avval fan tanlang" : "Daraja tanlang"} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">— Tanlanmagan —</SelectItem>
-                  {levels.map((l) => (
-                    <SelectItem key={l.id} value={l.id}>
-                      {l.name} — {formatCurrency(l.lesson_price)}/dars
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Level — faqat fan tanlanganda */}
+            {form.selectedSubjectId && (
+              <div className="space-y-1.5">
+                <Label>Daraja / Narx</Label>
+                {levelsLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Darajalar yuklanmoqda...
+                  </div>
+                ) : levels.length === 0 ? (
+                  <p className="text-sm text-amber-600 bg-amber-50 rounded-md px-3 py-2 flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    Bu fan uchun darajalar topilmadi
+                  </p>
+                ) : (
+                  <Select
+                    value={form.subject_level || "none"}
+                    onValueChange={(v) =>
+                      setForm((f) => ({ ...f, subject_level: v === "none" ? "" : v }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Daraja tanlang" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">— Tanlanmagan —</SelectItem>
+                      {levels.map((l) => (
+                        <SelectItem key={l.id} value={l.id}>
+                          {l.name} — {formatCurrency(l.lesson_price)}/dars
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            )}
 
             {/* Teacher */}
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label>O'qituvchi</Label>
               <Select
                 value={form.teacher || "none"}
                 onValueChange={(v) => setForm((f) => ({ ...f, teacher: v === "none" ? "" : v }))}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="O'qituvchi tanlang" />
+                  <SelectValue placeholder="O'qituvchi tanlang (ixtiyoriy)" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">— Tanlanmagan —</SelectItem>
                   {teachers.map((t) => (
                     <SelectItem key={t.id} value={t.id}>
-                      {t.full_name || t.phone_number}
+                      {t.user_name || t.user_phone}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {teachers.length === 0 && (
+                <p className="text-xs text-gray-400">
+                  Filialdagi o'qituvchilar yuklanmadi
+                </p>
+              )}
             </div>
 
             {/* Max students */}
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label>Maksimal o'quvchilar soni</Label>
               <Input
                 type="number"
@@ -571,7 +568,7 @@ export default function GroupsPage() {
             </div>
 
             {/* Description */}
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label>Tavsif</Label>
               <Textarea
                 placeholder="Guruh haqida qo'shimcha ma'lumot..."
@@ -582,7 +579,7 @@ export default function GroupsPage() {
             </div>
 
             {/* Status */}
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label>Holat</Label>
               <Select
                 value={form.is_active ? "active" : "inactive"}
@@ -600,7 +597,7 @@ export default function GroupsPage() {
 
             <div className="flex gap-3 pt-2">
               <Button onClick={handleSave} disabled={saving} className="flex-1">
-                {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 {editingGroup ? "Saqlash" : "Yaratish"}
               </Button>
               <Button variant="outline" onClick={() => setSheetOpen(false)} disabled={saving}>
@@ -611,24 +608,24 @@ export default function GroupsPage() {
         </SheetContent>
       </Sheet>
 
-      {/* Delete Confirm */}
-      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+      {/* Delete confirm */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Guruhni o'chirish</AlertDialogTitle>
             <AlertDialogDescription>
               <span className="font-semibold">"{deleteTarget?.name}"</span> guruhini o'chirishni
-              tasdiqlaysizmi?
+              tasdiqlaysizmi? Bu amalni qaytarib bo'lmaydi.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Bekor qilish</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Bekor qilish</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDelete}
-              disabled={deleting}
+              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+              disabled={deleteMutation.isPending}
               className="bg-red-600 hover:bg-red-700"
             >
-              {deleting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              {deleteMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               O'chirish
             </AlertDialogAction>
           </AlertDialogFooter>

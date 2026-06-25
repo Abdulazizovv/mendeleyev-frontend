@@ -1,360 +1,296 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/hooks/useAuth";
+import { schoolApi } from "@/lib/api";
+import { scheduleApi } from "@/lib/features/schedule/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import {
   BookOpen,
   Calendar,
-  Award,
-  TrendingUp,
   Clock,
-  CheckCircle,
-  DollarSign,
-  Target,
+  GraduationCap,
+  Wallet,
+  CheckCircle2,
   AlertCircle,
+  ChevronRight,
+  Users,
+  MapPin,
+  BarChart2,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/translations";
 
 export default function StudentDashboard() {
   const { user, currentBranch } = useAuth();
+  const branchId = currentBranch?.branch_id ?? "";
+  const today = new Date().toISOString().split("T")[0];
 
-  // Mock data - keyinchalik real API dan keladi
-  const stats = {
-    totalCourses: 6,
-    completedAssignments: 18,
-    upcomingClasses: 4,
-    averageGrade: 4.5,
-  };
+  const { data: studentClass, isLoading: classLoading } = useQuery({
+    queryKey: ["student-class", branchId],
+    queryFn: () => schoolApi.getStudentClass({ branch_id: branchId }),
+    enabled: !!branchId,
+  });
 
-  const upcomingClasses = [
-    {
-      id: "1",
-      subject: "Matematika",
-      teacher: "Abbos Karimov",
-      time: "09:00 - 10:30",
-      room: "301-xona",
-      date: "Bugun",
-    },
-    {
-      id: "2",
-      subject: "Fizika",
-      teacher: "Malika Rashidova",
-      time: "11:00 - 12:30",
-      room: "205-xona",
-      date: "Bugun",
-    },
-    {
-      id: "3",
-      subject: "Ingliz tili",
-      teacher: "John Smith",
-      time: "14:00 - 15:30",
-      room: "105-xona",
-      date: "Ertaga",
-    },
-  ];
+  const { data: subjectsRaw, isLoading: subjectsLoading } = useQuery({
+    queryKey: ["student-subjects", branchId],
+    queryFn: () => schoolApi.getStudentSubjects({ branch_id: branchId }),
+    enabled: !!branchId,
+  });
 
-  const subjects = [
-    {
-      id: "1",
-      name: "Matematika",
-      grade: 4.8,
-      progress: 85,
-      color: "from-blue-500 to-blue-600",
-    },
-    {
-      id: "2",
-      name: "Fizika",
-      grade: 4.5,
-      progress: 78,
-      color: "from-purple-500 to-purple-600",
-    },
-    {
-      id: "3",
-      name: "Ingliz tili",
-      grade: 4.2,
-      progress: 72,
-      color: "from-green-500 to-green-600",
-    },
-    {
-      id: "4",
-      name: "Kimyo",
-      grade: 4.6,
-      progress: 80,
-      color: "from-orange-500 to-orange-600",
-    },
-  ];
+  const subjects = Array.isArray(subjectsRaw) ? subjectsRaw : [];
 
-  const recentAssignments = [
-    {
-      id: "1",
-      title: "Kvadrat tenglamalar",
-      subject: "Matematika",
-      deadline: "2 kun qoldi",
-      status: "pending",
-    },
-    {
-      id: "2",
-      title: "Newton qonunlari",
-      subject: "Fizika",
-      deadline: "Bajarildi",
-      status: "completed",
-    },
-    {
-      id: "3",
-      title: "Past Simple tense",
-      subject: "Ingliz tili",
-      deadline: "1 hafta qoldi",
-      status: "pending",
-    },
-  ];
+  // Today's lessons for this student's class
+  const classId = studentClass?.id;
+  const { data: todayLessons, isLoading: lessonsLoading } = useQuery({
+    queryKey: ["student-today-lessons", branchId, classId, today],
+    queryFn: () =>
+      scheduleApi.getLessonInstances(branchId, {
+        date_from: today,
+        date_to: today,
+        class_id: classId,
+      }),
+    enabled: !!branchId && !!classId,
+  });
 
-  const payments = {
-    totalPaid: 15000000,
-    totalDebt: 5000000,
-    nextPaymentDate: "15 Dekabr",
-  };
+  const lessons = todayLessons?.results ?? [];
+  const balance = currentBranch?.balance;
 
   return (
     <div className="space-y-6">
-      {/* Welcome Section */}
-      <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl p-8 text-white shadow-lg">
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">
-              Salom, {user?.first_name}!
-            </h1>
-            <p className="text-purple-100 text-lg">
-              {currentBranch?.title || "O'quvchi"}
-            </p>
-            <div className="mt-4 flex items-center space-x-6">
-              <div>
-                <p className="text-sm text-purple-100">O'rtacha baho</p>
-                <p className="text-2xl font-bold">{stats.averageGrade.toFixed(1)}</p>
-              </div>
-              <div>
-                <p className="text-sm text-purple-100">Bajarilgan topshiriqlar</p>
-                <p className="text-2xl font-bold">{stats.completedAssignments}</p>
-              </div>
-            </div>
-          </div>
-          <Award className="w-16 h-16 text-purple-200 opacity-50" />
-        </div>
+      {/* Header */}
+      <div className="flex flex-col gap-1">
+        <h1 className="text-2xl font-bold text-gray-900">
+          Salom, {user?.first_name || user?.phone_number}!
+        </h1>
+        {studentClass ? (
+          <p className="text-sm text-gray-500">
+            {studentClass.name} · {studentClass.academic_year_name}
+          </p>
+        ) : (
+          <p className="text-sm text-gray-500">O'quvchi</p>
+        )}
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              Fanlar
-            </CardTitle>
-            <BookOpen className="w-5 h-5 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-gray-900">{stats.totalCourses}</div>
-            <p className="text-xs text-gray-500 mt-1">Aktiv fanlar</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              Topshiriqlar
-            </CardTitle>
-            <CheckCircle className="w-5 h-5 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-gray-900">{stats.completedAssignments}</div>
-            <p className="text-xs text-gray-500 mt-1">Bajarilgan</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              Yaqin darslar
-            </CardTitle>
-            <Clock className="w-5 h-5 text-orange-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-gray-900">{stats.upcomingClasses}</div>
-            <p className="text-xs text-gray-500 mt-1">Kelasi 24 soatda</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              O'rtacha
-            </CardTitle>
-            <TrendingUp className="w-5 h-5 text-purple-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-gray-900">{stats.averageGrade.toFixed(1)}</div>
-            <p className="text-xs text-gray-500 mt-1">Umumiy baho</p>
-          </CardContent>
-        </Card>
+      {/* Stats row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          {
+            label: "Fanlar",
+            value: subjectsLoading ? null : subjects.length,
+            sub: "Aktiv fan",
+            icon: <BookOpen className="w-5 h-5 text-blue-600" />,
+            bg: "bg-blue-50",
+          },
+          {
+            label: "Sinfdoshlar",
+            value: classLoading ? null : studentClass?.students_count ?? 0,
+            sub: "Sinfda",
+            icon: <Users className="w-5 h-5 text-green-600" />,
+            bg: "bg-green-50",
+          },
+          {
+            label: "Bugungi darslar",
+            value: lessonsLoading ? null : lessons.length,
+            sub: "Bugun",
+            icon: <Calendar className="w-5 h-5 text-purple-600" />,
+            bg: "bg-purple-50",
+          },
+          {
+            label: "Balans",
+            value:
+              balance == null
+                ? null
+                : balance >= 0
+                ? "✓"
+                : "⚠",
+            sub: balance != null ? formatCurrency(Math.abs(balance)) : "Ma'lumot yo'q",
+            icon: <Wallet className="w-5 h-5 text-orange-600" />,
+            bg: "bg-orange-50",
+          },
+        ].map((stat) => (
+          <Card key={stat.label} className="shadow-sm border border-gray-100">
+            <CardContent className="p-4">
+              <div className={`w-9 h-9 ${stat.bg} rounded-lg flex items-center justify-center mb-3`}>
+                {stat.icon}
+              </div>
+              {stat.value === null ? (
+                <Skeleton className="h-7 w-12 mb-1" />
+              ) : (
+                <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
+              )}
+              <p className="text-xs text-gray-500 mt-0.5">{stat.sub}</p>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Upcoming Classes */}
-        <Card className="border-0 shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-lg font-semibold">Yaqin darslar</CardTitle>
-            <Calendar className="w-5 h-5 text-gray-400" />
+      {/* Today lessons + Balance */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Today's lessons */}
+        <Card className="lg:col-span-2 shadow-sm border border-gray-100">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Clock className="w-4 h-4 text-gray-500" /> Bugungi darslar
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {upcomingClasses.map((lesson) => (
-              <div
-                key={lesson.id}
-                className="flex items-center justify-between p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-pink-600 rounded-lg flex items-center justify-center">
-                    <BookOpen className="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-gray-900">{lesson.subject}</h4>
-                    <p className="text-sm text-gray-500">
-                      {lesson.teacher} • {lesson.time}
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <span className="text-xs font-medium text-purple-600 bg-purple-100 px-3 py-1 rounded-full">
-                    {lesson.date}
-                  </span>
-                </div>
+          <CardContent>
+            {lessonsLoading || classLoading ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}
               </div>
-            ))}
-            <Button variant="outline" className="w-full">
-              <Calendar className="w-4 h-4 mr-2" />
-              To'liq jadval
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Subject Progress */}
-        <Card className="border-0 shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-lg font-semibold">Fanlar bo'yicha</CardTitle>
-            <Target className="w-5 h-5 text-gray-400" />
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {subjects.map((subject) => (
-              <div key={subject.id} className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-900">
-                    {subject.name}
-                  </span>
-                  <span className="text-sm font-bold text-gray-900">
-                    {subject.grade.toFixed(1)}
-                  </span>
-                </div>
-                <Progress value={subject.progress} className="h-2" />
-                <p className="text-xs text-gray-500">{subject.progress}% bajarildi</p>
+            ) : lessons.length === 0 ? (
+              <div className="text-center py-8 text-gray-400">
+                <Calendar className="w-10 h-10 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">Bugun dars yo'q</p>
               </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Assignments */}
-        <Card className="border-0 shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-lg font-semibold">Topshiriqlar</CardTitle>
-            <CheckCircle className="w-5 h-5 text-gray-400" />
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {recentAssignments.map((assignment) => (
-              <div
-                key={assignment.id}
-                className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-purple-300 hover:shadow-md transition-all"
-              >
-                <div className="flex items-center space-x-4">
+            ) : (
+              <div className="space-y-2">
+                {lessons.map((lesson: any) => (
                   <div
-                    className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                      assignment.status === "completed"
-                        ? "bg-green-100"
-                        : "bg-orange-100"
+                    key={lesson.id}
+                    className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 bg-gray-50"
+                  >
+                    <div className="text-xs font-mono text-gray-500 w-20 shrink-0">
+                      {lesson.start_time?.slice(0, 5)} – {lesson.end_time?.slice(0, 5)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {lesson.subject_name ?? "Dars"}
+                      </p>
+                      <div className="flex flex-wrap gap-x-3 mt-0.5">
+                        {lesson.teacher_name && (
+                          <span className="text-xs text-gray-500">{lesson.teacher_name}</span>
+                        )}
+                        {lesson.room_name && (
+                          <span className="text-xs text-gray-400 flex items-center gap-1">
+                            <MapPin className="w-3 h-3" /> {lesson.room_name}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <span
+                      className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${
+                        lesson.status === "completed"
+                          ? "bg-green-100 text-green-700"
+                          : lesson.status === "cancelled" || lesson.status === "canceled"
+                          ? "bg-red-100 text-red-700"
+                          : "bg-blue-100 text-blue-700"
+                      }`}
+                    >
+                      {lesson.status === "completed"
+                        ? "Tugallangan"
+                        : lesson.status === "cancelled" || lesson.status === "canceled"
+                        ? "Bekor"
+                        : lesson.lesson_number
+                        ? `${lesson.lesson_number}-dars`
+                        : "Rejalashtirilgan"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Balance */}
+        <Card className="shadow-sm border border-gray-100">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Wallet className="w-4 h-4 text-gray-500" /> Moliyaviy holat
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {balance != null ? (
+              <div
+                className={`flex items-center justify-between p-4 rounded-lg ${
+                  balance >= 0 ? "bg-green-50" : "bg-red-50"
+                }`}
+              >
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">
+                    {balance >= 0 ? "Balans" : "Qarzdorlik"}
+                  </p>
+                  <p
+                    className={`text-2xl font-bold ${
+                      balance >= 0 ? "text-green-700" : "text-red-700"
                     }`}
                   >
-                    {assignment.status === "completed" ? (
-                      <CheckCircle className="w-5 h-5 text-green-600" />
-                    ) : (
-                      <AlertCircle className="w-5 h-5 text-orange-600" />
+                    {formatCurrency(Math.abs(balance))}
+                  </p>
+                </div>
+                {balance >= 0 ? (
+                  <CheckCircle2 className="w-10 h-10 text-green-300" />
+                ) : (
+                  <AlertCircle className="w-10 h-10 text-red-300" />
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400 text-center py-4">
+                Moliyaviy ma'lumot mavjud emas
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Subjects */}
+      <Card className="shadow-sm border border-gray-100">
+        <CardHeader className="pb-3 flex flex-row items-center justify-between">
+          <CardTitle className="text-base font-semibold flex items-center gap-2">
+            <BookOpen className="w-4 h-4 text-gray-500" /> Mening fanlarim
+          </CardTitle>
+          <Link href="/student/grades">
+            <Button variant="ghost" size="sm" className="text-xs h-7 gap-1">
+              Baholar <ChevronRight className="w-3 h-3" />
+            </Button>
+          </Link>
+        </CardHeader>
+        <CardContent>
+          {subjectsLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {[1, 2, 3, 4, 5, 6].map((i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
+            </div>
+          ) : subjects.length === 0 ? (
+            <div className="text-center py-8 text-gray-400">
+              <BookOpen className="w-10 h-10 mx-auto mb-2 opacity-40" />
+              <p className="text-sm">Fan biriktirilmagan</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {subjects.map((sub: any) => (
+                <div
+                  key={sub.id}
+                  className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 hover:bg-blue-50 transition-colors"
+                >
+                  <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+                    <BookOpen className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {sub.subject_name}
+                    </p>
+                    {sub.teacher_name && (
+                      <p className="text-xs text-gray-500 truncate">{sub.teacher_name}</p>
                     )}
                   </div>
-                  <div>
-                    <h4 className="font-semibold text-gray-900">{assignment.title}</h4>
-                    <p className="text-sm text-gray-500">{assignment.subject}</p>
-                  </div>
                 </div>
-                <div className="text-right">
-                  <span
-                    className={`text-xs font-medium px-3 py-1 rounded-full ${
-                      assignment.status === "completed"
-                        ? "bg-green-100 text-green-700"
-                        : "bg-orange-100 text-orange-700"
-                    }`}
-                  >
-                    {assignment.deadline}
-                  </span>
-                </div>
-              </div>
-            ))}
-            <Button variant="outline" className="w-full">
-              Barcha topshiriqlar
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Payments */}
-        <Card className="border-0 shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-lg font-semibold">To'lovlar</CardTitle>
-            <DollarSign className="w-5 h-5 text-gray-400" />
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
-                <div>
-                  <p className="text-sm text-gray-600">To'langan</p>
-                  <p className="text-2xl font-bold text-green-700">
-                    {formatCurrency(payments.totalPaid)}
-                  </p>
-                </div>
-                <CheckCircle className="w-10 h-10 text-green-600" />
-              </div>
-
-              <div className="flex items-center justify-between p-4 bg-orange-50 rounded-lg">
-                <div>
-                  <p className="text-sm text-gray-600">Qoldiq</p>
-                  <p className="text-2xl font-bold text-orange-700">
-                    {formatCurrency(payments.totalDebt)}
-                  </p>
-                </div>
-                <AlertCircle className="w-10 h-10 text-orange-600" />
-              </div>
-
-              <div className="pt-4 border-t border-gray-200">
-                <p className="text-sm text-gray-600 mb-2">Keyingi to'lov</p>
-                <p className="text-lg font-semibold text-gray-900">
-                  {payments.nextPaymentDate}
-                </p>
-              </div>
+              ))}
             </div>
+          )}
+        </CardContent>
+      </Card>
 
-            <Button className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
-              <DollarSign className="w-4 h-4 mr-2" />
-              To'lov qilish
-            </Button>
-          </CardContent>
-        </Card>
+      {/* Quick links */}
+      <div className="flex flex-wrap gap-3">
+        <Link href="/student/grades">
+          <Button variant="outline" size="sm" className="gap-2">
+            <BarChart2 className="w-4 h-4" /> Baholarim
+          </Button>
+        </Link>
       </div>
     </div>
   );

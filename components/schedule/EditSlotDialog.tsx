@@ -98,7 +98,7 @@ export function EditSlotDialog({
           <div className="space-y-2">
             <Label htmlFor="class_subject">Sinf va fan *</Label>
             <Select
-              defaultValue={slot?.class_subject}
+              defaultValue={slot?.class_subject ?? undefined}
               onValueChange={(value) => setValue('class_subject', value)}
             >
               <SelectTrigger>

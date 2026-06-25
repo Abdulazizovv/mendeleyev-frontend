@@ -215,7 +215,7 @@ export default function TimetableEditPage() {
       open: true,
       slot,
     });
-    setSelectedClassSubjectId(slot.class_subject);
+    setSelectedClassSubjectId(slot.class_subject ?? undefined);
     setSelectedRoomId(slot.room || undefined);
   }, []);
 
@@ -243,7 +243,7 @@ export default function TimetableEditPage() {
         newTimeSlot.start_time,
         newTimeSlot.end_time,
         activeTemplate.id,
-        slot.room
+        slot.room ?? undefined
       );
 
       if (!payload) {

@@ -46,6 +46,7 @@ export interface GenerateLessonsData {
   start_date: string;
   end_date: string;
   skip_existing: boolean;
+  force_update: boolean;
 }
 
 type DateRangePreset = 'this_week' | 'next_week' | 'this_month' | 'next_month' | 'custom';
@@ -63,6 +64,7 @@ export function GenerateLessonsDialog({
   const [customStartDate, setCustomStartDate] = useState<Date | undefined>(undefined);
   const [customEndDate, setCustomEndDate] = useState<Date | undefined>(undefined);
   const [skipExisting, setSkipExisting] = useState(true);
+  const [forceUpdate, setForceUpdate] = useState(false);
 
   // Calculate date range based on preset
   const getDateRange = (): { start: Date; end: Date } => {
@@ -109,6 +111,7 @@ export function GenerateLessonsDialog({
       start_date: format(start, 'yyyy-MM-dd'),
       end_date: format(end, 'yyyy-MM-dd'),
       skip_existing: skipExisting,
+      force_update: forceUpdate,
     });
   };
 
@@ -247,7 +250,7 @@ export function GenerateLessonsDialog({
                 id="skip-existing"
                 checked={skipExisting}
                 onCheckedChange={(checked) => setSkipExisting(checked as boolean)}
-                disabled={isGenerating}
+                disabled={isGenerating || forceUpdate}
               />
               <div className="grid gap-1.5 leading-none">
                 <label
@@ -258,6 +261,31 @@ export function GenerateLessonsDialog({
                 </label>
                 <p className="text-xs text-gray-500">
                   Agar ushbu vaqtda dars mavjud bo'lsa, yangi dars yaratilmaydi
+                </p>
+              </div>
+            </div>
+
+            {/* Force Update Option */}
+            <div className="flex items-start space-x-3">
+              <Checkbox
+                id="force-update"
+                checked={forceUpdate}
+                onCheckedChange={(checked) => {
+                  const v = checked as boolean;
+                  setForceUpdate(v);
+                  if (v) setSkipExisting(false);
+                }}
+                disabled={isGenerating}
+              />
+              <div className="grid gap-1.5 leading-none">
+                <label
+                  htmlFor="force-update"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  Jadval o'zgarishlarini qo'llash
+                </label>
+                <p className="text-xs text-gray-500">
+                  Hali o'tilmagan rejalashtirilgan darslarni o'chib qayta yaratadi
                 </p>
               </div>
             </div>

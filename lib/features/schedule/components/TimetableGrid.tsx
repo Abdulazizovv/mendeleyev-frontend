@@ -179,7 +179,7 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
                         key={slot.id}
                         className={cn(
                           'border-2 rounded p-2 min-h-[80px] cursor-pointer transition-all hover:shadow-md',
-                          getSubjectColor(slot.subject_name)
+                          getSubjectColor(slot.subject_name ?? undefined)
                         )}
                         onClick={() => onSlotClick?.(slot)}
                       >
@@ -248,7 +248,7 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
                       key={slot.id}
                       className={cn(
                         'border-2 rounded p-3 cursor-pointer transition-all',
-                        getSubjectColor(slot.subject_name)
+                        getSubjectColor(slot.subject_name ?? undefined)
                       )}
                       onClick={() => onSlotClick?.(slot)}
                     >

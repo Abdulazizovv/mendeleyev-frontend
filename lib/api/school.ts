@@ -1185,6 +1185,8 @@ export const schoolApi = {
     branchId: string,
     params?: {
       class_subject?: string;
+      group?: string;
+      lesson?: string;
       date?: string;
       lesson_number?: number;
       is_locked?: boolean;

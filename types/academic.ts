@@ -66,21 +66,21 @@ export interface CurrentTimetableResponse {
 }
 
 export interface TimetableSlot extends BaseEntity {
-  timetable: string; // Backend field name
-  class_obj?: string; // Backend field name
-  class_subject: string; // Backend field name
+  timetable: string;
+  class_obj?: string | null;
+  class_subject?: string | null;
+  group?: string | null;
   day_of_week: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
-  day_of_week_display?: string; // "Dushanba", "Seshanba", etc.
+  day_of_week_display?: string;
   lesson_number: number;
-  start_time: string; // "09:00:00"
-  end_time: string; // "09:45:00"
-  room?: string;
-  room_name?: string;
-  // Expanded fields from backend
-  timetable_name?: string;
-  class_name?: string;
-  subject_name?: string;
-  teacher_name?: string;
+  start_time: string;
+  end_time: string;
+  room?: string | null;
+  room_name?: string | null;
+  class_name?: string | null;
+  subject_name?: string | null;
+  teacher_name?: string | null;
+  group_name?: string | null;
 }
 
 export interface TimetableConflict {
@@ -99,14 +99,15 @@ export interface CreateTimetableTemplate {
 }
 
 export interface CreateTimetableSlot {
-  timetable: string; // Backend kutayotgan nom
-  class_obj: string; // Backend kutayotgan nom
-  class_subject: string; // Backend kutayotgan nom
+  timetable: string;
+  class_obj?: string | null;
+  class_subject?: string | null;
+  group?: string | null;
   day_of_week: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
   lesson_number: number;
   start_time: string;
   end_time: string;
-  room?: string;
+  room?: string | null;
 }
 
 export interface BulkCreateSlots {

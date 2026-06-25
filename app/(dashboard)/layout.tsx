@@ -401,24 +401,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     if (role === "teacher") {
       return [
         ...baseItems,
-        { name: "Guruhlar",      href: `/${rolePath}/groups`,    icon: Users2 },
-        { name: "Darslar",       href: `/${rolePath}/lessons`,   icon: BookOpen },
-        { name: "Jadval",        href: `/${rolePath}/schedule`,  icon: Calendar },
-        { name: "Davomat",       href: `/${rolePath}/attendance`,icon: ClipboardList },
-        { name: "Baholar",       href: `/${rolePath}/grades`,    icon: Award },
-        { name: "Uyga vazifalar",href: `/${rolePath}/homework`,  icon: FileText },
+        { name: "Jadval",  href: `/${rolePath}/schedule`, icon: Calendar },
+        { name: "Moliya",  href: `/${rolePath}/finance`,  icon: Wallet },
       ];
     }
 
     if (role === "student") {
       return [
         ...baseItems,
-        { name: "Darslarim",     href: `/${rolePath}/lessons`,   icon: BookOpen },
-        { name: "Jadval",        href: `/${rolePath}/schedule`,  icon: Calendar },
-        { name: "Baholar",       href: `/${rolePath}/grades`,    icon: GraduationCap },
-        { name: "Uyga vazifalar",href: `/${rolePath}/homework`,  icon: CheckSquare },
-        { name: "Davomat",       href: `/${rolePath}/attendance`,icon: ClipboardList },
-        { name: "To'lovlar",     href: `/${rolePath}/payments`,  icon: Wallet },
+        { name: "Jadval", href: `/${rolePath}/schedule`, icon: Calendar },
+        { name: "Moliya", href: `/${rolePath}/payments`, icon: Wallet },
       ];
     }
 

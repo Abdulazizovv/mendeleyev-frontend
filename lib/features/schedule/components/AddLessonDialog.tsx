@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -19,19 +20,44 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, AlertTriangle } from 'lucide-react';
-import { scheduleApi } from '../api';
-import { formatDateUz } from '../constants/translations';
-import { formatDateForAPI } from '../utils/time';
-import type { AddLessonData, ScheduleAvailabilityResponse } from '@/types/academic';
+import { Loader2 } from 'lucide-react';
+import { schoolApi } from '@/lib/api';
+import { format } from 'date-fns';
+import { uz } from 'date-fns/locale';
 
-export type { AddLessonData };
+// ── Shared add-lesson data type ──────────────────────────────────────────────
+
+export interface AddLessonData {
+  class_subject?: string;
+  group?: string;
+  date: string;
+  lesson_number: number;
+  start_time: string;
+  end_time: string;
+  room?: string;
+  homework?: string;
+  teacher_notes?: string;
+  status: string;
+}
+
+// ── Context type ─────────────────────────────────────────────────────────────
+
+export interface AddLessonContext {
+  type: 'class' | 'group';
+  id: string;       // classId or groupId
+  name: string;     // className or groupName
+  date: Date;
+  lessonNumber: number;
+  startTime: string;
+  endTime: string;
+}
+
+// ── Dialog component ──────────────────────────────────────────────────────────
+
 interface AddLessonDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  context: { date: Date; lessonNumber: number; startTime: string; endTime: string; classId: string; className: string } | null;
+  context: AddLessonContext | null;
   branchId: string;
   onSubmit: (data: AddLessonData) => void;
   isSubmitting?: boolean;
@@ -45,200 +71,171 @@ export function AddLessonDialog({
   onSubmit,
   isSubmitting = false,
 }: AddLessonDialogProps) {
-  const [selectedSubjectId, setSelectedSubjectId] = useState<string | undefined>();
-  const [selectedRoomId, setSelectedRoomId] = useState<string | undefined>();
-  const [homework, setHomework] = useState('');
-  const [teacherNotes, setTeacherNotes] = useState('');
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
+  const [selectedRoomId, setSelectedRoomId]       = useState<string>('_none');
+  const [homework, setHomework]                   = useState('');
+  const [teacherNotes, setTeacherNotes]           = useState('');
 
-  // Get time slot info
-  const timeSlot = context ? {
-    start: context.startTime,
-    end: context.endTime,
-    label: `${context.lessonNumber}-dars (${context.startTime}-${context.endTime})`
-  } : null;
-
-  // Check availability when dialog opens and context changes
-  const { data: availability, isLoading: availabilityLoading, error: availabilityError } = useQuery({
-    queryKey: ['schedule-availability', branchId, context?.classId, context?.date, context?.startTime, context?.endTime],
-    queryFn: async () => {
-      if (!context?.classId || !context?.date || !context?.startTime || !context?.endTime) {
-        throw new Error('Missing required parameters');
-      }
-      return await scheduleApi.checkScheduleAvailability(branchId, {
-        class_id: context.classId,
-        date: formatDateForAPI(context.date),
-        start_time: context.startTime,
-        end_time: context.endTime,
-      });
-    },
-    enabled: open && !!context?.classId && !!context?.date && !!context?.startTime && !!context?.endTime,
-  });
-
-  // Reset form when context changes
+  // Reset on context change
   useEffect(() => {
     if (context) {
-      setSelectedSubjectId(undefined);
-      setSelectedRoomId(undefined);
+      setSelectedSubjectId('');
+      setSelectedRoomId('_none');
       setHomework('');
       setTeacherNotes('');
     }
   }, [context]);
 
+  // Fetch class subjects (only for class type)
+  const { data: classSubjects = [], isLoading: subjectsLoading } = useQuery({
+    queryKey: ['class-subjects', context?.id],
+    queryFn: () => schoolApi.getClassSubjects(context!.id, { is_active: true }),
+    enabled: open && !!context && context.type === 'class',
+    staleTime: 60_000,
+  });
+
+  // Fetch rooms
+  const { data: rooms = [], isLoading: roomsLoading } = useQuery({
+    queryKey: ['branch-rooms', branchId],
+    queryFn: () => schoolApi.getRooms(branchId, { is_active: true }),
+    enabled: open && !!branchId,
+    staleTime: 60_000,
+  });
+
+  const loading = subjectsLoading || roomsLoading;
+
   const handleSubmit = () => {
-    if (!selectedSubjectId || !context || !timeSlot) return;
+    if (!context) return;
+    if (context.type === 'class' && !selectedSubjectId) return;
 
     const data: AddLessonData = {
-      class_subject: selectedSubjectId,
-      date: formatDateForAPI(context.date),
+      date: format(context.date, 'yyyy-MM-dd'),
       lesson_number: context.lessonNumber,
       start_time: context.startTime,
       end_time: context.endTime,
       room: selectedRoomId === '_none' ? undefined : selectedRoomId,
       homework: homework.trim() || undefined,
       teacher_notes: teacherNotes.trim() || undefined,
+      status: 'planned',
     };
+
+    if (context.type === 'class') {
+      data.class_subject = selectedSubjectId;
+    } else {
+      data.group = context.id;
+    }
 
     onSubmit(data);
   };
 
   const handleClose = () => {
-    setSelectedSubjectId(undefined);
-    setSelectedRoomId(undefined);
+    setSelectedSubjectId('');
+    setSelectedRoomId('_none');
     setHomework('');
     setTeacherNotes('');
     onOpenChange(false);
   };
 
-  if (!context || !timeSlot) {
-    return null;
-  }
+  const isClassMode = context?.type === 'class';
+  const canSubmit = !isSubmitting && !loading && (isClassMode ? !!selectedSubjectId : true);
+
+  const dateLabel = context
+    ? format(context.date, 'd MMMM yyyy', { locale: uz })
+    : '';
+  const timeLabel = context
+    ? `${context.lessonNumber}-dars (${context.startTime}–${context.endTime})`
+    : '';
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Yangi dars qo'shish</DialogTitle>
+          <DialogTitle>
+            {isClassMode ? "Sinf darsi qo'shish" : "Guruh darsi qo'shish"}
+          </DialogTitle>
           <DialogDescription>
-            {context.className} sinfi • {formatDateUz(context.date)} • {timeSlot.label}
+            {context?.name} · {dateLabel} · {timeLabel}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          {/* Availability Status */}
-          {availabilityLoading && (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin mr-2" />
-              <span>Mavjudlik tekshirilmoqda...</span>
+        <div className="space-y-4 py-2">
+          {/* Subject — only for class lessons */}
+          {isClassMode && (
+            <div className="space-y-1.5">
+              <Label>Fan <span className="text-red-500">*</span></Label>
+              {subjectsLoading ? (
+                <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Fanlar yuklanmoqda...
+                </div>
+              ) : classSubjects.length === 0 ? (
+                <p className="text-sm text-amber-600 bg-amber-50 rounded-md px-3 py-2">
+                  Bu sinfga biriktirilgan fanlar topilmadi
+                </p>
+              ) : (
+                <Select value={selectedSubjectId} onValueChange={setSelectedSubjectId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Fan tanlang" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {classSubjects.map((cs) => (
+                      <SelectItem key={cs.id} value={cs.id}>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{cs.subject_name}</span>
+                          {cs.teacher_name && (
+                            <span className="text-xs text-gray-500">{cs.teacher_name}</span>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           )}
 
-          {availabilityError && (
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                Mavjudlikni tekshirishda xatolik yuz berdi. Iltimos, qayta urinib ko'ring.
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {availability && availability.conflicts.length > 0 && (
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                <div className="font-semibold mb-2">Konfliktlar topildi:</div>
-                <ul className="list-disc list-inside space-y-1">
-                  {availability.conflicts.map((conflict, index) => (
-                    <li key={index} className="text-sm">
-                      {conflict.message}
-                    </li>
+          {/* Room */}
+          <div className="space-y-1.5">
+            <Label>Xona <span className="text-gray-400 text-xs">(ixtiyoriy)</span></Label>
+            {roomsLoading ? (
+              <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Xonalar yuklanmoqda...
+              </div>
+            ) : (
+              <Select value={selectedRoomId} onValueChange={setSelectedRoomId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Xona tanlang (ixtiyoriy)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">— Xonasiz —</SelectItem>
+                  {rooms.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.name}
+                      {r.capacity ? ` (${r.capacity} o'rindiq)` : ''}
+                    </SelectItem>
                   ))}
-                </ul>
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* Subject Select */}
-          <div className="space-y-2">
-            <Label htmlFor="subject">
-              Fan <span className="text-red-500">*</span>
-            </Label>
-            <Select
-              value={selectedSubjectId}
-              onValueChange={setSelectedSubjectId}
-              disabled={availabilityLoading || !availability}
-            >
-              <SelectTrigger id="subject">
-                <SelectValue placeholder={
-                  availabilityLoading ? 'Yuklanmoqda...' :
-                  !availability ? 'Mavjudlik tekshirilmoqda...' :
-                  availability.available_subjects.length === 0 ? 'Mavjud fanlar yo\'q' :
-                  'Fan tanlang'
-                } />
-              </SelectTrigger>
-              <SelectContent>
-                {availability?.available_subjects.map((subject) => (
-                  <SelectItem key={subject.id} value={subject.id}>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{subject.subject_name}</span>
-                      <span className="text-gray-500">-</span>
-                      <span className="text-sm text-gray-600">{subject.teacher_name}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Faqat ushbu vaqtda mavjud bo'lgan fanlar ko'rsatiladi
-            </p>
-          </div>
-
-          {/* Room Select */}
-          <div className="space-y-2">
-            <Label htmlFor="room">Xona</Label>
-            <Select
-              value={selectedRoomId || '_none'}
-              onValueChange={(v) => setSelectedRoomId(v === '_none' ? undefined : v)}
-              disabled={availabilityLoading || !availability}
-            >
-              <SelectTrigger id="room">
-                <SelectValue placeholder={
-                  availabilityLoading ? 'Yuklanmoqda...' :
-                  !availability ? 'Mavjudlik tekshirilmoqda...' :
-                  'Xonani tanlang (ixtiyoriy)'
-                } />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_none">Xonasiz</SelectItem>
-                {availability?.available_rooms.map((room) => (
-                  <SelectItem key={room.id} value={room.id}>
-                    {room.name} ({room.capacity} o'rindiq)
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Faqat ushbu vaqtda bo'sh bo'lgan xonalar ko'rsatiladi
-            </p>
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           {/* Homework */}
-          <div className="space-y-2">
-            <Label htmlFor="homework">Uy vazifasi</Label>
+          <div className="space-y-1.5">
+            <Label>Uy vazifasi <span className="text-gray-400 text-xs">(ixtiyoriy)</span></Label>
             <Textarea
-              id="homework"
-              placeholder="Uy vazifasini kiriting (ixtiyoriy)"
+              placeholder="Uy vazifasini kiriting..."
               value={homework}
               onChange={(e) => setHomework(e.target.value)}
-              rows={3}
+              rows={2}
             />
           </div>
 
-          {/* Teacher Notes */}
-          <div className="space-y-2">
-            <Label htmlFor="notes">O'qituvchi uchun izohlar</Label>
+          {/* Notes */}
+          <div className="space-y-1.5">
+            <Label>Izoh <span className="text-gray-400 text-xs">(ixtiyoriy)</span></Label>
             <Textarea
-              id="notes"
-              placeholder="Qo'shimcha izohlar (ixtiyoriy)"
+              placeholder="Qo'shimcha izohlar..."
               value={teacherNotes}
               onChange={(e) => setTeacherNotes(e.target.value)}
               rows={2}
@@ -250,10 +247,7 @@ export function AddLessonDialog({
           <Button variant="outline" onClick={handleClose} disabled={isSubmitting}>
             Bekor qilish
           </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={!selectedSubjectId || availabilityLoading || !availability || isSubmitting}
-          >
+          <Button onClick={handleSubmit} disabled={!canSubmit}>
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Dars qo'shish
           </Button>

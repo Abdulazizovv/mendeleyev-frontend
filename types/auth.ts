@@ -65,6 +65,7 @@ export interface Branch {
 }
 
 export interface BranchMembership {
+  id?: string;
   branch_id: string;
   branch_name: string;
   branch_type: BranchType;
