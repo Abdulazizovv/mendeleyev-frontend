@@ -72,6 +72,8 @@ type FormState = {
   teacher: string;
   description: string;
   max_students: number;
+  teacher_salary_type: "percentage" | "per_lesson" | "";
+  teacher_salary_value: number | "";
   is_active: boolean;
 };
 
@@ -82,6 +84,8 @@ const EMPTY_FORM: FormState = {
   teacher: "",
   description: "",
   max_students: 30,
+  teacher_salary_type: "",
+  teacher_salary_value: "",
   is_active: true,
 };
 
@@ -202,6 +206,8 @@ export default function GroupsPage() {
       teacher: group.teacher ?? "",
       description: group.description ?? "",
       max_students: group.max_students,
+      teacher_salary_type: group.teacher_salary_type ?? "",
+      teacher_salary_value: group.teacher_salary_value ?? "",
       is_active: group.is_active,
     });
     setSheetOpen(true);
@@ -218,6 +224,8 @@ export default function GroupsPage() {
       teacher: form.teacher || null,
       description: form.description,
       max_students: form.max_students,
+      teacher_salary_type: form.teacher_salary_type || null,
+      teacher_salary_value: form.teacher_salary_value !== "" ? Number(form.teacher_salary_value) : null,
       is_active: form.is_active,
     };
     if (editingGroup) {
@@ -552,6 +560,57 @@ export default function GroupsPage() {
                 </p>
               )}
             </div>
+
+            {/* Teacher salary — faqat o'qituvchi tanlanganda */}
+            {form.teacher && (
+              <div className="border rounded-lg p-3 space-y-3 bg-gray-50">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Maosh sozlamalari</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Maosh turi</Label>
+                    <Select
+                      value={form.teacher_salary_type || "_none"}
+                      onValueChange={(v) =>
+                        setForm((f) => ({
+                          ...f,
+                          teacher_salary_type: v === "_none" ? "" : v as "percentage" | "per_lesson",
+                          teacher_salary_value: "",
+                        }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Tanlang" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="_none">Belgilanmagan</SelectItem>
+                        <SelectItem value="percentage">Foizga (%)</SelectItem>
+                        <SelectItem value="per_lesson">Dars uchun (so'm)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {form.teacher_salary_type && (
+                    <div className="space-y-1.5">
+                      <Label>
+                        {form.teacher_salary_type === "percentage" ? "Foiz (%)" : "Summa (so'm)"}
+                      </Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={form.teacher_salary_type === "percentage" ? 100 : undefined}
+                        placeholder={form.teacher_salary_type === "percentage" ? "40" : "50000"}
+                        value={form.teacher_salary_value}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            teacher_salary_value: e.target.value === "" ? "" : Number(e.target.value),
+                          }))
+                        }
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Max students */}
             <div className="space-y-1.5">

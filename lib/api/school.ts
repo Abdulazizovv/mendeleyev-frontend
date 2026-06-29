@@ -30,6 +30,7 @@ import type {
   DashboardStatistics,
   TodaysLesson,
   StudentImportResult,
+  SimpleImportResult,
   StudentImportTaskResponse,
   StudentImportStatusResponse,
   AssessmentType,
@@ -294,22 +295,46 @@ export const schoolApi = {
   // ==================== CLASS STUDENTS ====================
 
   /**
-   * Sinf o'quvchilarini olish
+   * Sinf o'quvchilarini olish (massiv — backward compat)
    */
   getClassStudents: async (
     classId: string,
-    params?: { 
+    params?: {
       page?: number;
       page_size?: number;
       search?: string;
       ordering?: string;
-      is_active?: boolean; 
+      is_active?: boolean;
     }
   ): Promise<ClassStudent[]> => {
     const response = await apiClient.get<ClassStudent[] | PaginatedResponse<ClassStudent>>(`/school/classes/${classId}/students/`, {
       params,
     });
     return unwrapResults(response.data);
+  },
+
+  /**
+   * Sinf o'quvchilarini olish (sahifalangan)
+   */
+  getClassStudentsPaged: async (
+    classId: string,
+    params?: {
+      page?: number;
+      page_size?: number;
+      search?: string;
+      ordering?: string;
+      is_active?: boolean;
+      include_removed?: boolean;
+    }
+  ): Promise<PaginatedResponse<ClassStudent>> => {
+    const response = await apiClient.get<PaginatedResponse<ClassStudent> | ClassStudent[]>(
+      `/school/classes/${classId}/students/`,
+      { params }
+    );
+    if (Array.isArray(response.data)) {
+      return { count: response.data.length, next: null, previous: null, results: response.data };
+    }
+    return response.data;
   },
 
   /**
@@ -988,6 +1013,21 @@ export const schoolApi = {
     return response.data;
   },
 
+  importStudentsSimple: async (
+    file: File,
+    branchId: string
+  ): Promise<SimpleImportResult> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('branch_id', branchId);
+    const response = await apiClient.post<SimpleImportResult>(
+      '/school/students/import-simple/',
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return response.data;
+  },
+
   // ==================== ASSESSMENT TYPES ====================
 
   getAssessmentTypes: async (
@@ -1425,12 +1465,34 @@ export const schoolApi = {
 
   getGroupMembers: async (
     branchId: string,
-    groupId: string
+    groupId: string,
+    params?: { page_size?: number }
   ): Promise<GroupMembership[]> => {
     const response = await apiClient.get<PaginatedResponse<GroupMembership> | GroupMembership[]>(
-      `/school/branches/${branchId}/groups/${groupId}/members/`
+      `/school/branches/${branchId}/groups/${groupId}/members/`,
+      { params }
     );
     return unwrapResults(response.data);
+  },
+
+  getGroupMembersPaged: async (
+    branchId: string,
+    groupId: string,
+    params?: {
+      page?: number;
+      page_size?: number;
+      search?: string;
+      include_removed?: boolean;
+    }
+  ): Promise<PaginatedResponse<GroupMembership>> => {
+    const response = await apiClient.get<PaginatedResponse<GroupMembership> | GroupMembership[]>(
+      `/school/branches/${branchId}/groups/${groupId}/members/`,
+      { params }
+    );
+    if (Array.isArray(response.data)) {
+      return { count: response.data.length, next: null, previous: null, results: response.data };
+    }
+    return response.data;
   },
 
   addGroupMember: async (
@@ -1441,6 +1503,51 @@ export const schoolApi = {
     const response = await apiClient.post<GroupMembership>(
       `/school/branches/${branchId}/groups/${groupId}/members/`,
       { student: studentId }
+    );
+    return response.data;
+  },
+
+  addGroupMembers: async (
+    branchId: string,
+    groupId: string,
+    studentIds: string[]
+  ): Promise<GroupMembership[]> => {
+    return Promise.all(
+      studentIds.map((id) =>
+        apiClient
+          .post<GroupMembership>(
+            `/school/branches/${branchId}/groups/${groupId}/members/`,
+            { student: id }
+          )
+          .then((r) => r.data)
+      )
+    );
+  },
+
+  getGroupAttendances: async (
+    branchId: string,
+    groupId: string
+  ): Promise<any[]> => {
+    const response = await apiClient.get(
+      `/school/branches/${branchId}/attendance/`,
+      { params: { group: groupId, page_size: 500 } }
+    );
+    return response.data?.results ?? response.data ?? [];
+  },
+
+  bulkMarkGroupAttendance: async (
+    branchId: string,
+    data: {
+      group_id: string;
+      date: string;
+      lesson_number: number;
+      records: { student_id: string; status: string; notes?: string }[];
+      lesson_id?: string;
+    }
+  ): Promise<any> => {
+    const response = await apiClient.post(
+      `/school/branches/${branchId}/attendance/bulk-mark/`,
+      data
     );
     return response.data;
   },

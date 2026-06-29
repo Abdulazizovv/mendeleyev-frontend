@@ -7,7 +7,7 @@ import { useAuth } from "@/lib/hooks/useAuth";
 import { useDebounce } from "@/lib/hooks/useDebounce";
 import { schoolApi } from "@/lib/api/school";
 import { branchApi, type MembershipDetail } from "@/lib/api/branch";
-import type { Class, ClassSubject, ClassStudent, Subject } from "@/types";
+import type { Class, ClassSubject, ClassStudent, Subject, SubjectLevel } from "@/types";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -63,15 +63,45 @@ export default function ClassDetailPage() {
 		enabled: !!classId,
 	});
 
-	const { data: classStudents = [], isLoading: cstLoading } = useQuery<ClassStudent[]>({
-		queryKey: ["classStudents", classId],
-		queryFn: () => schoolApi.getClassStudents(classId!),
+	// Sinf o'quvchilari: sahifalangan + qidiruv
+	const [studPage, setStudPage] = React.useState(1);
+	const [studSearch, setStudSearch] = React.useState("");
+	const debouncedStudSearch = useDebounce(studSearch, 300);
+	const STUD_PAGE_SIZE = 20;
+
+	const { data: classStudentsData, isLoading: cstLoading } = useQuery({
+		queryKey: ["classStudents", classId, studPage, debouncedStudSearch],
+		queryFn: () => schoolApi.getClassStudentsPaged(classId!, {
+			page: studPage,
+			page_size: STUD_PAGE_SIZE,
+			search: debouncedStudSearch || undefined,
+		}),
 		enabled: !!classId,
 	});
+	const classStudents = classStudentsData?.results ?? [];
+	const studCount = classStudentsData?.count ?? 0;
+	const studTotalPages = Math.ceil(studCount / STUD_PAGE_SIZE);
+
+	// Moliya tab uchun hammasi
+	const { data: allClassStudentsData } = useQuery({
+		queryKey: ["classStudents-all", classId],
+		queryFn: () => schoolApi.getClassStudentsPaged(classId!, { page_size: 500 }),
+		enabled: !!classId,
+	});
+	const allClassStudents = allClassStudentsData?.results ?? [];
+
+	// Arxiv tab
+	const [activeClassTab, setActiveClassTab] = React.useState("subjects");
+	const { data: archivedStudentsData, isLoading: archivedStudLoading } = useQuery({
+		queryKey: ["classStudents-archived", classId],
+		queryFn: () => schoolApi.getClassStudentsPaged(classId!, { include_removed: true, page_size: 500 }),
+		enabled: !!classId && activeClassTab === "archive",
+	});
+	const archivedStudents = (archivedStudentsData?.results ?? []).filter((s) => s.deleted_at != null);
 
 	// Mutations
 	const addSubjectMutation = useMutation({
-		mutationFn: (payload: { subject: string; hours_per_week: number; is_active: boolean }) =>
+		mutationFn: (payload: import('@/types').AddSubjectToClassRequest) =>
 			schoolApi.addSubjectToClass(classId!, payload),
 		onSuccess: () => qc.invalidateQueries({ queryKey: ["classSubjects", classId] }),
 	});
@@ -143,10 +173,30 @@ export default function ClassDetailPage() {
 
 	const [subjectForm, setSubjectForm] = React.useState<{
 		subject?: string;
+		subject_level?: string;
 		teacher?: string;
 		hours_per_week?: number;
 		is_active?: boolean;
+		teacher_salary_type?: 'percentage' | 'per_lesson' | '';
+		teacher_salary_value?: number;
 	}>({ hours_per_week: 2, is_active: true });
+
+	// Load levels when subject changes
+	const { data: subjectLevels = [], isLoading: levelsLoading } = useQuery<SubjectLevel[]>({
+		queryKey: ["subjectLevels", subjectForm.subject],
+		queryFn: () => schoolApi.getSubjectLevels(branchId!, subjectForm.subject!),
+		enabled: !!branchId && !!subjectForm.subject,
+	});
+
+	// Auto-select level when levels load
+	React.useEffect(() => {
+		if (subjectLevels.length === 1) {
+			setSubjectForm(f => ({ ...f, subject_level: subjectLevels[0].id }));
+		} else if (subjectLevels.length > 1) {
+			// reset level when subject changes
+			setSubjectForm(f => f.subject_level ? f : { ...f, subject_level: undefined });
+		}
+	}, [subjectLevels]);
 
 	const [studentForm, setStudentForm] = React.useState<{
 		students: MembershipDetail[];
@@ -171,15 +221,20 @@ export default function ClassDetailPage() {
 		enabled: !!branchId && transferDialog.open,
 	});
 
-	// Finance stats from classStudents
+	// Finance stats from allClassStudents (all pages)
 	const financeStats = React.useMemo(() => {
-		const positive = classStudents.filter((s) => s.student_balance > 0);
-		const negative = classStudents.filter((s) => s.student_balance < 0);
-		const zero = classStudents.filter((s) => s.student_balance === 0);
+		const positive = allClassStudents.filter((s) => s.student_balance > 0);
+		const negative = allClassStudents.filter((s) => s.student_balance < 0);
+		const zero = allClassStudents.filter((s) => s.student_balance === 0);
 		const totalDebt = negative.reduce((sum, s) => sum + Math.abs(s.student_balance), 0);
 		const totalPrepaid = positive.reduce((sum, s) => sum + s.student_balance, 0);
 		return { positive, negative, zero, totalDebt, totalPrepaid };
-	}, [classStudents]);
+	}, [allClassStudents]);
+
+	const handleStudSearchChange = (v: string) => {
+		setStudSearch(v);
+		setStudPage(1);
+	};
 
 	if (classLoading) {
 		return (
@@ -290,11 +345,11 @@ export default function ClassDetailPage() {
 			</div>
 
 			{/* Tabs */}
-			<Tabs defaultValue="students">
+			<Tabs defaultValue="students" value={activeClassTab} onValueChange={setActiveClassTab}>
 				<TabsList>
 					<TabsTrigger value="students">
 						<Users className="w-4 h-4 mr-2" />
-						O'quvchilar ({cls.current_students_count || 0})
+						O'quvchilar ({studCount || cls.current_students_count || 0})
 					</TabsTrigger>
 					<TabsTrigger value="subjects">
 						<BookOpen className="w-4 h-4 mr-2" />
@@ -304,12 +359,29 @@ export default function ClassDetailPage() {
 						<Wallet className="w-4 h-4 mr-2" />
 						Moliya
 					</TabsTrigger>
+					<TabsTrigger value="archive">
+						<Archive className="w-4 h-4 mr-2" />
+						Arxiv
+					</TabsTrigger>
 				</TabsList>
 
 				{/* ===== O'QUVCHILAR TAB ===== */}
 				<TabsContent value="students" className="mt-4 space-y-4">
-					<div className="flex items-center justify-between">
-						<p className="text-sm text-muted-foreground">Sinfga qo'shilgan o'quvchilar</p>
+					<div className="flex items-center justify-between gap-3 flex-wrap">
+						<div className="relative">
+							<Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
+							<Input
+								placeholder="Ism yoki telefon..."
+								value={studSearch}
+								onChange={(e) => handleStudSearchChange(e.target.value)}
+								className="pl-8 h-9 w-48"
+							/>
+							{studSearch && (
+								<button onClick={() => handleStudSearchChange("")} className="absolute right-2 top-2.5">
+									<X className="w-4 h-4 text-muted-foreground" />
+								</button>
+							)}
+						</div>
 						<Dialog open={openAddStudent} onOpenChange={setOpenAddStudent}>
 							<DialogTrigger asChild>
 								<Button size="sm">
@@ -495,7 +567,7 @@ export default function ClassDetailPage() {
 										<TableRow key={st.id}>
 											<TableCell className="font-medium">
 												<Link
-													href={`/school/students/${st.student_id}`}
+													href={`/school/students/${st.student_profile_id ?? st.student_id}`}
 													className="hover:text-indigo-600 hover:underline transition-colors"
 												>
 													{st.student_name}
@@ -563,6 +635,21 @@ export default function ClassDetailPage() {
 									))}
 								</TableBody>
 							</Table>
+							{/* Pagination */}
+							{studTotalPages > 1 && (
+								<div className="flex items-center justify-between px-4 py-3 border-t text-sm">
+									<span className="text-muted-foreground">Jami: {studCount} ta</span>
+									<div className="flex items-center gap-2">
+										<Button variant="outline" size="sm" onClick={() => setStudPage((p) => p - 1)} disabled={studPage === 1}>
+											‹ Oldingi
+										</Button>
+										<span className="text-muted-foreground min-w-[60px] text-center">{studPage} / {studTotalPages}</span>
+										<Button variant="outline" size="sm" onClick={() => setStudPage((p) => p + 1)} disabled={studPage >= studTotalPages}>
+											Keyingi ›
+										</Button>
+									</div>
+								</div>
+							)}
 						</Card>
 					)}
 				</TabsContent>
@@ -589,33 +676,56 @@ export default function ClassDetailPage() {
 								) : (
 									<div className="space-y-4">
 										<div className="grid grid-cols-2 gap-4">
+											{/* Fan */}
 											<div className="space-y-2">
-												<Label>
-													Fan <span className="text-red-500">*</span>
-												</Label>
+												<Label>Fan <span className="text-red-500">*</span></Label>
 												<Select
 													value={subjectForm.subject}
-													onValueChange={(v) => setSubjectForm((s) => ({ ...s, subject: v }))}
+													onValueChange={(v) => setSubjectForm((s) => ({ ...s, subject: v, subject_level: undefined }))}
 												>
 													<SelectTrigger>
 														<SelectValue placeholder="Fanni tanlang" />
 													</SelectTrigger>
 													<SelectContent>
 														{subjects.map((s) => (
-															<SelectItem key={s.id} value={s.id}>
-																{s.name}
+															<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
+											</div>
+
+											{/* Daraja */}
+											<div className="space-y-2">
+												<Label>Daraja <span className="text-red-500">*</span></Label>
+												<Select
+													value={subjectForm.subject_level ?? ""}
+													onValueChange={(v) => setSubjectForm((s) => ({ ...s, subject_level: v }))}
+													disabled={!subjectForm.subject || levelsLoading}
+												>
+													<SelectTrigger>
+														<SelectValue placeholder={
+															!subjectForm.subject ? "Avval fan tanlang"
+															: levelsLoading ? "Yuklanmoqda..."
+															: subjectLevels.length === 0 ? "Daraja yo'q"
+															: "Darajani tanlang"
+														} />
+													</SelectTrigger>
+													<SelectContent>
+														{subjectLevels.map((lv) => (
+															<SelectItem key={lv.id} value={lv.id}>
+																{lv.name} — {lv.lesson_price.toLocaleString("uz-UZ")} so'm
 															</SelectItem>
 														))}
 													</SelectContent>
 												</Select>
 											</div>
+
+											{/* O'qituvchi */}
 											<div className="space-y-2">
 												<Label>O'qituvchi</Label>
 												<Select
-													value={subjectForm.teacher}
-													onValueChange={(v) =>
-														setSubjectForm((s) => ({ ...s, teacher: v === "_none" ? undefined : v }))
-													}
+													value={subjectForm.teacher ?? "_none"}
+													onValueChange={(v) => setSubjectForm((s) => ({ ...s, teacher: v === "_none" ? undefined : v }))}
 												>
 													<SelectTrigger>
 														<SelectValue placeholder="Tanlang (ixtiyoriy)" />
@@ -623,41 +733,75 @@ export default function ClassDetailPage() {
 													<SelectContent>
 														<SelectItem value="_none">O'qituvchisiz</SelectItem>
 														{teachers.map((t) => (
-															<SelectItem key={t.id} value={t.id}>
-																{t.user_name}
-															</SelectItem>
+															<SelectItem key={t.id} value={t.id}>{t.user_name}</SelectItem>
 														))}
 													</SelectContent>
 												</Select>
 											</div>
+
+											{/* Haftalik soat */}
 											<div className="space-y-2">
-												<Label>
-													Haftalik soat <span className="text-red-500">*</span>
-												</Label>
+												<Label>Haftalik soat <span className="text-red-500">*</span></Label>
 												<Input
 													type="number"
 													placeholder="2"
 													value={String(subjectForm.hours_per_week ?? "")}
-													onChange={(e) =>
-														setSubjectForm((s) => ({ ...s, hours_per_week: Number(e.target.value) }))
-													}
-													min={1}
-													max={20}
+													onChange={(e) => setSubjectForm((s) => ({ ...s, hours_per_week: Number(e.target.value) }))}
+													min={1} max={20}
 												/>
 											</div>
-											<div className="space-y-2">
-												<Label>Holat</Label>
-												<div className="flex items-center gap-2 h-10">
-													<Checkbox
-														id="sub_active"
-														checked={!!subjectForm.is_active}
-														onCheckedChange={(v) => setSubjectForm((s) => ({ ...s, is_active: Boolean(v) }))}
-													/>
-													<Label htmlFor="sub_active" className="font-normal cursor-pointer">
-														Faol
-													</Label>
+										</div>
+
+										{/* Maosh sozlamalari (only when teacher selected) */}
+										{subjectForm.teacher && subjectForm.teacher !== "_none" && (
+											<div className="border-t pt-4 space-y-3">
+												<p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Maosh sozlamalari</p>
+												<div className="grid grid-cols-2 gap-4">
+													<div className="space-y-2">
+														<Label>Maosh turi</Label>
+														<Select
+															value={subjectForm.teacher_salary_type ?? ""}
+															onValueChange={(v) => setSubjectForm((s) => ({
+																...s,
+																teacher_salary_type: v === "" ? undefined : v as 'percentage' | 'per_lesson',
+															}))}
+														>
+															<SelectTrigger>
+																<SelectValue placeholder="Tanlang" />
+															</SelectTrigger>
+															<SelectContent>
+																<SelectItem value="">Belgilanmagan</SelectItem>
+																<SelectItem value="percentage">Foizga (%)</SelectItem>
+																<SelectItem value="per_lesson">Dars uchun (so'm)</SelectItem>
+															</SelectContent>
+														</Select>
+													</div>
+													{subjectForm.teacher_salary_type && (
+														<div className="space-y-2">
+															<Label>
+																{subjectForm.teacher_salary_type === 'percentage' ? 'Foiz (%)' : "Summa (so'm)"}
+															</Label>
+															<Input
+																type="number"
+																placeholder={subjectForm.teacher_salary_type === 'percentage' ? "40" : "50000"}
+																min={0}
+																max={subjectForm.teacher_salary_type === 'percentage' ? 100 : undefined}
+																value={subjectForm.teacher_salary_value ?? ""}
+																onChange={(e) => setSubjectForm((s) => ({ ...s, teacher_salary_value: Number(e.target.value) }))}
+															/>
+														</div>
+													)}
 												</div>
 											</div>
+										)}
+
+										<div className="flex items-center gap-2">
+											<Checkbox
+												id="sub_active"
+												checked={!!subjectForm.is_active}
+												onCheckedChange={(v) => setSubjectForm((s) => ({ ...s, is_active: Boolean(v) }))}
+											/>
+											<Label htmlFor="sub_active" className="font-normal cursor-pointer">Faol</Label>
 										</div>
 									</div>
 								)}
@@ -668,14 +812,17 @@ export default function ClassDetailPage() {
 									</Button>
 									<Button
 										onClick={() => {
-											if (!subjectForm.subject) return;
+											if (!subjectForm.subject || !subjectForm.subject_level) return;
 											addSubjectMutation.mutate(
 												{
 													subject: subjectForm.subject,
-													teacher: subjectForm.teacher || undefined,
+													subject_level: subjectForm.subject_level,
+													teacher: subjectForm.teacher || null,
 													hours_per_week: Number(subjectForm.hours_per_week ?? 2),
 													is_active: Boolean(subjectForm.is_active ?? true),
-												} as any,
+													teacher_salary_type: subjectForm.teacher_salary_type || null,
+													teacher_salary_value: subjectForm.teacher_salary_value ?? null,
+												},
 												{
 													onSuccess: () => {
 														setOpenAddSubject(false);
@@ -684,7 +831,7 @@ export default function ClassDetailPage() {
 												}
 											);
 										}}
-										disabled={addSubjectMutation.isPending || !subjectForm.subject}
+										disabled={addSubjectMutation.isPending || !subjectForm.subject || !subjectForm.subject_level}
 									>
 										{addSubjectMutation.isPending ? "Saqlanmoqda..." : "Qo'shish"}
 									</Button>
@@ -711,8 +858,9 @@ export default function ClassDetailPage() {
 								<TableHeader>
 									<TableRow>
 										<TableHead>Fan</TableHead>
+										<TableHead>Daraja</TableHead>
 										<TableHead>O'qituvchi</TableHead>
-										<TableHead className="text-center w-32">Haftalik soat</TableHead>
+										<TableHead className="text-center w-24">Soat/hafta</TableHead>
 										<TableHead className="text-center w-24">Holat</TableHead>
 										<TableHead className="w-16"></TableHead>
 									</TableRow>
@@ -721,6 +869,18 @@ export default function ClassDetailPage() {
 									{classSubjects.map((cs) => (
 										<TableRow key={cs.id}>
 											<TableCell className="font-medium">{cs.subject_name}</TableCell>
+											<TableCell>
+												{cs.subject_level_detail ? (
+													<div>
+														<p className="text-sm font-medium">{cs.subject_level_detail.name}</p>
+														<p className="text-xs text-muted-foreground">
+															{cs.subject_level_detail.lesson_price.toLocaleString("uz-UZ")} so'm
+														</p>
+													</div>
+												) : (
+													<span className="text-muted-foreground text-sm">—</span>
+												)}
+											</TableCell>
 											<TableCell className="text-sm text-muted-foreground">
 												{cs.teacher_name || "—"}
 											</TableCell>
@@ -854,7 +1014,7 @@ export default function ClassDetailPage() {
 													<TableRow key={st.id}>
 														<TableCell className="font-medium">
 															<Link
-																href={`/school/students/${st.student_id}`}
+																href={`/school/students/${st.student_profile_id ?? st.student_id}`}
 																className="hover:text-indigo-600 hover:underline transition-colors"
 															>
 																{st.student_name}
@@ -903,6 +1063,52 @@ export default function ClassDetailPage() {
 							)}
 						</>
 					)}
+				</TabsContent>
+
+				{/* ===== ARXIV TAB ===== */}
+				<TabsContent value="archive" className="mt-4">
+					<Card>
+						<CardHeader>
+							<CardTitle className="text-base">Chiqarilgan o'quvchilar tarixi</CardTitle>
+						</CardHeader>
+						<CardContent className="p-0">
+							{archivedStudLoading ? (
+								<div className="flex justify-center py-10">
+									<div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+								</div>
+							) : archivedStudents.length === 0 ? (
+								<div className="text-center py-12">
+									<Archive className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+									<p className="text-sm text-muted-foreground">Chiqarilgan o'quvchilar yo'q</p>
+								</div>
+							) : (
+								<Table>
+									<TableHeader>
+										<TableRow>
+											<TableHead>O'quvchi</TableHead>
+											<TableHead>Telefon</TableHead>
+											<TableHead>Qabul qilingan</TableHead>
+											<TableHead>Chiqarilgan</TableHead>
+										</TableRow>
+									</TableHeader>
+									<TableBody>
+										{archivedStudents.map((st) => (
+											<TableRow key={st.id}>
+												<TableCell className="font-medium">
+													<Link href={`/school/students/${st.student_profile_id ?? st.student_id}`} className="hover:text-primary hover:underline">
+														{st.student_name}
+													</Link>
+												</TableCell>
+												<TableCell className="text-sm text-muted-foreground">{st.student_phone}</TableCell>
+												<TableCell className="text-sm text-muted-foreground">{st.enrollment_date}</TableCell>
+												<TableCell className="text-sm text-red-500">{st.deleted_at ? new Date(st.deleted_at).toLocaleDateString("uz") : "—"}</TableCell>
+											</TableRow>
+										))}
+									</TableBody>
+								</Table>
+							)}
+						</CardContent>
+					</Card>
 				</TabsContent>
 			</Tabs>
 

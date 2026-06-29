@@ -212,11 +212,13 @@ export default function BranchSettingsPage() {
   });
 
   const [sal, setSal] = useState({
-    salary_calculation_time: "00:00",
-    auto_calculate_salary:   true,
-    salary_calculation_day:  1,
-    work_days_per_week:      6,
-    work_hours_per_day:      8,
+    salary_calculation_time:    "00:00",
+    auto_calculate_salary:      true,
+    salary_calculation_day:     1,
+    work_days_per_week:         6,
+    work_hours_per_day:         8,
+    enable_lesson_based_salary: false,
+    enable_daily_salary_calc:   false,
   });
 
   useEffect(() => {
@@ -242,11 +244,13 @@ export default function BranchSettingsPage() {
       early_payment_discount_percent: String(settings.early_payment_discount_percent ?? "0.00"),
     });
     setSal({
-      salary_calculation_time: toHH(settings.salary_calculation_time) || "00:00",
-      auto_calculate_salary:   settings.auto_calculate_salary ?? true,
-      salary_calculation_day:  settings.salary_calculation_day ?? 1,
-      work_days_per_week:      settings.work_days_per_week    ?? 6,
-      work_hours_per_day:      settings.work_hours_per_day    ?? 8,
+      salary_calculation_time:    toHH(settings.salary_calculation_time) || "00:00",
+      auto_calculate_salary:      settings.auto_calculate_salary ?? true,
+      salary_calculation_day:     settings.salary_calculation_day ?? 1,
+      work_days_per_week:         settings.work_days_per_week    ?? 6,
+      work_hours_per_day:         settings.work_hours_per_day    ?? 8,
+      enable_lesson_based_salary: settings.enable_lesson_based_salary ?? false,
+      enable_daily_salary_calc:   settings.enable_daily_salary_calc   ?? false,
     });
   }, [settings]);
 
@@ -777,21 +781,49 @@ export default function BranchSettingsPage() {
                   description="Avtomatik maosh hisoblash rejimi"
                 />
 
-                {/* Auto switch */}
-                <div className={cn(
-                  "flex items-center justify-between p-4 rounded-xl border mb-5 transition-colors",
-                  sal.auto_calculate_salary
-                    ? "bg-green-50 border-green-100"
-                    : "bg-gray-50 border-gray-200"
-                )}>
-                  <div>
-                    <p className="text-sm font-medium text-gray-800">Avtomatik hisoblash</p>
-                    <p className="text-xs text-gray-500 mt-0.5">Har kuni belgilangan vaqtda ishga tushadi</p>
+                {/* Toggles */}
+                <div className="space-y-3 mb-5">
+                  <div className={cn(
+                    "flex items-center justify-between p-4 rounded-xl border transition-colors",
+                    sal.auto_calculate_salary ? "bg-green-50 border-green-100" : "bg-gray-50 border-gray-200"
+                  )}>
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">Avtomatik hisoblash</p>
+                      <p className="text-xs text-gray-500 mt-0.5">Har kuni belgilangan vaqtda ishga tushadi</p>
+                    </div>
+                    <Switch
+                      checked={sal.auto_calculate_salary}
+                      onCheckedChange={v => setSal(p => ({ ...p, auto_calculate_salary: v }))}
+                    />
                   </div>
-                  <Switch
-                    checked={sal.auto_calculate_salary}
-                    onCheckedChange={v => setSal(p => ({ ...p, auto_calculate_salary: v }))}
-                  />
+
+                  <div className={cn(
+                    "flex items-center justify-between p-4 rounded-xl border transition-colors",
+                    sal.enable_lesson_based_salary ? "bg-blue-50 border-blue-100" : "bg-gray-50 border-gray-200"
+                  )}>
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">Darsga asoslangan maosh</p>
+                      <p className="text-xs text-gray-500 mt-0.5">O'quvchi to'loviga bog'liq holda o'qituvchi maoshi hisoblanadi</p>
+                    </div>
+                    <Switch
+                      checked={sal.enable_lesson_based_salary}
+                      onCheckedChange={v => setSal(p => ({ ...p, enable_lesson_based_salary: v }))}
+                    />
+                  </div>
+
+                  <div className={cn(
+                    "flex items-center justify-between p-4 rounded-xl border transition-colors",
+                    sal.enable_daily_salary_calc ? "bg-orange-50 border-orange-100" : "bg-gray-50 border-gray-200"
+                  )}>
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">Kunlik maosh hisoblash</p>
+                      <p className="text-xs text-gray-500 mt-0.5">Oylik/soatlik xodimlar uchun har kuni belgilangan ulush yoziladi</p>
+                    </div>
+                    <Switch
+                      checked={sal.enable_daily_salary_calc}
+                      onCheckedChange={v => setSal(p => ({ ...p, enable_daily_salary_calc: v }))}
+                    />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 mb-5">
@@ -852,11 +884,13 @@ export default function BranchSettingsPage() {
                 <SaveRow
                   pending={pending}
                   onClick={() => updateMutation.mutate({
-                    salary_calculation_time: toFull(sal.salary_calculation_time),
-                    auto_calculate_salary:   sal.auto_calculate_salary,
-                    salary_calculation_day:  sal.salary_calculation_day,
-                    work_days_per_week:      sal.work_days_per_week,
-                    work_hours_per_day:      sal.work_hours_per_day,
+                    salary_calculation_time:    toFull(sal.salary_calculation_time),
+                    auto_calculate_salary:      sal.auto_calculate_salary,
+                    salary_calculation_day:     sal.salary_calculation_day,
+                    work_days_per_week:         sal.work_days_per_week,
+                    work_hours_per_day:         sal.work_hours_per_day,
+                    enable_lesson_based_salary: sal.enable_lesson_based_salary,
+                    enable_daily_salary_calc:   sal.enable_daily_salary_calc,
                   })}
                   saved={lastSaved === "salary"}
                 />

@@ -25,11 +25,9 @@ import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import type { StaffMember } from "@/types/staff";
 import {
-  TrendingUp,
-  Wallet,
   Gift,
-  Clock,
   AlertTriangle,
+  SlidersHorizontal,
   ArrowRight,
   Loader2,
   CheckCircle,
@@ -50,65 +48,43 @@ interface TxConfig {
   requiresCash: boolean;
 }
 
+// Faqat ichki tranzaksiyalar: bonus, jarima, to'g'rilash
+// Avans va maosh to'lash → Moliya > Kassalar sahifasida
 const TX_TYPES: TxConfig[] = [
-  {
-    type: "salary_accrual",
-    label: "Maosh hisoblash",
-    shortLabel: "Hisoblash",
-    desc: "Xodim balansiga maosh qo'shish",
-    icon: TrendingUp,
-    headerBg: "bg-emerald-600",
-    cardActive: "border-emerald-400 bg-emerald-50 text-emerald-800",
-    btnClass: "bg-emerald-600 hover:bg-emerald-700 text-white",
-    sign: "+",
-    requiresCash: false,
-  },
-  {
-    type: "deduction",
-    label: "Maosh to'lash",
-    shortLabel: "To'lash",
-    desc: "Balansdan kassaga to'lash",
-    icon: Wallet,
-    headerBg: "bg-blue-600",
-    cardActive: "border-blue-400 bg-blue-50 text-blue-800",
-    btnClass: "bg-blue-600 hover:bg-blue-700 text-white",
-    sign: "-",
-    requiresCash: true,
-  },
   {
     type: "bonus",
     label: "Bonus",
     shortLabel: "Bonus",
-    desc: "Rag'batlantirish bonusi",
+    desc: "Xodimga mukofot bonusi qo'shish",
     icon: Gift,
-    headerBg: "bg-purple-600",
-    cardActive: "border-purple-400 bg-purple-50 text-purple-800",
-    btnClass: "bg-purple-600 hover:bg-purple-700 text-white",
+    headerBg: "bg-amber-500",
+    cardActive: "border-amber-400 bg-amber-50 text-amber-800",
+    btnClass: "bg-amber-500 hover:bg-amber-600 text-white",
     sign: "+",
     requiresCash: false,
-  },
-  {
-    type: "advance",
-    label: "Avans to'lash",
-    shortLabel: "Avans",
-    desc: "Oldindan to'lov (avans)",
-    icon: Clock,
-    headerBg: "bg-amber-600",
-    cardActive: "border-amber-400 bg-amber-50 text-amber-800",
-    btnClass: "bg-amber-600 hover:bg-amber-700 text-white",
-    sign: "-",
-    requiresCash: true,
   },
   {
     type: "fine",
     label: "Jarima",
     shortLabel: "Jarima",
-    desc: "Balansdan jarima ayirish",
+    desc: "Xodim balansidan jarima ayirish",
     icon: AlertTriangle,
     headerBg: "bg-red-600",
     cardActive: "border-red-400 bg-red-50 text-red-800",
     btnClass: "bg-red-600 hover:bg-red-700 text-white",
     sign: "-",
+    requiresCash: false,
+  },
+  {
+    type: "adjustment",
+    label: "To'g'rilash",
+    shortLabel: "To'g'rilash",
+    desc: "Balansni qo'lda to'g'rilash (manual)",
+    icon: SlidersHorizontal,
+    headerBg: "bg-slate-600",
+    cardActive: "border-slate-400 bg-slate-50 text-slate-800",
+    btnClass: "bg-slate-600 hover:bg-slate-700 text-white",
+    sign: "+",
     requiresCash: false,
   },
 ];
@@ -141,7 +117,7 @@ export function StaffTransactionSheet({
   onClose,
   staff,
   branchId,
-  defaultType = "salary_accrual",
+  defaultType = "bonus",
   onSuccess,
 }: StaffTransactionSheetProps) {
   const queryClient = useQueryClient();
@@ -166,18 +142,11 @@ export function StaffTransactionSheet({
     setPaymentMethod("cash");
   }, [open, defaultType]);
 
-  // Smart amount autofill
+  // Reset amount on type change
   useEffect(() => {
     if (!open) return;
-    if (txType === "salary_accrual") {
-      setAmountRaw(staff.monthly_salary > 0 ? String(staff.monthly_salary) : "");
-    } else if (txType === "deduction") {
-      const suggested = Math.min(Math.max(staff.balance, 0), staff.monthly_salary || 0);
-      setAmountRaw(suggested > 0 ? String(suggested) : "");
-    } else {
-      setAmountRaw("");
-    }
-  }, [txType, open, staff.monthly_salary, staff.balance]);
+    setAmountRaw("");
+  }, [txType, open]);
 
   // Cash registers
   const { data: registersData } = useQuery({
@@ -304,11 +273,11 @@ export function StaffTransactionSheet({
         {/* ── Form ────────────────────────────────────────────── */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
 
-          {/* Type selector — 3+2 grid */}
+          {/* Type selector — 3 column grid */}
           <div className="space-y-1.5">
             <Label className="text-xs text-gray-500">Operatsiya turi</Label>
             <div className="grid grid-cols-3 gap-1.5">
-              {TX_TYPES.slice(0, 3).map((t) => {
+              {TX_TYPES.map((t) => {
                 const Icon = t.icon;
                 const active = txType === t.type;
                 return (
@@ -329,46 +298,8 @@ export function StaffTransactionSheet({
                 );
               })}
             </div>
-            <div className="grid grid-cols-2 gap-1.5">
-              {TX_TYPES.slice(3).map((t) => {
-                const Icon = t.icon;
-                const active = txType === t.type;
-                return (
-                  <button
-                    key={t.type}
-                    type="button"
-                    onClick={() => setTxType(t.type)}
-                    className={cn(
-                      "flex flex-col items-center gap-1.5 p-2.5 rounded-xl border-2 text-center transition-all text-xs font-medium",
-                      active
-                        ? t.cardActive
-                        : "border-gray-100 bg-white text-gray-500 hover:border-gray-200 hover:bg-gray-50"
-                    )}
-                  >
-                    <Icon className="w-4 h-4" />
-                    {t.shortLabel}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Type description hint */}
             <p className="text-xs text-gray-400 text-center pt-0.5">{cfg.desc}</p>
           </div>
-
-          {/* Monthly salary quick-fill */}
-          {staff.monthly_salary > 0 && (txType === "salary_accrual" || txType === "deduction") && (
-            <button
-              type="button"
-              onClick={() => setAmountRaw(String(staff.monthly_salary))}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-gray-50 border border-gray-200 text-sm hover:bg-gray-100 transition-colors"
-            >
-              <span className="text-gray-400 text-xs">Oylik maosh:</span>
-              <span className="font-semibold text-gray-700 tabular-nums">
-                {formatCurrency(staff.monthly_salary)}
-              </span>
-            </button>
-          )}
 
           {/* Description */}
           <div className="space-y-1">

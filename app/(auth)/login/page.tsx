@@ -468,15 +468,24 @@ function PhoneInline({ value, onChange, error }: {
   value: string; onChange: (v: string) => void; error?: string;
 }) {
   const digits = value.replace(/\D/g, "").replace(/^998/, "").slice(0, 9);
+
+  const handleChange = (raw: string) => {
+    let n = raw.replace(/\D/g, "");
+    // Autofill may include country code (+998 → "998...") or leading 0
+    if (n.startsWith("998")) n = n.slice(3);
+    else if (n.startsWith("0")) n = n.slice(1);
+    onChange(`+998${n.slice(0, 9)}`);
+  };
+
   return (
     <div>
       <div className={`flex h-12 rounded-xl border overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 ${error ? "border-red-400" : "border-gray-200"}`}>
         <div className="flex items-center px-3 bg-gray-50 border-r border-gray-200 shrink-0 select-none">
           <span className="text-base font-semibold text-gray-700">+998</span>
         </div>
-        <input type="tel" maxLength={9} autoComplete="tel-national"
+        <input type="tel" maxLength={13} autoComplete="tel"
                value={digits}
-               onChange={(e) => onChange(`+998${e.target.value.replace(/\D/g, "").slice(0, 9)}`)}
+               onChange={(e) => handleChange(e.target.value)}
                placeholder="XX XXX XX XX"
                className="flex-1 px-3 text-base bg-white focus:outline-none placeholder:text-gray-300 font-medium tracking-wide" />
       </div>

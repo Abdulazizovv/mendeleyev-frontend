@@ -72,9 +72,28 @@ export interface ClassStudent {
   notes?: string;
   created_at: string;
   updated_at: string;
+  deleted_at?: string | null;
 }
 
 // Subject Types
+export interface SubjectDetailClassSubject {
+  id: string;
+  class_id: string;
+  class_name: string;
+  hours_per_week: number;
+  is_active: boolean;
+  subject_level: { id: string; name: string; lesson_price: number } | null;
+  teacher_salary_type: 'percentage' | 'per_lesson' | null;
+  teacher_salary_value: number | null;
+  teacher: {
+    id: string;
+    user_id: string;
+    full_name: string;
+    phone_number: string;
+  } | null;
+  quarter: { id: string; name: string; number: number } | null;
+}
+
 export interface Subject {
   id: string;
   branch: string;
@@ -85,6 +104,8 @@ export interface Subject {
   /** Hex rang kodi (#RRGGBB) - dars jadvali va UI da ishlatiladi */
   color?: string;
   is_active: boolean;
+  levels_count?: number;
+  default_lesson_price?: number;
   created_at: string;
   updated_at: string;
   created_by?: string | null;
@@ -93,6 +114,8 @@ export interface Subject {
   total_classes?: number;
   active_classes?: number;
   teachers?: { id: string; phone_number: string; full_name: string }[];
+  class_subjects?: SubjectDetailClassSubject[];
+  levels?: SubjectLevel[];
 }
 
 export interface SubjectLevel {
@@ -123,6 +146,8 @@ export interface Group {
   teacher_name: string | null;
   description?: string;
   max_students: number;
+  teacher_salary_type: 'percentage' | 'per_lesson' | null;
+  teacher_salary_value: number | null;
   is_active: boolean;
   members_count: number;
   created_at: string;
@@ -135,6 +160,8 @@ export interface CreateGroupRequest {
   teacher?: string | null;
   description?: string;
   max_students?: number;
+  teacher_salary_type?: 'percentage' | 'per_lesson' | null;
+  teacher_salary_value?: number | null;
   is_active?: boolean;
 }
 
@@ -144,9 +171,12 @@ export interface GroupMembership {
   student: string;
   student_name: string;
   student_personal_number?: string;
+  student_phone?: string | null;
+  student_balance?: number;
   enrollment_date: string;
   is_active: boolean;
   created_at: string;
+  deleted_at?: string | null;
 }
 
 export interface ClassSubject {
@@ -155,13 +185,19 @@ export interface ClassSubject {
   class_name: string;
   subject: string;
   subject_name: string;
+  subject_color?: string;
   subject_code?: string;
+  subject_level?: string | null;
+  subject_level_detail?: SubjectLevel | null;
+  available_levels?: { id: string; name: string; lesson_price: number }[];
   teacher?: string;
   teacher_name?: string;
   hours_per_week: number;
   quarter?: string;
   quarter_name?: string;
   is_active: boolean;
+  teacher_salary_type?: 'percentage' | 'per_lesson' | null;
+  teacher_salary_value?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -240,6 +276,8 @@ export interface BranchSettings {
   salary_calculation_time: string;
   auto_calculate_salary: boolean;
   salary_calculation_day: number;
+  enable_lesson_based_salary: boolean;
+  enable_daily_salary_calc: boolean;
 
   // To'lov va chegirmalar
   late_payment_penalty_percent: string;
@@ -274,6 +312,8 @@ export interface UpdateBranchSettingsPayload {
   salary_calculation_time?: string;
   auto_calculate_salary?: boolean;
   salary_calculation_day?: number;
+  enable_lesson_based_salary?: boolean;
+  enable_daily_salary_calc?: boolean;
   late_payment_penalty_percent?: string;
   early_payment_discount_percent?: string;
   work_days_per_week?: number;
@@ -635,10 +675,13 @@ export interface CreateSubjectRequest {
 
 export interface AddSubjectToClassRequest {
   subject: string;
-  teacher?: string;
+  subject_level?: string | null;
+  teacher?: string | null;
   hours_per_week: number;
-  quarter?: string;
+  quarter?: string | null;
   is_active: boolean;
+  teacher_salary_type?: 'percentage' | 'per_lesson' | null;
+  teacher_salary_value?: number | null;
 }
 
 export interface CreateBuildingRequest {
@@ -1296,6 +1339,30 @@ export interface StudentImportStatusResponse {
   message?: string;
   result?: StudentImportResult;
   error?: string;
+}
+
+export interface SimpleImportError {
+  row: number;
+  name: string;
+  phone: string;
+  error: string;
+}
+
+export interface SimpleImportedStudent {
+  row: number;
+  name: string;
+  phone: string;
+  personal_number: string;
+}
+
+export interface SimpleImportResult {
+  total: number;
+  success: number;
+  skipped: number;
+  failed: number;
+  errors: SimpleImportError[];
+  skipped_list: { row: number; name: string; phone: string }[];
+  students: SimpleImportedStudent[];
 }
 
 export type StudentDocumentType = 'passport' | 'birth_certificate' | 'certificate' | 'photo' | 'other';

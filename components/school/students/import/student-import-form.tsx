@@ -1,22 +1,33 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { FileSpreadsheet, Upload, Download, AlertCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { FileUpload } from "./file-upload";
-import { ImportResults } from "./import-results";
+  FileSpreadsheet,
+  Upload,
+  Download,
+  CheckCircle2,
+  XCircle,
+  SkipForward,
+  AlertCircle,
+  X,
+  Info,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { schoolApi } from "@/lib/api";
 import { toast } from "sonner";
-import type { StudentImportResult } from "@/types";
+import type { SimpleImportResult } from "@/types";
 
 interface StudentImportFormProps {
   branchId: string;
@@ -24,343 +35,336 @@ interface StudentImportFormProps {
 
 export function StudentImportForm({ branchId }: StudentImportFormProps) {
   const router = useRouter();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const importingRef = useRef(false);
   const [file, setFile] = useState<File | null>(null);
+  const [dragging, setDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingMessage, setLoadingMessage] = useState<string>("");
-  const [previewResult, setPreviewResult] = useState<StudentImportResult | null>(null);
-  const [importResult, setImportResult] = useState<StudentImportResult | null>(null);
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [result, setResult] = useState<SimpleImportResult | null>(null);
 
-  // Polling intervalini to'xtatish
-  const stopPolling = () => {
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-      pollingIntervalRef.current = null;
-    }
-  };
-
-  // Cleanup: component unmount bo'lganda polling to'xtatish
-  useEffect(() => {
-    return () => {
-      stopPolling();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Task statusini tekshirish (polling)
-  const pollTaskStatus = async (taskId: string, isDryRun: boolean) => {
-    try {
-      const statusData = await schoolApi.checkImportStatus(taskId);
-
-      if (statusData.status === 'SUCCESS' && statusData.result) {
-        stopPolling();
-        setIsLoading(false);
-        
-        if (isDryRun) {
-          setPreviewResult(statusData.result);
-          if (statusData.result.success > 0) {
-            toast.success(
-              `${statusData.result.success} ta o'quvchi import uchun tayyor`,
-              {
-                description: statusData.result.failed > 0 
-                  ? `${statusData.result.failed} ta o'quvchida xatolik topildi`
-                  : undefined
-              }
-            );
-          } else {
-            toast.error("Import uchun tayyor o'quvchilar topilmadi");
-          }
-        } else {
-          setImportResult(statusData.result);
-          setPreviewResult(null);
-          if (statusData.result.success > 0) {
-            toast.success(
-              `${statusData.result.success} ta o'quvchi muvaffaqiyatli import qilindi`,
-              {
-                description: statusData.result.failed > 0 
-                  ? `${statusData.result.failed} ta o'quvchida xatolik yuz berdi`
-                  : undefined
-              }
-            );
-          } else {
-            toast.error("Import qilingan o'quvchilar yo'q");
-          }
-        }
-      } else if (statusData.status === 'FAILURE') {
-        stopPolling();
-        setIsLoading(false);
-        toast.error("Import jarayonida xatolik yuz berdi", {
-          description: statusData.error || "Noma'lum xatolik"
-        });
-      } else if (statusData.status === 'STARTED') {
-        setLoadingMessage("Import jarayoni davom etmoqda...");
-      } else if (statusData.status === 'PENDING') {
-        setLoadingMessage("Navbatda kutmoqda...");
-      }
-    } catch (error: unknown) {
-      console.error("Status check error:", error);
-      stopPolling();
-      setIsLoading(false);
-      const apiError = error as { response?: { data?: { detail?: string } }; message?: string };
-      toast.error("Status tekshirishda xatolik", {
-        description: apiError?.response?.data?.detail || apiError?.message || "Iltimos, qaytadan urinib ko'ring"
-      });
-    }
-  };
-
-  const handlePreview = async () => {
-    if (!file) {
-      toast.error("Iltimos, faylni tanlang");
+  const handleFileChange = (selected: File | null) => {
+    if (!selected) return;
+    const ext = selected.name.split(".").pop()?.toLowerCase();
+    if (ext !== "xlsx" && ext !== "xls") {
+      toast.error("Faqat .xlsx yoki .xls fayl qabul qilinadi");
       return;
     }
+    setFile(selected);
+    setResult(null);
+  };
 
-    setIsLoading(true);
-    setLoadingMessage("Fayl yuklanmoqda...");
-    setPreviewResult(null);
-    setImportResult(null);
-
-    try {
-      const taskResponse = await schoolApi.importStudents(file, branchId, true);
-      
-      // Polling boshlash (har 2 soniyada)
-      pollingIntervalRef.current = setInterval(() => {
-        pollTaskStatus(taskResponse.task_id, true);
-      }, 2000);
-      
-      // Birinchi marta darhol tekshirish
-      pollTaskStatus(taskResponse.task_id, true);
-      
-    } catch (error: unknown) {
-      const apiError = error as { response?: { data?: { detail?: string } }; message?: string };
-      console.error("Preview error:", error);
-      setIsLoading(false);
-      toast.error("Xatolik yuz berdi", {
-        description: apiError?.response?.data?.detail || apiError?.message || "Faylni tekshirishda xatolik"
-      });
-    }
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragging(false);
+    const dropped = e.dataTransfer.files[0];
+    if (dropped) handleFileChange(dropped);
   };
 
   const handleImport = async () => {
-    if (!file) {
-      toast.error("Iltimos, faylni tanlang");
-      return;
-    }
-
+    if (!file || importingRef.current) return;
+    importingRef.current = true;
     setIsLoading(true);
-    setLoadingMessage("Fayl yuklanmoqda...");
-    setImportResult(null);
-
     try {
-      const taskResponse = await schoolApi.importStudents(file, branchId, false);
-      
-      // Polling boshlash (har 2 soniyada)
-      pollingIntervalRef.current = setInterval(() => {
-        pollTaskStatus(taskResponse.task_id, false);
-      }, 2000);
-      
-      // Birinchi marta darhol tekshirish
-      pollTaskStatus(taskResponse.task_id, false);
-      
-    } catch (error: unknown) {
-      const apiError = error as { response?: { data?: { detail?: string } }; message?: string };
-      console.error("Import error:", error);
+      const data = await schoolApi.importStudentsSimple(file, branchId);
+      setResult(data);
+      if (data.success > 0) {
+        toast.success(`${data.success} ta o'quvchi muvaffaqiyatli import qilindi`);
+      } else if (data.skipped > 0 && data.failed === 0) {
+        toast.info("Barcha o'quvchilar allaqachon tizimda mavjud");
+      } else {
+        toast.warning("Import qilingan o'quvchilar yo'q");
+      }
+    } catch (err: unknown) {
+      const apiErr = err as { response?: { data?: { detail?: string } }; message?: string };
+      toast.error(
+        apiErr?.response?.data?.detail || apiErr?.message || "Import xatolik bilan tugadi"
+      );
+    } finally {
       setIsLoading(false);
-      toast.error("Import jarayonida xatolik yuz berdi", {
-        description: apiError?.response?.data?.detail || apiError?.message || "Iltimos, qaytadan urinib ko'ring"
-      });
+      importingRef.current = false;
     }
-  };
-
-  const handleReset = () => {
-    stopPolling();
-    setFile(null);
-    setPreviewResult(null);
-    setImportResult(null);
-    setLoadingMessage("");
-  };
-
-  const handleGoToStudents = () => {
-    stopPolling();
-    router.push(`/school/students`);
-  };
-
-  const handleFileSelect = (selectedFile: File | null) => {
-    // Agar yangi fayl tanlansa, oldingi pollingni to'xtatish
-    if (selectedFile !== file) {
-      stopPolling();
-      setPreviewResult(null);
-      setImportResult(null);
-      setLoadingMessage("");
-      setIsLoading(false);
-    }
-    setFile(selectedFile);
   };
 
   const downloadTemplate = () => {
-    // Create Excel template with headers
-    const headers = [
-      "Shartnoma Raqam FIO",
-      "Balans",
-      "Smil",
-      "Guruh",
-      "Telefon Raqam",
-      "Sinf Rahbari",
-      "Jinsi",
-      "Tug'ilgan sanai",
-      "Manzil",
-      "Shartnoma sanasi",
-      "Shartnoma tugasi",
-      "Passport",
-      "Aboniment",
-      "1-Yaqinl Turi",
-      "1-Yaqini FIO",
-      "1-Yaqini Telefon",
-      "2-Yaqini Turi",
-      "2-Yaqini FIO",
-      "2-Yaqini Telefon",
-    ];
-
-    // Create sample data
-    const sampleData = [
-      [
-        "Ali Karim o'g'li Valiyev",
-        "0",
-        "",
-        "5-A",
-        "+998901234567",
-        "Javohirbek Bahromov",
-        "male",
-        "2010-05-15",
-        "Toshkent shahri, Chilonzor tumani",
-        "",
-        "",
-        "AB1234567",
-        "",
-        "ota",
-        "Karim Olim o'g'li Valiyev",
-        "+998901234568",
-        "ona",
-        "Nodira Aziz qizi Valiyeva",
-        "+998901234569",
-      ],
-    ];
-
-    // Create CSV content
-    const csvContent = [
-      headers.join(","),
-      ...sampleData.map((row) =>
-        row.map((cell) => `"${cell}"`).join(",")
-      ),
-    ].join("\n");
-
-    // Create and download file
-    const blob = new Blob(["\uFEFF" + csvContent], {
-      type: "text/csv;charset=utf-8;",
-    });
-    const link = document.createElement("a");
+    const csv = "﻿Ism,Familiya,Telefon\nAli,Valiyev,+998901234567\n";
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", "students_import_template.csv");
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "o_quvchilar_template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Namuna fayl yuklab olindi");
+  };
 
-    toast.success("Template yuklab olindi", {
-      description: "CSV faylni Excel da ochib, ma'lumotlarni to'ldiring",
-    });
+  const reset = () => {
+    setFile(null);
+    setResult(null);
+    if (inputRef.current) inputRef.current.value = "";
+  };
+
+  const removeFile = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    reset();
   };
 
   return (
     <div className="space-y-6">
-      {/* Instructions Card */}
+      {/* Format instructions */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-base">
             <FileSpreadsheet className="h-5 w-5" />
-            O&apos;quvchilarni Excel orqali import qilish
+            Excel fayl formati
           </CardTitle>
-          <CardDescription>
-            Excel fayl orqali bir necha o&apos;quvchini bir vaqtda import qiling
-          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Eslatma</AlertTitle>
-            <AlertDescription>
-              <ul className="list-disc list-inside space-y-1 mt-2 text-sm">
-                <li>Excel fayl (.xlsx yoki .xls formatida) bo&apos;lishi kerak</li>
-                <li>Fayl hajmi 10MB dan oshmasligi kerak</li>
-                <li>Telefon raqamlar unique bo&apos;lishi kerak</li>
-                <li>Avval &quot;Oldindan ko&apos;rish&quot; tugmasini bosib tekshiring</li>
-                <li>Keyin &quot;Import qilish&quot; tugmasini bosing</li>
-              </ul>
-            </AlertDescription>
-          </Alert>
-
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={downloadTemplate}
-              className="flex items-center gap-2"
-            >
-              <Download className="h-4 w-4" />
-              Template yuklab olish
-            </Button>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-3 gap-2 text-sm text-center">
+            {[
+              { col: "A", label: "Ism" },
+              { col: "B", label: "Familiya" },
+              { col: "C", label: "Telefon raqam" },
+            ].map(({ col, label }) => (
+              <div key={col} className="rounded-md border bg-muted/40 py-3">
+                <div className="text-lg font-bold">{col}</div>
+                <div className="text-muted-foreground">{label}</div>
+              </div>
+            ))}
           </div>
+          <p className="text-xs text-muted-foreground">
+            Birinchi qator sarlavha sifatida o&apos;tkazib yuboriladi. Telefon raqam
+            +998XXXXXXXXX formatida bo&apos;lishi tavsiya etiladi.
+          </p>
+          <Button variant="outline" size="sm" onClick={downloadTemplate} type="button">
+            <Download className="h-4 w-4 mr-2" />
+            Namuna fayl yuklab olish
+          </Button>
         </CardContent>
       </Card>
 
-      {/* File Upload */}
-      <FileUpload
-        file={file}
-        onFileSelect={handleFileSelect}
-        disabled={isLoading}
-      />
+      {/* File upload area */}
+      <div
+        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragging(true); }}
+        onDragLeave={(e) => { e.stopPropagation(); setDragging(false); }}
+        onDrop={handleDrop}
+        className={`relative rounded-lg border-2 border-dashed transition-colors
+          ${dragging ? "border-primary bg-primary/5" : "border-muted-foreground/30"}
+        `}
+      >
+        <input
+          ref={inputRef}
+          type="file"
+          accept=".xlsx,.xls"
+          className="hidden"
+          onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
+        />
 
-      {/* Action Buttons */}
-      {file && !importResult && (
-        <div className="flex gap-3">
-          <Button
-            onClick={handlePreview}
-            disabled={isLoading}
-            variant="outline"
-            className="flex-1"
-          >
-            {isLoading ? loadingMessage || "Tekshirilmoqda..." : "Oldindan ko'rish"}
-          </Button>
-          {previewResult && (
-            <Button
-              onClick={handleImport}
-              disabled={isLoading || previewResult.success === 0}
-              className="flex-1"
+        {file ? (
+          /* File selected — show info, no click-to-reopen */
+          <div className="flex items-center gap-3 p-6">
+            <FileSpreadsheet className="h-8 w-8 text-green-500 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="font-medium truncate">{file.name}</p>
+              <p className="text-sm text-muted-foreground">
+                {(file.size / 1024).toFixed(1)} KB
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={removeFile}
+              className="p-1 text-muted-foreground hover:text-destructive rounded"
             >
-              <Upload className="h-4 w-4 mr-2" />
-              {isLoading ? loadingMessage || "Import qilinmoqda..." : "Import qilish"}
-            </Button>
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          /* No file — click to open dialog */
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            className="w-full flex flex-col items-center justify-center gap-3 p-10 cursor-pointer hover:bg-muted/30 transition-colors rounded-lg"
+          >
+            <Upload className="h-10 w-10 text-muted-foreground" />
+            <div className="text-center">
+              <p className="font-medium text-sm">Excel faylni shu yerga tashlang</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                yoki bosib tanlang (.xlsx, .xls)
+              </p>
+            </div>
+          </button>
+        )}
+      </div>
+
+      {/* Import button */}
+      {file && !result && (
+        <Button
+          type="button"
+          onClick={handleImport}
+          disabled={isLoading}
+          className="w-full"
+          size="lg"
+        >
+          <Upload className="h-4 w-4 mr-2" />
+          {isLoading ? "Import qilinmoqda..." : "Import qilish"}
+        </Button>
+      )}
+
+      {/* Results */}
+      {result && (
+        <div className="space-y-4">
+          {/* Summary badges */}
+          <div className="flex flex-wrap gap-3">
+            <Badge variant="outline" className="gap-1.5 px-3 py-1.5 text-sm">
+              Jami: <span className="font-bold">{result.total}</span>
+            </Badge>
+            {result.success > 0 && (
+              <Badge className="gap-1.5 px-3 py-1.5 text-sm bg-green-500 hover:bg-green-600">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Yangi: <span className="font-bold">{result.success}</span>
+              </Badge>
+            )}
+            {result.skipped > 0 && (
+              <Badge variant="secondary" className="gap-1.5 px-3 py-1.5 text-sm">
+                <SkipForward className="h-3.5 w-3.5" />
+                Mavjud: <span className="font-bold">{result.skipped}</span>
+              </Badge>
+            )}
+            {result.failed > 0 && (
+              <Badge variant="destructive" className="gap-1.5 px-3 py-1.5 text-sm">
+                <XCircle className="h-3.5 w-3.5" />
+                Xatolik: <span className="font-bold">{result.failed}</span>
+              </Badge>
+            )}
+          </div>
+
+          {/* Successfully added */}
+          {result.students.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2 text-green-600">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Qo&apos;shilgan o&apos;quvchilar ({result.students.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">Qator</TableHead>
+                      <TableHead>Ism Familiya</TableHead>
+                      <TableHead>Telefon</TableHead>
+                      <TableHead>Raqam</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {result.students.map((s) => (
+                      <TableRow key={s.row}>
+                        <TableCell className="text-muted-foreground">{s.row}</TableCell>
+                        <TableCell className="font-medium">{s.name}</TableCell>
+                        <TableCell>{s.phone}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {s.personal_number}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
           )}
-        </div>
-      )}
 
-      {/* Preview Results */}
-      {previewResult && !importResult && (
-        <ImportResults result={previewResult} isDryRun={true} />
-      )}
+          {/* Already existed (skipped) */}
+          {result.skipped_list && result.skipped_list.length > 0 && (
+            <Card className="border-muted">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2 text-muted-foreground">
+                  <Info className="h-4 w-4" />
+                  Allaqachon tizimda mavjud — o&apos;tkazib yuborildi (
+                  {result.skipped_list.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">Qator</TableHead>
+                      <TableHead>Ism Familiya</TableHead>
+                      <TableHead>Telefon</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {result.skipped_list.map((s, i) => (
+                      <TableRow key={i} className="text-muted-foreground">
+                        <TableCell>{s.row}</TableCell>
+                        <TableCell>{s.name}</TableCell>
+                        <TableCell>{s.phone}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
 
-      {/* Import Results */}
-      {importResult && (
-        <>
-          <ImportResults result={importResult} isDryRun={false} />
+          {/* Real errors */}
+          {result.errors.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2 text-destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  Xatoliklar ({result.errors.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">Qator</TableHead>
+                      <TableHead>Ism Familiya</TableHead>
+                      <TableHead>Telefon</TableHead>
+                      <TableHead>Xatolik</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {result.errors.map((e, i) => (
+                      <TableRow key={i} className="bg-destructive/5">
+                        <TableCell className="text-muted-foreground">{e.row}</TableCell>
+                        <TableCell>{e.name || "—"}</TableCell>
+                        <TableCell>{e.phone || "—"}</TableCell>
+                        <TableCell className="text-destructive text-sm">{e.error}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Action buttons */}
           <div className="flex gap-3">
-            <Button onClick={handleReset} variant="outline" className="flex-1">
+            <Button type="button" variant="outline" onClick={reset} className="flex-1">
               Yana import qilish
             </Button>
-            <Button onClick={handleGoToStudents} className="flex-1">
+            <Button
+              type="button"
+              onClick={() => router.push("/school/students")}
+              className="flex-1"
+            >
               O&apos;quvchilar ro&apos;yxatiga o&apos;tish
             </Button>
           </div>
-        </>
+        </div>
+      )}
+
+      {!file && !result && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription className="text-sm">
+            Telefon raqami allaqachon tizimda mavjud bo&apos;lgan o&apos;quvchilar o&apos;tkazib
+            yuboriladi (takrorlanmaydi).
+          </AlertDescription>
+        </Alert>
       )}
     </div>
   );

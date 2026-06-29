@@ -116,29 +116,6 @@ export function CreateSubjectForm({ branchId, onSuccess, onCancel }: CreateSubje
           )}
         />
 
-        {/* Subject Code */}
-        <FormField
-          control={form.control}
-          name="code"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Fan kodi</FormLabel>
-              <FormControl>
-                <Input
-                  placeholder="MATH"
-                  {...field}
-                  disabled={isSubmitting}
-                  className="h-11 font-mono"
-                />
-              </FormControl>
-              <FormDescription>
-                Fan uchun qisqa kod (ixtiyoriy)
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
         {/* Description */}
         <FormField
           control={form.control}

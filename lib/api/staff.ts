@@ -435,4 +435,45 @@ export const staffApi = {
     );
     return response.data;
   },
+
+  // ==================== DOCUMENTS ====================
+
+  getDocuments: async (staffId: string) => {
+    const response = await apiClient.get<import("@/types/staff").StaffDocument[]>(
+      `branches/staff/${staffId}/documents/`
+    );
+    return response.data;
+  },
+
+  uploadDocument: async (staffId: string, formData: FormData) => {
+    const response = await apiClient.post<import("@/types/staff").StaffDocument>(
+      `branches/staff/${staffId}/documents/`,
+      formData,
+      { headers: { "Content-Type": "multipart/form-data" } }
+    );
+    return response.data;
+  },
+
+  deleteDocument: async (staffId: string, docId: string): Promise<void> => {
+    await apiClient.delete(`branches/staff/${staffId}/documents/${docId}/`);
+  },
+
+  // ==================== ACTIVITY LOG ====================
+
+  getActivity: async (staffId: string, params?: { page?: number }) => {
+    const response = await apiClient.get<PaginatedResponse<import("@/types/staff").StaffActivityLog>>(
+      `branches/staff/${staffId}/activity/`,
+      { params }
+    );
+    return response.data;
+  },
+
+  // ==================== BALANCE STATS ====================
+
+  getBalanceStats: async (staffId: string) => {
+    const response = await apiClient.get<import("@/types/staff").StaffBalanceStats>(
+      `branches/staff/${staffId}/balance-stats/`
+    );
+    return response.data;
+  },
 };

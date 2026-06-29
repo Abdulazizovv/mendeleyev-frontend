@@ -11,7 +11,7 @@ export type StaffStatus = "active" | "terminated";
 
 export type BalanceStatus = "positive" | "negative" | "zero";
 
-export type TransactionType = "salary" | "bonus" | "deduction" | "advance" | "fine" | "refund" | "salary_accrual" | "adjustment" | "other";
+export type TransactionType = "salary" | "bonus" | "deduction" | "advance" | "fine" | "refund" | "salary_accrual" | "lesson_salary" | "adjustment" | "other";
 
 // Note: backend supports additional methods in salary/balance flows (see docs/api/staff-salary-api.md)
 export type PaymentMethod = "cash" | "bank_transfer" | "card" | "mobile_payment" | "other";
@@ -440,6 +440,7 @@ export const transactionTypeLabels: Record<TransactionType, string> = {
   fine: "Jarima",
   refund: "Qaytarish",
   salary_accrual: "Oylik hisoblash",
+  lesson_salary: "Darsdan maosh",
   adjustment: "To'g'rilash",
   other: "Boshqa",
 };
@@ -464,6 +465,64 @@ export const paymentStatusLabels: Record<PaymentStatus, string> = {
   completed: "To'langan",
   failed: "Muvaffaqiyatsiz",
 };
+
+// ==================== Staff Documents ====================
+
+export type StaffDocumentType = "passport" | "contract" | "diploma" | "certificate" | "photo" | "other";
+
+export interface StaffDocument {
+  id: string;
+  name: string;
+  file: string;
+  file_url: string;
+  document_type: StaffDocumentType;
+  document_type_display: string;
+  notes: string;
+  uploaded_by_name: string | null;
+  created_at: string;
+}
+
+export const staffDocumentTypeLabels: Record<StaffDocumentType, string> = {
+  passport: "Pasport",
+  contract: "Shartnoma",
+  diploma: "Diplom",
+  certificate: "Sertifikat",
+  photo: "Fotosurat",
+  other: "Boshqa",
+};
+
+// ==================== Activity Log ====================
+
+export type StaffActivityActionType =
+  | "created" | "updated" | "terminated" | "reactivated"
+  | "balance_change" | "document_add" | "document_delete"
+  | "salary_paid" | "note" | "other";
+
+export interface StaffActivityLog {
+  id: string;
+  action_type: StaffActivityActionType;
+  action_type_display: string;
+  description: string;
+  performed_by_name: string | null;
+  ip_address: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+// ==================== Balance Stats ====================
+
+export interface StaffBalanceStatItem {
+  total: number;
+  count: number;
+}
+
+export interface StaffBalanceStats {
+  bonus: StaffBalanceStatItem;
+  fine: StaffBalanceStatItem;
+  lesson_salary: StaffBalanceStatItem;
+  deduction: StaffBalanceStatItem;
+  adjustment: StaffBalanceStatItem;
+}
 
 // Additional status values from API
 export const salaryPaymentStatusLabels: Record<string, string> = {

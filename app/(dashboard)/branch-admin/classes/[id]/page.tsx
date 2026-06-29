@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/hooks/useAuth";
 import { useDebounce } from "@/lib/hooks/useDebounce";
 import { schoolApi } from "@/lib/api/school";
 import { branchApi, type MembershipDetail } from "@/lib/api/branch";
-import type { Class, ClassSubject, ClassStudent, Subject, Student } from "@/types";
+import type { Class, ClassSubject, ClassStudent, Subject, Student, SubjectLevel } from "@/types";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -60,7 +60,7 @@ export default function ClassDetailPage() {
 	});
 
 	const addSubjectMutation = useMutation({
-		mutationFn: (payload: { subject: string; hours_per_week: number; is_active: boolean }) =>
+		mutationFn: (payload: import('@/types').AddSubjectToClassRequest) =>
 			schoolApi.addSubjectToClass(classId!, payload),
 		onSuccess: () => qc.invalidateQueries({ queryKey: ["classSubjects", classId] }),
 	});
@@ -111,12 +111,27 @@ export default function ClassDetailPage() {
 	const [transferDialog, setTransferDialog] = React.useState<{ open: boolean; membershipId?: string; studentName?: string }>({ open: false });
 	const [transferForm, setTransferForm] = React.useState<{ targetClassId?: string; notes?: string }>({});
 
-	const [subjectForm, setSubjectForm] = React.useState<{ subject?: string; teacher?: string; hours_per_week?: number; is_active?: boolean }>({
-		subject: undefined,
-		teacher: undefined,
-		hours_per_week: 2,
-		is_active: true,
+	const [subjectForm, setSubjectForm] = React.useState<{
+		subject?: string;
+		subject_level?: string;
+		teacher?: string;
+		hours_per_week?: number;
+		is_active?: boolean;
+		teacher_salary_type?: 'percentage' | 'per_lesson' | '';
+		teacher_salary_value?: number;
+	}>({ hours_per_week: 2, is_active: true });
+
+	const { data: subjectLevels = [], isLoading: levelsLoading } = useQuery<SubjectLevel[]>({
+		queryKey: ["subjectLevels", subjectForm.subject],
+		queryFn: () => schoolApi.getSubjectLevels(branchId!, subjectForm.subject!),
+		enabled: !!branchId && !!subjectForm.subject,
 	});
+
+	React.useEffect(() => {
+		if (subjectLevels.length === 1) {
+			setSubjectForm(f => ({ ...f, subject_level: subjectLevels[0].id }));
+		}
+	}, [subjectLevels]);
 
 	const [studentForm, setStudentForm] = React.useState<{ students: MembershipDetail[]; is_active?: boolean; notes?: string }>({
 		students: [],
@@ -232,34 +247,55 @@ export default function ClassDetailPage() {
 								) : (
 									<>
 										<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+											{/* Fan */}
 											<div className="space-y-2">
-												<Label className="text-sm font-medium">
-													Fan nomi <span className="text-red-500">*</span>
-												</Label>
+												<Label className="text-sm font-medium">Fan <span className="text-red-500">*</span></Label>
 												<Select
 													value={subjectForm.subject}
-													onValueChange={(v) => setSubjectForm((s) => ({ ...s, subject: v }))}
+													onValueChange={(v) => setSubjectForm((s) => ({ ...s, subject: v, subject_level: undefined }))}
 												>
 													<SelectTrigger className="h-10">
 														<SelectValue placeholder="Fanni tanlang..." />
 													</SelectTrigger>
 													<SelectContent>
 														{subjects.map((s) => (
-															<SelectItem key={s.id} value={s.id}>
-																{s.name} {s.code && <span className="text-muted-foreground">({s.code})</span>}
+															<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
+											</div>
+
+											{/* Daraja */}
+											<div className="space-y-2">
+												<Label className="text-sm font-medium">Daraja <span className="text-red-500">*</span></Label>
+												<Select
+													value={subjectForm.subject_level ?? ""}
+													onValueChange={(v) => setSubjectForm((s) => ({ ...s, subject_level: v }))}
+													disabled={!subjectForm.subject || levelsLoading}
+												>
+													<SelectTrigger className="h-10">
+														<SelectValue placeholder={
+															!subjectForm.subject ? "Avval fan tanlang"
+															: levelsLoading ? "Yuklanmoqda..."
+															: subjectLevels.length === 0 ? "Daraja yo'q"
+															: "Darajani tanlang"
+														} />
+													</SelectTrigger>
+													<SelectContent>
+														{subjectLevels.map((lv) => (
+															<SelectItem key={lv.id} value={lv.id}>
+																{lv.name} — {lv.lesson_price.toLocaleString("uz-UZ")} so'm
 															</SelectItem>
 														))}
 													</SelectContent>
 												</Select>
-												<p className="text-xs text-muted-foreground">O'qitiladigan fanni belgilang</p>
 											</div>
 
+											{/* O'qituvchi */}
 											<div className="space-y-2">
-												<Label className="text-sm font-medium">
-													O'qituvchi
-												</Label>
+												<Label className="text-sm font-medium">O'qituvchi</Label>
 												<Select
-													value={subjectForm.teacher}
+													value={subjectForm.teacher ?? "_none"}
 													onValueChange={(v) => setSubjectForm((s) => ({ ...s, teacher: v === "_none" ? undefined : v }))}
 												>
 													<SelectTrigger className="h-10">
@@ -268,48 +304,76 @@ export default function ClassDetailPage() {
 													<SelectContent>
 														<SelectItem value="_none">O'qituvchisiz</SelectItem>
 														{teachers.map((t) => (
-															<SelectItem key={t.id} value={t.id}>
-																{t.user_name}
-															</SelectItem>
+															<SelectItem key={t.id} value={t.id}>{t.user_name}</SelectItem>
 														))}
 													</SelectContent>
 												</Select>
-												<p className="text-xs text-muted-foreground">Fanni o'qituvchini belgilang (ixtiyoriy)</p>
 											</div>
-										</div>
 
-										<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+											{/* Haftalik soat */}
 											<div className="space-y-2">
-												<Label className="text-sm font-medium">
-													Haftalik dars soatlari <span className="text-red-500">*</span>
-												</Label>
+												<Label className="text-sm font-medium">Haftalik soat <span className="text-red-500">*</span></Label>
 												<Input
 													type="number"
 													className="h-10"
 													placeholder="2"
 													value={String(subjectForm.hours_per_week ?? "")}
 													onChange={(e) => setSubjectForm((s) => ({ ...s, hours_per_week: Number(e.target.value) }))}
-													min={1}
-													max={20}
-													required
+													min={1} max={20}
 												/>
-												<p className="text-xs text-muted-foreground">Haftasiga necha soat dars o'tiladi (1-20)</p>
 											</div>
+										</div>
 
-											<div className="space-y-2">
-												<Label className="text-sm font-medium">Holat</Label>
-												<div className="flex items-center space-x-2 h-10">
-													<Checkbox
-														id="sub_is_active"
-														checked={!!subjectForm.is_active}
-														onCheckedChange={(v) => setSubjectForm((s) => ({ ...s, is_active: Boolean(v) }))}
-													/>
-													<Label htmlFor="sub_is_active" className="text-sm font-normal cursor-pointer">
-														Fan faol holda
-													</Label>
+										{/* Maosh (o'qituvchi tanlanganda) */}
+										{subjectForm.teacher && subjectForm.teacher !== "_none" && (
+											<div className="border rounded-lg p-4 space-y-3 bg-gray-50">
+												<p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Maosh sozlamalari</p>
+												<div className="grid grid-cols-2 gap-4">
+													<div className="space-y-2">
+														<Label className="text-sm">Maosh turi</Label>
+														<Select
+															value={subjectForm.teacher_salary_type ?? ""}
+															onValueChange={(v) => setSubjectForm((s) => ({
+																...s,
+																teacher_salary_type: v === "" ? undefined : v as 'percentage' | 'per_lesson',
+															}))}
+														>
+															<SelectTrigger>
+																<SelectValue placeholder="Tanlang" />
+															</SelectTrigger>
+															<SelectContent>
+																<SelectItem value="">Belgilanmagan</SelectItem>
+																<SelectItem value="percentage">Foizga (%)</SelectItem>
+																<SelectItem value="per_lesson">Dars uchun (so'm)</SelectItem>
+															</SelectContent>
+														</Select>
+													</div>
+													{subjectForm.teacher_salary_type && (
+														<div className="space-y-2">
+															<Label className="text-sm">
+																{subjectForm.teacher_salary_type === 'percentage' ? 'Foiz (%)' : "Summa (so'm)"}
+															</Label>
+															<Input
+																type="number"
+																placeholder={subjectForm.teacher_salary_type === 'percentage' ? "40" : "50000"}
+																min={0}
+																max={subjectForm.teacher_salary_type === 'percentage' ? 100 : undefined}
+																value={subjectForm.teacher_salary_value ?? ""}
+																onChange={(e) => setSubjectForm((s) => ({ ...s, teacher_salary_value: Number(e.target.value) }))}
+															/>
+														</div>
+													)}
 												</div>
-												<p className="text-xs text-muted-foreground">Nofaol fanlar ko'rinmaydi</p>
 											</div>
+										)}
+
+										<div className="flex items-center space-x-2">
+											<Checkbox
+												id="sub_is_active"
+												checked={!!subjectForm.is_active}
+												onCheckedChange={(v) => setSubjectForm((s) => ({ ...s, is_active: Boolean(v) }))}
+											/>
+											<Label htmlFor="sub_is_active" className="text-sm font-normal cursor-pointer">Faol holda qo'shish</Label>
 										</div>
 									</>
 								)}
@@ -321,23 +385,26 @@ export default function ClassDetailPage() {
 								</Button>
 								<Button
 									onClick={() => {
-										if (!subjectForm.subject) return;
+										if (!subjectForm.subject || !subjectForm.subject_level) return;
 										addSubjectMutation.mutate(
 											{
 												subject: subjectForm.subject,
-												teacher: subjectForm.teacher || undefined,
+												subject_level: subjectForm.subject_level,
+												teacher: subjectForm.teacher || null,
 												hours_per_week: Number(subjectForm.hours_per_week ?? 2),
 												is_active: Boolean(subjectForm.is_active ?? true),
-											} as any,
-											{ 
+												teacher_salary_type: subjectForm.teacher_salary_type || null,
+												teacher_salary_value: subjectForm.teacher_salary_value ?? null,
+											},
+											{
 												onSuccess: () => {
 													setOpenAddSubject(false);
-													setSubjectForm({ subject: undefined, teacher: undefined, hours_per_week: 2, is_active: true });
+													setSubjectForm({ hours_per_week: 2, is_active: true });
 												}
 											}
 										);
 									}}
-									disabled={addSubjectMutation.isPending || !subjectForm.subject}
+									disabled={addSubjectMutation.isPending || !subjectForm.subject || !subjectForm.subject_level}
 									className="min-w-[120px]"
 								>
 									{addSubjectMutation.isPending ? (
@@ -345,9 +412,7 @@ export default function ClassDetailPage() {
 											<span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
 											Saqlanmoqda...
 										</span>
-									) : (
-										"Qo'shish"
-									)}
+									) : "Qo'shish"}
 								</Button>
 							</DialogFooter>
 						</DialogContent>
@@ -364,21 +429,34 @@ export default function ClassDetailPage() {
 								<TableHeader>
 									<TableRow>
 										<TableHead>Fan</TableHead>
+										<TableHead>Daraja</TableHead>
 										<TableHead>O'qituvchi</TableHead>
-										<TableHead>Haftalik soat</TableHead>
+										<TableHead className="text-center w-24">Soat/hafta</TableHead>
 										<TableHead>Holat</TableHead>
-										<TableHead className="w-24">Amal</TableHead>
+										<TableHead className="w-16">Amal</TableHead>
 									</TableRow>
 								</TableHeader>
 								<TableBody>
 									{classSubjects.map((cs) => (
 										<TableRow key={cs.id}>
 											<TableCell className="font-medium">{cs.subject_name}</TableCell>
-											<TableCell>{cs.teacher_name || "-"}</TableCell>
-											<TableCell>{cs.hours_per_week}</TableCell>
+											<TableCell>
+												{cs.subject_level_detail ? (
+													<div>
+														<p className="text-sm font-medium">{cs.subject_level_detail.name}</p>
+														<p className="text-xs text-muted-foreground">
+															{cs.subject_level_detail.lesson_price.toLocaleString("uz-UZ")} so'm
+														</p>
+													</div>
+												) : (
+													<span className="text-muted-foreground text-sm">—</span>
+												)}
+											</TableCell>
+											<TableCell>{cs.teacher_name || "—"}</TableCell>
+											<TableCell className="text-center text-sm">{cs.hours_per_week}</TableCell>
 											<TableCell>
 												<span className={`px-2 py-1 text-xs rounded ${cs.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
-													{cs.is_active ? "Faol" : "NoFaol"}
+													{cs.is_active ? "Faol" : "Nofaol"}
 												</span>
 											</TableCell>
 											<TableCell>
