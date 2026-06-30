@@ -1,19 +1,37 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
-import { schoolApi } from "@/lib/api";
+import { schoolApi, financeApi } from "@/lib/api";
 import { useAuth } from "@/lib/hooks";
 import { formatCurrency, formatDateUz } from "@/lib/translations";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { toast } from "sonner";
 import {
   ArrowLeft, Edit, Phone, User, Package, XCircle,
   ArrowUpRight, ArrowDownLeft, History, Users, Hash, ChevronRight,
   GraduationCap, Wallet, AlertCircle, MapPin, Calendar,
-  UserCheck, Clock, MessageSquare,
+  UserCheck, Clock, MessageSquare, Plus, Edit2, Trash2, Loader2,
+  CreditCard,
 } from "lucide-react";
 
 // ─────────────────────────────────── helpers ──────────────────────────────────
@@ -124,9 +142,20 @@ function InfoRow({
 export default function StudentDetailPage() {
   const params  = useParams();
   const router  = useRouter();
+  const queryClient = useQueryClient();
   const { currentBranch } = useAuth();
   const branchId  = currentBranch?.branch_id;
   const studentId = params.id as string;
+
+  // Subscription dialog state
+  const [isSubDialogOpen, setIsSubDialogOpen] = useState(false);
+  const [editingSub, setEditingSub] = useState<any>(null);
+  const [subForm, setSubForm] = useState({
+    subscription_plan: "",
+    start_date: "",
+    next_payment_date: "",
+    notes: "",
+  });
 
   const { data: student, isLoading } = useQuery({
     queryKey: ["student", studentId],
@@ -139,6 +168,115 @@ export default function StudentDetailPage() {
     queryFn:  () => schoolApi.getStudentRelatives(studentId),
     enabled:  !!studentId,
   });
+
+  // Subscription plans
+  const { data: subscriptionPlansData } = useQuery({
+    queryKey: ["subscription-plans", branchId],
+    queryFn:  () => financeApi.getSubscriptionPlans({ branch_id: branchId, is_active: true }),
+    enabled:  !!branchId,
+  });
+  const subscriptionPlans = subscriptionPlansData?.results || [];
+
+  // Live student subscriptions (separate query for fresh data)
+  const { data: subscriptionsData, refetch: refetchSubscriptions } = useQuery({
+    queryKey: ["student-subscriptions", studentId],
+    queryFn:  () => financeApi.getStudentSubscriptions({ student_profile: studentId }),
+    enabled:  !!studentId,
+  });
+  const liveSubscriptions = subscriptionsData?.results || [];
+
+  const createSubMutation = useMutation({
+    mutationFn: (data: any) =>
+      financeApi.createStudentSubscription({
+        student_profile: studentId,
+        subscription_plan: data.subscription_plan,
+        branch: branchId!,
+        start_date: data.start_date,
+        next_payment_date: data.next_payment_date,
+        notes: data.notes || undefined,
+      }),
+    onSuccess: () => {
+      toast.success("Abonement muvaffaqiyatli qo'shildi");
+      refetchSubscriptions();
+      queryClient.invalidateQueries({ queryKey: ["student", studentId] });
+      setIsSubDialogOpen(false);
+      resetSubForm();
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.detail || "Abonement qo'shishda xatolik");
+    },
+  });
+
+  const updateSubMutation = useMutation({
+    mutationFn: ({ subId, data }: { subId: string; data: any }) =>
+      financeApi.updateStudentSubscription(subId, data),
+    onSuccess: () => {
+      toast.success("Abonement yangilandi");
+      refetchSubscriptions();
+      queryClient.invalidateQueries({ queryKey: ["student", studentId] });
+      setIsSubDialogOpen(false);
+      setEditingSub(null);
+      resetSubForm();
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.detail || "Abonement yangilashda xatolik");
+    },
+  });
+
+  const deleteSubMutation = useMutation({
+    mutationFn: (subId: string) => financeApi.deleteStudentSubscription(subId),
+    onSuccess: () => {
+      toast.success("Abonement o'chirildi");
+      refetchSubscriptions();
+      queryClient.invalidateQueries({ queryKey: ["student", studentId] });
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.detail || "Abonement o'chirishda xatolik");
+    },
+  });
+
+  const resetSubForm = () => {
+    setSubForm({ subscription_plan: "", start_date: "", next_payment_date: "", notes: "" });
+    setEditingSub(null);
+  };
+
+  const openAddSub = () => {
+    resetSubForm();
+    setIsSubDialogOpen(true);
+  };
+
+  const openEditSub = (sub: any) => {
+    setEditingSub(sub);
+    setSubForm({
+      subscription_plan: sub.subscription_plan?.id || sub.subscription_plan || "",
+      start_date: sub.start_date || "",
+      next_payment_date: sub.next_payment_date || "",
+      notes: sub.notes || "",
+    });
+    setIsSubDialogOpen(true);
+  };
+
+  const handleSaveSub = () => {
+    if (!subForm.subscription_plan) return toast.error("Abonement rejasini tanlang");
+    if (!subForm.start_date) return toast.error("Boshlanish sanasini kiriting");
+    if (!subForm.next_payment_date) return toast.error("Keyingi to'lov sanasini kiriting");
+
+    if (editingSub) {
+      updateSubMutation.mutate({
+        subId: editingSub.id,
+        data: { next_payment_date: subForm.next_payment_date, notes: subForm.notes || undefined },
+      });
+    } else {
+      createSubMutation.mutate(subForm);
+    }
+  };
+
+  const handleDeleteSub = (sub: any) => {
+    const name = sub.subscription_plan?.name || "Abonement";
+    if (confirm(`${name} ni o'chirishni tasdiqlaysizmi?`)) {
+      deleteSubMutation.mutate(sub.id);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -174,11 +312,10 @@ export default function StudentDetailPage() {
     );
   }
 
-  const balance       = student.balance;
-  const bal           = balance?.balance ?? 0;
-  const transactions  = (student.recent_transactions ?? []) as any[];
-  const subscriptions = (student.subscriptions      ?? []) as any[];
-  const groups        = ((student as any).groups ?? (student as any).student_groups ?? []) as any[];
+  const balance      = student.balance;
+  const bal          = balance?.balance ?? 0;
+  const transactions = (student.recent_transactions ?? []) as any[];
+  const groups       = ((student as any).groups ?? (student as any).student_groups ?? []) as any[];
   const fullName = [student.first_name, student.middle_name, student.last_name].filter(Boolean).join(" ");
   const initials = `${student.first_name?.[0] ?? ""}${student.last_name?.[0] ?? ""}`.toUpperCase();
 
@@ -350,47 +487,56 @@ export default function StudentDetailPage() {
           </CardContent>
         </Card>
 
-        {/* ── RIGHT — subscriptions + financial status ── */}
+        {/* ── RIGHT — subscriptions management ── */}
         <Card className="border-gray-200 shadow-none">
           <CardHeader className="px-5 pt-5 pb-2">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                Abonement va moliya
+              <CardTitle className="text-xs font-semibold text-gray-400 uppercase tracking-wide flex items-center gap-2">
+                <CreditCard className="w-4 h-4" />
+                Abonementlar
               </CardTitle>
-              {subscriptions.length > 0 && (
-                <span className="text-xs font-semibold text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
-                  {subscriptions.length} ta
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {liveSubscriptions.length > 0 && (
+                  <span className="text-xs font-semibold text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
+                    {liveSubscriptions.length} ta
+                  </span>
+                )}
+                <Button
+                  size="sm"
+                  className="h-8 gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs"
+                  onClick={openAddSub}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Biriktirish
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="px-5 pb-5 pt-0">
-            {subscriptions.length === 0 ? (
+            {liveSubscriptions.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
                 <div className="w-12 h-12 rounded-2xl bg-gray-50 flex items-center justify-center">
                   <Package className="w-5 h-5 text-gray-300" />
                 </div>
                 <p className="text-sm text-gray-400">Abonement biriktirilmagan</p>
+                <Button variant="outline" size="sm" className="gap-1.5 text-indigo-600 border-indigo-200 hover:bg-indigo-50" onClick={openAddSub}>
+                  <Plus className="w-3.5 h-3.5" />
+                  Abonement biriktirish
+                </Button>
               </div>
             ) : (
               <div className="space-y-3">
-                {subscriptions.map((sub: any) => {
-                  const lastPaid = (sub as any).last_payment_date
-                    ?? (sub as any).last_charged_date
-                    ?? (sub as any).last_deduction_date;
-                  const price         = sub.subscription_plan?.price ?? 0;
-                  const unpaidMonths  = getUnpaidMonths(lastPaid);
-                  const hasDebt       = sub.total_debt > 0 || unpaidMonths.length > 0;
+                {liveSubscriptions.map((sub: any) => {
+                  const lastPaid = sub.last_payment_date ?? sub.last_charged_date ?? sub.last_deduction_date;
+                  const price        = sub.subscription_plan?.price ?? 0;
+                  const unpaidMonths = getUnpaidMonths(lastPaid);
+                  const hasDebt      = sub.total_debt > 0 || unpaidMonths.length > 0;
 
                   return (
                     <div
                       key={sub.id}
                       className={`rounded-xl border overflow-hidden ${
-                        !sub.is_active
-                          ? "border-gray-200"
-                          : hasDebt
-                          ? "border-red-200"
-                          : "border-emerald-200"
+                        !sub.is_active ? "border-gray-200" : hasDebt ? "border-red-200" : "border-emerald-200"
                       }`}
                     >
                       {/* Sub header */}
@@ -401,19 +547,35 @@ export default function StudentDetailPage() {
                           <p className="text-sm font-bold text-gray-900 truncate">{sub.subscription_plan?.name}</p>
                           <p className="text-xs text-gray-500 mt-0.5">{formatCurrency(price)} / oy</p>
                         </div>
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border shrink-0 ${
-                          sub.is_active
-                            ? "bg-white text-emerald-700 border-emerald-200"
-                            : "bg-white text-gray-500 border-gray-200"
-                        }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${sub.is_active ? "bg-emerald-500" : "bg-gray-400"}`} />
-                          {sub.is_active ? "Aktiv" : "Tugagan"}
-                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border ${
+                            sub.is_active ? "bg-white text-emerald-700 border-emerald-200" : "bg-white text-gray-500 border-gray-200"
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${sub.is_active ? "bg-emerald-500" : "bg-gray-400"}`} />
+                            {sub.is_active ? "Aktiv" : "Tugagan"}
+                          </span>
+                          <button
+                            onClick={() => openEditSub(sub)}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center bg-white border border-gray-200 hover:border-indigo-300 hover:bg-indigo-50 transition-colors"
+                            title="Tahrirlash"
+                          >
+                            <Edit2 className="w-3.5 h-3.5 text-gray-500 hover:text-indigo-600" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteSub(sub)}
+                            disabled={deleteSubMutation.isPending}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center bg-white border border-gray-200 hover:border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50"
+                            title="O'chirish"
+                          >
+                            {deleteSubMutation.isPending
+                              ? <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-400" />
+                              : <Trash2 className="w-3.5 h-3.5 text-gray-500 hover:text-red-600" />}
+                          </button>
+                        </div>
                       </div>
 
                       {/* Info rows */}
                       <div className="px-4 divide-y divide-gray-50">
-                        {/* Last payment */}
                         {lastPaid ? (
                           <div className="flex items-start gap-3 py-3">
                             <Wallet className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
@@ -431,8 +593,15 @@ export default function StudentDetailPage() {
                             <p className="text-sm text-gray-400">To&apos;lov amalga oshirilmagan</p>
                           </div>
                         )}
-
-                        {/* Debt months */}
+                        {sub.next_payment_date && (
+                          <div className="flex items-center gap-3 py-3">
+                            <Calendar className="w-4 h-4 text-indigo-400 shrink-0" />
+                            <div>
+                              <p className="text-xs text-gray-400 font-medium">Keyingi to&apos;lov</p>
+                              <p className="text-sm font-semibold text-gray-800">{formatDateUz(sub.next_payment_date)}</p>
+                            </div>
+                          </div>
+                        )}
                         {unpaidMonths.length > 0 && (
                           <div className="flex items-start gap-3 py-3">
                             <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
@@ -458,6 +627,83 @@ export default function StudentDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* ── Subscription Dialog ── */}
+      <Dialog open={isSubDialogOpen} onOpenChange={(open) => { if (!open) { setIsSubDialogOpen(false); resetSubForm(); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingSub ? "Abonementni tahrirlash" : "Abonement biriktirish"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            {/* Plan */}
+            <div className="space-y-1.5">
+              <Label>Abonement rejasi <span className="text-red-500">*</span></Label>
+              <Select
+                value={subForm.subscription_plan}
+                onValueChange={(v) => setSubForm((f) => ({ ...f, subscription_plan: v }))}
+                disabled={!!editingSub}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Reja tanlang" />
+                </SelectTrigger>
+                <SelectContent>
+                  {subscriptionPlans.map((plan: any) => (
+                    <SelectItem key={plan.id} value={plan.id}>
+                      {plan.name} — {formatCurrency(plan.price)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {!!editingSub && <p className="text-xs text-gray-400">Reja o&apos;zgartirib bo&apos;lmaydi</p>}
+            </div>
+
+            {/* Start date */}
+            <div className="space-y-1.5">
+              <Label>Boshlanish sanasi <span className="text-red-500">*</span></Label>
+              <Input
+                type="date"
+                value={subForm.start_date}
+                onChange={(e) => setSubForm((f) => ({ ...f, start_date: e.target.value }))}
+                disabled={!!editingSub}
+              />
+            </div>
+
+            {/* Next payment date */}
+            <div className="space-y-1.5">
+              <Label>Keyingi to&apos;lov sanasi <span className="text-red-500">*</span></Label>
+              <Input
+                type="date"
+                value={subForm.next_payment_date}
+                onChange={(e) => setSubForm((f) => ({ ...f, next_payment_date: e.target.value }))}
+              />
+            </div>
+
+            {/* Notes */}
+            <div className="space-y-1.5">
+              <Label>Izoh</Label>
+              <Input
+                placeholder="Qo'shimcha izoh..."
+                value={subForm.notes}
+                onChange={(e) => setSubForm((f) => ({ ...f, notes: e.target.value }))}
+              />
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" className="flex-1" onClick={() => { setIsSubDialogOpen(false); resetSubForm(); }}>
+                Bekor qilish
+              </Button>
+              <Button
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700"
+                onClick={handleSaveSub}
+                disabled={createSubMutation.isPending || updateSubMutation.isPending}
+              >
+                {(createSubMutation.isPending || updateSubMutation.isPending) && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                {editingSub ? "Saqlash" : "Biriktirish"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Transactions — full width, detailed ── */}
       <Card className="border-gray-200 shadow-none">

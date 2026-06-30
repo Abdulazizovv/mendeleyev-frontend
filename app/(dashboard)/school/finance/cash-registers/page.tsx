@@ -296,6 +296,8 @@ export default function CashRegistersPage() {
                 onArchive={() => handleArchive(r)}
                 onRestore={() => handleRestore(r)}
                 onMarkPrimary={() => markPrimary(r.id)}
+                onIncome={() => { setSelectedRegister(r); setTxModal("income"); }}
+                onExpense={() => { setSelectedRegister(r); setTxModal("expense"); }}
               />
             ))
           )}
@@ -462,24 +464,23 @@ export default function CashRegistersPage() {
               />
 
               {/* ── SUMMARY BAR ── */}
-              {summaryTx.length > 0 && (
-                <div className="grid grid-cols-3 divide-x divide-slate-100 bg-white border-b border-slate-200 shrink-0">
-                  <div className="px-5 py-2">
-                    <p className="text-[10px] text-slate-400 mb-0.5">Kirim{summaryTotal > SUMMARY_PAGE_SIZE ? " ≈" : ""}</p>
-                    <p className="text-sm font-bold tabular-nums text-emerald-600">+{formatCurrency(summaryIncome)}</p>
-                  </div>
-                  <div className="px-5 py-2">
-                    <p className="text-[10px] text-slate-400 mb-0.5">Chiqim{summaryTotal > SUMMARY_PAGE_SIZE ? " ≈" : ""}</p>
-                    <p className="text-sm font-bold tabular-nums text-rose-600">−{formatCurrency(summaryExpense)}</p>
-                  </div>
-                  <div className="px-5 py-2">
-                    <p className="text-[10px] text-slate-400 mb-0.5">Sof</p>
-                    <p className={cn("text-sm font-bold tabular-nums", summaryNet >= 0 ? "text-slate-800" : "text-rose-600")}>
-                      {summaryNet >= 0 ? "+" : "−"}{formatCurrency(Math.abs(summaryNet))}
-                    </p>
-                  </div>
-                </div>
-              )}
+              <div className="flex items-center gap-4 px-5 py-2 bg-white border-b border-slate-100 shrink-0">
+                <span className="text-xs text-slate-400 font-medium tabular-nums">{totalCount} ta tranzaksiya</span>
+                <div className="flex-1" />
+                {summaryTx.length > 0 && (
+                  <>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-slate-400">Kirim{summaryTotal > SUMMARY_PAGE_SIZE ? " ≈" : ""}:</span>
+                      <span className="text-sm font-bold tabular-nums text-emerald-600">+{formatCurrency(summaryIncome)}</span>
+                    </div>
+                    <div className="w-px h-4 bg-slate-200" />
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-slate-400">Chiqim{summaryTotal > SUMMARY_PAGE_SIZE ? " ≈" : ""}:</span>
+                      <span className="text-sm font-bold tabular-nums text-rose-600">−{formatCurrency(summaryExpense)}</span>
+                    </div>
+                  </>
+                )}
+              </div>
 
               {/* ── TABLE ── */}
               <div className="flex-1 overflow-auto">
@@ -501,18 +502,20 @@ export default function CashRegistersPage() {
                   <table className="w-full text-sm border-separate border-spacing-0">
                     <thead className="sticky top-0 z-10">
                       <tr className="bg-slate-50 border-b border-slate-200">
-                        <th className="py-3 pl-4 pr-4 text-xs font-semibold text-slate-400 text-left whitespace-nowrap w-[110px] border-l-[3px] border-l-transparent">Sana</th>
-                        <th className="py-3 px-4 text-xs font-semibold text-slate-400 text-left w-[110px]">Tur</th>
-                        <th className="py-3 px-4 text-xs font-semibold text-slate-400 text-left">Tranzaksiya</th>
-                        <th className="py-3 px-4 text-xs font-semibold text-slate-400 text-left w-[180px]">Mijoz</th>
-                        <th className="py-3 px-4 text-xs font-semibold text-slate-400 text-right whitespace-nowrap w-[150px]">Summa</th>
-                        <th className="py-3 pl-4 pr-5 text-xs font-semibold text-slate-400 text-center w-[52px]"></th>
+                        <th className="py-2.5 pl-4 pr-2 text-xs font-semibold text-slate-400 text-center w-10">#</th>
+                        <th className="py-2.5 px-3 text-xs font-semibold text-slate-400 text-left whitespace-nowrap">Sana va vaqt</th>
+                        <th className="py-2.5 px-3 text-xs font-semibold text-slate-400 text-left">Mijoz</th>
+                        <th className="py-2.5 px-3 text-xs font-semibold text-slate-400 text-left">Izoh</th>
+                        <th className="py-2.5 px-3 text-xs font-semibold text-slate-400 text-left whitespace-nowrap">Tranzaksiya turi</th>
+                        <th className="py-2.5 px-3 text-xs font-semibold text-slate-400 text-right whitespace-nowrap">Miqdori</th>
+                        <th className="py-2.5 px-3 text-xs font-semibold text-slate-400 text-left whitespace-nowrap">To'lov usuli</th>
+                        <th className="py-2.5 px-3 text-xs font-semibold text-slate-400 text-center whitespace-nowrap">Holati</th>
                       </tr>
                     </thead>
                     <tbody>
                       {visibleTx.map((tx, idx) => (
                         <TxRow
-                          key={tx.id} tx={tx}
+                          key={tx.id} tx={tx} index={(serverPage - 1) * PAGE_SIZE + idx + 1}
                           active={activeTx?.id === tx.id}
                           onSelect={() => setActiveTx(activeTx?.id === tx.id ? null : tx)}
                         />
@@ -912,9 +915,10 @@ function FilterBar({
 
 // ── Register Card ─────────────────────────────────────────────────────────────
 
-function RegisterCard({ register, selected, primary, hideBalance, onSelect, onEdit, onArchive, onRestore, onMarkPrimary }: {
+function RegisterCard({ register, selected, primary, hideBalance, onSelect, onEdit, onArchive, onRestore, onMarkPrimary, onIncome, onExpense }: {
   register: CashRegister; selected: boolean; primary: boolean; hideBalance: boolean;
   onSelect: () => void; onEdit: () => void; onArchive: () => void; onRestore: () => void; onMarkPrimary: () => void;
+  onIncome?: () => void; onExpense?: () => void;
 }) {
   return (
     <div onClick={onSelect} className={cn(
@@ -975,6 +979,29 @@ function RegisterCard({ register, selected, primary, hideBalance, onSelect, onEd
           )}
         </div>
       </div>
+
+      {register.is_active && (
+        <div className={cn("flex gap-1.5 mt-2 pt-2 border-t", selected ? "border-blue-500" : "border-slate-100")}>
+          <button
+            onClick={(e) => { e.stopPropagation(); onIncome?.(); }}
+            className={cn(
+              "flex-1 h-6 rounded-md text-[11px] font-semibold transition-colors",
+              selected ? "bg-white/15 text-white hover:bg-white/25" : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
+            )}
+          >
+            + Kirim
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onExpense?.(); }}
+            className={cn(
+              "flex-1 h-6 rounded-md text-[11px] font-semibold transition-colors",
+              selected ? "bg-white/15 text-white hover:bg-white/25" : "bg-rose-50 text-rose-600 hover:bg-rose-100"
+            )}
+          >
+            − Chiqim
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -987,8 +1014,8 @@ const STATUS_BADGE: Record<string, { bg: string; text: string; dot: string }> = 
   cancelled: { bg: "bg-slate-100",   text: "text-slate-500",   dot: "bg-slate-400"   },
 };
 
-function TxRow({ tx, active, onSelect }: {
-  tx: Transaction; active: boolean; onSelect: () => void;
+function TxRow({ tx, index, active, onSelect }: {
+  tx: Transaction; index: number; active: boolean; onSelect: () => void;
 }) {
   const router = useRouter();
   const label = TX_LABEL[tx.transaction_type] ?? tx.transaction_type_display;
@@ -1001,139 +1028,110 @@ function TxRow({ tx, active, onSelect }: {
   const whoHref = tx.student
     ? `/school/students/${tx.student.id}`
     : tx.employee ? `/school/staff/${tx.employee.id}` : null;
-  const statusStyle = STATUS_BADGE[tx.status] ?? { bg: "bg-slate-100", text: "text-slate-500", dot: "bg-slate-300" };
+  const statusStyle = STATUS_BADGE[tx.status] ?? { bg: "bg-slate-100", text: "text-slate-500", dot: "bg-slate-400" };
 
-  if (cancelled) {
-    return (
-      <tr
-        onClick={onSelect}
-        className={cn(
-          "group transition-colors cursor-pointer",
-          active ? "bg-slate-100" : "bg-slate-50/70 hover:bg-slate-100/60"
-        )}
-      >
-        <td className="py-2.5 pl-4 pr-4 whitespace-nowrap border-b border-slate-100 border-l-[3px] border-l-slate-300">
-          <p className="text-xs text-slate-400 leading-tight">{date}</p>
-          <p className="text-[11px] text-slate-300 mt-0.5 tabular-nums">{time}</p>
-        </td>
-        <td colSpan={3} className="py-2.5 px-4 border-b border-slate-100">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full">
-              <X className="w-2.5 h-2.5" />Bekor qilindi
-            </span>
-            {tx.category_name && (
-              <span className="text-xs text-slate-400 truncate max-w-[200px]">{tx.category_name}</span>
-            )}
-            {whoLabel && (
-              <span className="text-xs text-slate-400 truncate max-w-[120px]">· {whoLabel}</span>
-            )}
-          </div>
-        </td>
-        <td className="py-2.5 px-4 text-right border-b border-slate-100 whitespace-nowrap">
-          <p className="text-sm font-medium tabular-nums text-slate-400 line-through">
-            {formatCurrency(tx.amount)}
-          </p>
-        </td>
-        <td className="py-2.5 pl-4 pr-5 text-center border-b border-slate-100">
-          <span className="inline-block w-2.5 h-2.5 rounded-full bg-slate-300" title={statusLabel} />
-        </td>
-      </tr>
-    );
-  }
+  const periods: string[] = (tx.period_months?.length ?? 0) > 0
+    ? (tx.period_months as string[])
+    : tx.period_month ? [tx.period_month as string] : [];
+  const noteText = tx.description
+    ?? (tx.category_name
+      ? `${tx.category_name}${periods.length > 0 ? " · " + periods.map(fmtPeriod).join(", ") : ""}`
+      : null);
 
   return (
     <tr
       onClick={onSelect}
       className={cn(
-        "group transition-colors cursor-pointer",
-        active ? "bg-blue-50/70" : "bg-white hover:bg-slate-50/80"
+        "group transition-colors cursor-pointer border-b border-slate-100",
+        cancelled
+          ? (active ? "bg-slate-100" : "bg-slate-50/70 hover:bg-slate-100/60")
+          : (active ? "bg-blue-50/70" : "bg-white hover:bg-slate-50/80")
       )}
     >
-      {/* Sana — with left accent border */}
-      <td className={cn(
-        "py-3.5 pl-4 pr-4 whitespace-nowrap border-b border-slate-100 border-l-[3px]",
-        inc ? "border-l-emerald-400" : exp ? "border-l-rose-400" : "border-l-slate-300"
-      )}>
-        <p className="text-xs font-semibold leading-tight text-slate-800">{date}</p>
+      {/* # */}
+      <td className="py-3 pl-4 pr-2 text-center">
+        <span className="text-[11px] text-slate-300 tabular-nums font-mono">{index}</span>
+      </td>
+
+      {/* Sana va vaqt */}
+      <td className="py-3 px-3 whitespace-nowrap">
+        <p className={cn("text-xs font-medium leading-tight", cancelled ? "text-slate-400" : "text-slate-700")}>{date}</p>
         <p className="text-[11px] text-slate-400 mt-0.5 tabular-nums">{time}</p>
       </td>
 
-      {/* Tur — type badge only */}
-      <td className="py-3.5 px-4 border-b border-slate-100 whitespace-nowrap">
-        <span className={cn(
-          "inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full",
-          inc ? "bg-emerald-100 text-emerald-700" : exp ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-600"
-        )}>
-          {inc
-            ? <ArrowDownRight className="w-2.5 h-2.5" />
-            : exp
-            ? <ArrowUpRight className="w-2.5 h-2.5" />
-            : <ArrowRightLeft className="w-2.5 h-2.5" />}
-          {label}
-        </span>
-      </td>
-
-      {/* Tranzaksiya — category + period + description */}
-      <td className="py-3.5 px-4 border-b border-slate-100">
-        {(() => {
-          const periods: string[] = (tx.period_months?.length ?? 0) > 0 ? (tx.period_months as string[]) : tx.period_month ? [tx.period_month as string] : [];
-          return (
-            <p className="text-xs font-medium truncate max-w-[220px] leading-tight text-slate-700">
-              {tx.category_name ?? "—"}
-              {periods.length > 0 && (
-                <span className="font-normal"> · {periods.map(fmtPeriod).join(", ")}</span>
-              )}
-            </p>
-          );
-        })()}
-        {tx.description && (
-          <p className="text-[11px] text-slate-400 mt-0.5 truncate max-w-[220px]">{tx.description}</p>
-        )}
-      </td>
-
       {/* Mijoz */}
-      <td className="py-3.5 px-4 border-b border-slate-100">
+      <td className="py-3 px-3">
         {whoLabel ? (
           whoHref ? (
             <button
               onClick={(e) => { e.stopPropagation(); router.push(whoHref); }}
-              className="group/link flex items-center gap-1 text-xs font-medium text-slate-700 hover:text-blue-600 max-w-[160px] leading-tight"
+              className="text-xs font-medium text-slate-700 hover:text-blue-600 hover:underline truncate max-w-[130px] text-left block"
             >
-              <span className="truncate group-hover/link:underline">{whoLabel}</span>
-              <ExternalLink className="w-2.5 h-2.5 shrink-0 opacity-0 group-hover/link:opacity-70 transition-opacity" />
+              {whoLabel}
             </button>
           ) : (
-            <p className="text-xs font-medium text-slate-700 truncate max-w-[160px] leading-tight">{whoLabel}</p>
+            <p className="text-xs font-medium text-slate-700 truncate max-w-[130px]">{whoLabel}</p>
           )
         ) : (
           <span className="text-xs text-slate-300">—</span>
         )}
       </td>
 
-      {/* Summa + to'lov usuli */}
-      <td className="py-3.5 px-4 text-right border-b border-slate-100 whitespace-nowrap">
-        <p className={cn(
-          "text-sm font-bold tabular-nums leading-tight",
-          inc ? "text-emerald-600" : exp ? "text-rose-600" : "text-slate-700"
-        )}>
-          {inc ? "+" : exp ? "−" : ""}{formatCurrency(tx.amount)}
-        </p>
+      {/* Izoh */}
+      <td className="py-3 px-3">
+        {noteText ? (
+          <p className="text-xs text-slate-500 truncate max-w-[200px]">{noteText}</p>
+        ) : (
+          <span className="text-xs text-slate-300">—</span>
+        )}
+      </td>
+
+      {/* Tranzaksiya turi */}
+      <td className="py-3 px-3 whitespace-nowrap">
         <span className={cn(
-          "inline-flex items-center gap-0.5 text-[10px] font-semibold mt-1",
-          tx.payment_method === "card" ? "text-blue-500" : tx.payment_method === "bank" ? "text-emerald-600" : "text-amber-600"
+          "inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full",
+          cancelled ? "bg-slate-100 text-slate-400"
+            : inc ? "bg-emerald-50 text-emerald-700"
+            : exp ? "bg-rose-50 text-rose-700"
+            : "bg-slate-100 text-slate-600"
         )}>
-          {tx.payment_method === "card"
-            ? <><CreditCard className="w-2.5 h-2.5" />Plastik</>
-            : tx.payment_method === "bank"
-            ? <><Building2 className="w-2.5 h-2.5" />Bank</>
-            : <><Banknote className="w-2.5 h-2.5" />Naqd</>}
+          {cancelled
+            ? <X className="w-2.5 h-2.5" />
+            : inc ? <ArrowDownRight className="w-2.5 h-2.5" />
+            : exp ? <ArrowUpRight className="w-2.5 h-2.5" />
+            : <ArrowRightLeft className="w-2.5 h-2.5" />}
+          {label}
         </span>
       </td>
 
-      {/* Holat — dot indicator only */}
-      <td className="py-3.5 pl-4 pr-5 text-center border-b border-slate-100">
+      {/* Miqdori */}
+      <td className="py-3 px-3 text-right whitespace-nowrap">
+        <p className={cn(
+          "text-sm font-bold tabular-nums",
+          cancelled ? "text-slate-400 line-through"
+            : inc ? "text-emerald-600"
+            : exp ? "text-rose-600"
+            : "text-slate-700"
+        )}>
+          {inc ? "+" : exp ? "−" : ""}{formatCurrency(tx.amount)}
+        </p>
+      </td>
+
+      {/* To'lov usuli */}
+      <td className="py-3 px-3 whitespace-nowrap">
+        <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
+          {tx.payment_method === "card"
+            ? <><CreditCard className="w-3 h-3 text-blue-400" />Plastik</>
+            : tx.payment_method === "bank"
+            ? <><Building2 className="w-3 h-3 text-emerald-500" />Bank</>
+            : <><Banknote className="w-3 h-3 text-amber-500" />Naqd</>}
+        </span>
+      </td>
+
+      {/* Holati */}
+      <td className="py-3 px-3 text-center">
         <span
-          className={cn("inline-block w-2.5 h-2.5 rounded-full", statusStyle.dot)}
+          className={cn("inline-block w-2 h-2 rounded-full", statusStyle.dot)}
           title={statusLabel}
         />
       </td>

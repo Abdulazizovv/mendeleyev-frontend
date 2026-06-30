@@ -476,14 +476,14 @@ export const financeApi = {
   },
 
   /**
-   * Update student subscription
-   * PUT /api/v1/school/finance/student-subscriptions/{id}/
+   * Update student subscription (partial update)
+   * PATCH /api/v1/school/finance/student-subscriptions/{id}/
    */
   updateStudentSubscription: async (
     id: string,
     data: UpdateStudentSubscriptionRequest
   ): Promise<StudentSubscription> => {
-    const response = await apiClient.put<StudentSubscription>(
+    const response = await apiClient.patch<StudentSubscription>(
       `/school/finance/student-subscriptions/${id}/`,
       data
     );
@@ -491,11 +491,23 @@ export const financeApi = {
   },
 
   /**
-   * Delete student subscription (deactivate)
+   * Delete student subscription (soft delete)
    * DELETE /api/v1/school/finance/student-subscriptions/{id}/
    */
   deleteStudentSubscription: async (id: string): Promise<void> => {
     await apiClient.delete(`/school/finance/student-subscriptions/${id}/`);
+  },
+
+  /**
+   * Deactivate student subscription (set is_active=false via PATCH)
+   * PATCH /api/v1/school/finance/student-subscriptions/{id}/
+   */
+  deactivateStudentSubscription: async (id: string): Promise<StudentSubscription> => {
+    const response = await apiClient.patch<StudentSubscription>(
+      `/school/finance/student-subscriptions/${id}/`,
+      { is_active: false }
+    );
+    return response.data;
   },
 
   chargeStudentSubscription: async (

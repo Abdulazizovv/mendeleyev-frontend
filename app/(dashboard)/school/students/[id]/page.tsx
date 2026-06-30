@@ -7,9 +7,25 @@ import { schoolApi, financeApi } from "@/lib/api";
 import { useAuth } from "@/lib/hooks";
 import { formatCurrency, formatDateUz } from "@/lib/translations";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { toast } from "sonner";
 import {
   ArrowLeft, Phone, User, Package, XCircle,
   ArrowRightLeft, Users, Hash, ChevronRight,
@@ -17,12 +33,13 @@ import {
   Clock, Tag, Receipt, Banknote, CreditCard, Building2,
   TrendingUp, TrendingDown, RotateCcw, UserX, UserPlus,
   ArrowUpCircle, ArrowDownCircle, FileText, File, ImageIcon,
-  Upload, Trash2, Download, Activity,
+  Upload, Trash2, Download, Activity, Plus, Edit2, Loader2,
+  User2, Shield,
 } from "lucide-react";
 import { TransactionDetailSheet } from "@/components/finance/transactions/TransactionDetailSheet";
 import { cn } from "@/lib/utils";
 import type { Transaction, StudentBalanceTransaction } from "@/types/finance";
-import type { StudentDocument, StudentActivityLog, CreateStudentRequest } from "@/types/school";
+import type { StudentDocument, StudentActivityLog, CreateStudentRequest, StudentRelative, RelationshipType, CreateStudentRelativeRequest } from "@/types/school";
 
 // ─────────────────────────────────── helpers ──────────────────────────────────
 
@@ -70,17 +87,35 @@ function fmtPeriod(ym: string) {
 
 // ─────────────────────────────────── config ───────────────────────────────────
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; dot: string }> = {
-  active:      { label: "Aktiv",        color: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
-  archived:    { label: "Arxivlangan",  color: "bg-gray-100 text-gray-600 border-gray-200",         dot: "bg-gray-400" },
-  suspended:   { label: "To'xtatilgan", color: "bg-red-50 text-red-700 border-red-200",             dot: "bg-red-500" },
-  graduated:   { label: "Bitirgan",     color: "bg-blue-50 text-blue-700 border-blue-200",          dot: "bg-blue-500" },
-  transferred: { label: "Ko'chirilgan", color: "bg-orange-50 text-orange-700 border-orange-200",    dot: "bg-orange-500" },
+const STATUS_CONFIG: Record<string, { label: string; color: string; dot: string; btnColor: string; actionLabel: string; description: string; destructive: boolean }> = {
+  active:      { label: "Aktiv",        color: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500", btnColor: "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-700", actionLabel: "Faollashtirish",      description: "O'quvchi faol holda davom etadi",                           destructive: false },
+  archived:    { label: "Arxivlangan",  color: "bg-gray-100 text-gray-600 border-gray-200",         dot: "bg-gray-400",   btnColor: "bg-gray-600 hover:bg-gray-700 text-white border-gray-700",         actionLabel: "Arxivlash",            description: "O'quvchi arxivga o'tkaziladi, ko'rinmaydi",                 destructive: true  },
+  suspended:   { label: "To'xtatilgan", color: "bg-red-50 text-red-700 border-red-200",             dot: "bg-red-500",    btnColor: "bg-red-600 hover:bg-red-700 text-white border-red-700",             actionLabel: "To'xtatish",           description: "O'quvchi vaqtincha to'xtatiladi",                           destructive: true  },
+  graduated:   { label: "Bitirgan",     color: "bg-blue-50 text-blue-700 border-blue-200",          dot: "bg-blue-500",   btnColor: "bg-blue-600 hover:bg-blue-700 text-white border-blue-700",          actionLabel: "Bitirgan deb belgilash", description: "O'quvchi maktabni tamomlagan deb belgilanadi",              destructive: true  },
+  transferred: { label: "Ko'chirilgan", color: "bg-orange-50 text-orange-700 border-orange-200",    dot: "bg-orange-500", btnColor: "bg-orange-600 hover:bg-orange-700 text-white border-orange-700",    actionLabel: "Ko'chirilgan belgilash", description: "O'quvchi boshqa muassasaga o'tkazilgan deb belgilanadi",   destructive: true  },
 };
 
 const GENDER_MAP: Record<string, string> = {
   male: "Erkak", female: "Ayol", other: "Boshqa", unspecified: "Belgilanmagan",
 };
+
+const REL_MAP: Record<string, string> = {
+  father: "Ota", mother: "Ona", brother: "Aka/Uka", sister: "Opa/Singil",
+  grandfather: "Bobo", grandmother: "Buvi", uncle: "Amaki/Togʻa", aunt: "Xola/Amma", guardian: "Vasiy", other: "Boshqa",
+};
+
+const RELATIONSHIP_TYPES: { value: RelationshipType; label: string }[] = [
+  { value: "father",      label: "Ota" },
+  { value: "mother",      label: "Ona" },
+  { value: "brother",     label: "Aka/Uka" },
+  { value: "sister",      label: "Opa/Singil" },
+  { value: "grandfather", label: "Bobo" },
+  { value: "grandmother", label: "Buvi" },
+  { value: "uncle",       label: "Amaki/Togʻa" },
+  { value: "aunt",        label: "Xola/Amma" },
+  { value: "guardian",    label: "Vasiy" },
+  { value: "other",       label: "Boshqa" },
+];
 
 const TX_ICON_CFG: Record<string, { iconBg: string; iconCls: string; Icon: React.ElementType; sign: string; amtCls: string }> = {
   income:   { iconBg: "bg-emerald-50", iconCls: "text-emerald-600", Icon: TrendingUp,     sign: "+", amtCls: "text-emerald-600" },
@@ -209,118 +244,220 @@ function TxRow({ tx, onOpen }: { tx: any; onOpen: (tx: any) => void }) {
   );
 }
 
-// ── Balance Transaction row ───────────────────────────────────────────────────
+// ── Unified Transactions Section (Balance Audit) ─────────────────────────────
 
-function BalTxRow({ tx }: { tx: StudentBalanceTransaction }) {
-  const isCredit = tx.transaction_type === "credit";
-  const reasonCfg = BAL_REASON_CFG[tx.reason] ?? BAL_REASON_CFG.other;
-  const meta = tx.metadata as any;
-  const billingMonth = meta?.year && meta?.month
-    ? `${UZ_MONTHS_MAP[String(meta.month).padStart(2, "0")] ?? meta.month} ${meta.year}`
-    : null;
+const REASON_LABEL: Record<string, string> = {
+  subscription_charge: "Abonement yechimi",
+  payment_topup:       "To'lov (kirim)",
+  manual_adjustment:   "Qo'lda kiritilgan",
+  other:               "Boshqa",
+};
 
-  return (
-    <tr className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50 transition-colors">
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-2.5">
-          <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center shrink-0", isCredit ? "bg-emerald-50" : "bg-red-50")}>
-            {isCredit
-              ? <ArrowUpCircle className="w-3.5 h-3.5 text-emerald-600" />
-              : <ArrowDownCircle className="w-3.5 h-3.5 text-red-500" />}
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className={cn("text-[10px] font-semibold border px-1.5 py-0.5 rounded-full", reasonCfg.cls)}>
-                {reasonCfg.label}
-              </span>
-            </div>
-            {billingMonth && (
-              <p className="text-[10px] text-slate-500 mt-0.5">{billingMonth} uchun</p>
-            )}
-            {tx.description && !billingMonth && (
-              <p className="text-[10px] text-slate-400 mt-0.5 truncate max-w-[200px]">{tx.description}</p>
-            )}
-          </div>
-        </div>
-      </td>
-      <td className="px-3 py-3 whitespace-nowrap">
-        <span className="text-[11px] text-gray-500">{tx.occurred_at ? formatDateUz(tx.occurred_at) : "—"}</span>
-      </td>
-      <td className="px-3 py-3">
-        <span className="text-[11px] text-gray-400 tabular-nums">
-          {formatCurrency(tx.previous_balance)} → {formatCurrency(tx.new_balance)}
-        </span>
-      </td>
-      <td className="px-4 py-3 text-right whitespace-nowrap">
-        <p className={cn("text-sm font-bold tabular-nums", isCredit ? "text-emerald-600" : "text-red-500")}>
-          {isCredit ? "+" : "−"}{formatCurrency(tx.amount)}
-        </p>
-      </td>
-    </tr>
-  );
+const FILTER_REASONS = [
+  { value: "all",                 label: "Barcha sabablar" },
+  { value: "subscription_charge", label: "Abonement yechimi" },
+  { value: "payment_topup",       label: "To'lov (kirim)" },
+  { value: "manual_adjustment",   label: "Qo'lda kiritilgan" },
+];
+
+function formatDateTime(dt?: string | null): string {
+  if (!dt) return "—";
+  const d = new Date(dt);
+  if (isNaN(d.getTime())) return "—";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-// ── Unified Transactions Section ──────────────────────────────────────────────
+function whoLabel(tx: StudentBalanceTransaction): string {
+  if (tx.reason === "subscription_charge") return "Billing tizimi";
+  if (tx.processed_by_phone) return formatPhoneDisplay(tx.processed_by_phone);
+  return "Tizim";
+}
 
-function TransactionsSection({
-  transactions, studentId, onOpenTx,
-}: {
-  transactions: any[];
-  studentId: string;
-  onOpenTx: (tx: any) => void;
-}) {
-  const [showAll, setShowAll] = React.useState(false);
+function TransactionsSection({ studentId }: { studentId: string }) {
+  const PAGE_SIZE = 10;
+  const [page, setPage] = React.useState(1);
+  const [filterType, setFilterType] = React.useState("all");
+  const [filterReason, setFilterReason] = React.useState("all");
 
-  const { data: allTxData, isLoading: allTxLoading } = useQuery({
-    queryKey: ["student-all-tx", studentId],
-    queryFn: () => financeApi.getTransactions({ student_profile: studentId, page_size: 200, ordering: "-transaction_date" } as any),
-    enabled: showAll && !!studentId,
+  const { data: balancesData } = useQuery({
+    queryKey: ["student-balance-record", studentId],
+    queryFn: () => financeApi.getStudentBalances({ student_profile: studentId }),
+    enabled: !!studentId,
+  });
+  const balanceId: string | null = (balancesData as any)?.results?.[0]?.id ?? null;
+  const currentBalance: number = (balancesData as any)?.results?.[0]?.balance ?? 0;
+
+  const { data: allTxs = [], isLoading } = useQuery<StudentBalanceTransaction[]>({
+    queryKey: ["student-balance-tx", balanceId],
+    queryFn: () => financeApi.getStudentBalanceTransactions(balanceId!, { ordering: "-occurred_at" }),
+    enabled: !!balanceId,
   });
 
-  const shownTxs = showAll ? ((allTxData as any)?.results ?? []) : transactions.slice(0, 8);
+  const filtered = (allTxs as StudentBalanceTransaction[]).filter(tx => {
+    if (filterType !== "all" && tx.transaction_type !== filterType) return false;
+    if (filterReason !== "all" && tx.reason !== filterReason) return false;
+    return true;
+  });
+
+  const totalCount = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const paginatedTxs = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const handleFilterType = (v: string) => { setFilterType(v); setPage(1); };
+  const handleFilterReason = (v: string) => { setFilterReason(v); setPage(1); };
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-        <div className="flex items-center gap-2">
-          <Receipt className="w-4 h-4 text-gray-400" />
-          <span className="text-sm font-semibold text-gray-700">Tranzaksiyalar</span>
-          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{transactions.length}</span>
-        </div>
-        {!showAll && transactions.length > 8 && (
-          <button onClick={() => setShowAll(true)} className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800">
-            Barchasini ko&apos;rish <ChevronRight className="w-3.5 h-3.5" />
-          </button>
-        )}
-        {showAll && (
-          <button onClick={() => setShowAll(false)} className="text-xs text-gray-500 hover:text-gray-700">Kamroq</button>
+      {/* Header */}
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
+        <ArrowRightLeft className="w-4 h-4 text-gray-400" />
+        <span className="text-sm font-semibold text-gray-700">Tranzaksiyalar</span>
+        {(allTxs as any[]).length > 0 && (
+          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+            {(allTxs as any[]).length}
+          </span>
         )}
       </div>
-      {transactions.length === 0 ? (
-        <div className="py-8 text-center">
-          <Receipt className="w-8 h-8 text-gray-200 mx-auto mb-2" />
+
+      {/* Filters */}
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100 bg-gray-50/60 flex-wrap">
+        <select
+          value={filterType}
+          onChange={e => handleFilterType(e.target.value)}
+          className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white text-gray-600 focus:outline-none focus:border-gray-400 cursor-pointer"
+        >
+          <option value="all">Barcha turlar</option>
+          <option value="credit">Kirim (+)</option>
+          <option value="debit">Chiqim (−)</option>
+        </select>
+        <select
+          value={filterReason}
+          onChange={e => handleFilterReason(e.target.value)}
+          className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white text-gray-600 focus:outline-none focus:border-gray-400 cursor-pointer"
+        >
+          {FILTER_REASONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+        </select>
+        {(filterType !== "all" || filterReason !== "all") && (
+          <>
+            <button
+              onClick={() => { setFilterType("all"); setFilterReason("all"); setPage(1); }}
+              className="text-xs text-gray-500 hover:text-gray-700 font-medium"
+            >
+              Tozalash ×
+            </button>
+            <span className="text-[11px] text-gray-400 ml-auto">{totalCount} ta natija</span>
+          </>
+        )}
+      </div>
+
+      {/* Content */}
+      {isLoading ? (
+        <div className="p-4 space-y-2">
+          {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 rounded-lg" />)}
+        </div>
+      ) : !balanceId || (allTxs as any[]).length === 0 ? (
+        <div className="py-10 text-center">
+          <ArrowRightLeft className="w-8 h-8 text-gray-200 mx-auto mb-2" />
           <p className="text-sm text-gray-400">Tranzaksiyalar yo&apos;q</p>
         </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs min-w-[480px]">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="text-left px-4 py-2.5 font-semibold text-gray-500">Tranzaksiya</th>
-                <th className="text-left px-3 py-2.5 font-semibold text-gray-500">Sana</th>
-                <th className="text-left px-3 py-2.5 font-semibold text-gray-500">Usul</th>
-                <th className="text-right px-4 py-2.5 font-semibold text-gray-500">Summa</th>
-              </tr>
-            </thead>
-            <tbody>
-              {allTxLoading
-                ? [...Array(3)].map((_, i) => (
-                    <tr key={i}><td colSpan={4} className="px-4 py-3"><Skeleton className="h-8 rounded-lg" /></td></tr>
-                  ))
-                : shownTxs.map((tx: any) => <TxRow key={tx.id} tx={tx} onOpen={onOpenTx} />)}
-            </tbody>
-          </table>
+      ) : filtered.length === 0 ? (
+        <div className="py-8 text-center">
+          <p className="text-sm text-gray-400">Filter bo&apos;yicha natija yo&apos;q</p>
         </div>
+      ) : (
+        <>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs min-w-[640px]">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 font-semibold text-[11px] uppercase tracking-wide">
+                  <th className="px-3 py-2.5 text-center w-9">#</th>
+                  <th className="px-3 py-2.5 text-left">Sana va vaqt</th>
+                  <th className="px-3 py-2.5 text-left">Sabab</th>
+                  <th className="px-3 py-2.5 text-left">Tafsilot</th>
+                  <th className="px-3 py-2.5 text-right">Summa</th>
+                  <th className="px-3 py-2.5 text-left">Balans o&apos;zgarishi</th>
+                  <th className="px-4 py-2.5 text-left">Kim tomonidan</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedTxs.map((tx, idx) => {
+                  const isCredit = tx.transaction_type === "credit";
+                  const meta = tx.metadata as any;
+                  const billingMonth = meta?.year && meta?.month
+                    ? `${UZ_MONTHS_MAP[String(meta.month).padStart(2, "0")] ?? meta.month} ${meta.year}`
+                    : null;
+                  const reasonLabel = REASON_LABEL[tx.reason] ?? "Boshqa";
+                  const globalIdx = (page - 1) * PAGE_SIZE + idx + 1;
+
+                  return (
+                    <tr key={tx.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/70 transition-colors">
+                      <td className="px-3 py-3 text-center">
+                        <span className="text-[11px] text-gray-300 tabular-nums">{globalIdx}</span>
+                      </td>
+                      <td className="px-3 py-3 whitespace-nowrap">
+                        <span className="text-[11px] text-gray-500 font-mono">{formatDateTime(tx.occurred_at)}</span>
+                      </td>
+                      <td className="px-3 py-3">
+                        <p className="text-xs font-medium text-gray-700">{reasonLabel}</p>
+                      </td>
+                      <td className="px-3 py-3">
+                        {billingMonth ? (
+                          <p className="text-xs text-gray-500">{billingMonth} uchun</p>
+                        ) : tx.description ? (
+                          <p className="text-xs text-gray-500">{tx.description}</p>
+                        ) : (
+                          <span className="text-[11px] text-gray-300">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-3 text-right whitespace-nowrap">
+                        <span className={cn(
+                          "text-sm font-bold tabular-nums",
+                          isCredit ? "text-emerald-600" : "text-red-500"
+                        )}>
+                          {isCredit ? "+" : "−"}{formatCurrency(tx.amount)}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 whitespace-nowrap">
+                        <span className="text-[11px] text-gray-400 tabular-nums font-mono">
+                          {formatCurrency(tx.previous_balance)}
+                        </span>
+                        <span className="text-[11px] text-gray-300 mx-1">→</span>
+                        <span className="text-[11px] text-gray-600 tabular-nums font-mono font-medium">
+                          {formatCurrency(tx.new_balance)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-[11px] text-gray-500">{whoLabel(tx)}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50/50">
+              <p className="text-xs text-gray-400">{page} / {totalPages} sahifa · {totalCount} ta</p>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  ← Oldingi
+                </button>
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Keyingi →
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -651,7 +788,6 @@ export default function StudentDetailPage() {
   const qc = useQueryClient();
   const branchId  = currentBranch?.branch_id;
   const studentId = params.id as string;
-  const [selectedTx, setSelectedTx] = React.useState<Transaction | null>(null);
 
   // Status change
   const [statusDialog, setStatusDialog] = React.useState(false);
@@ -661,12 +797,54 @@ export default function StudentDetailPage() {
   const [transferDialog, setTransferDialog] = React.useState(false);
   const [targetClassId, setTargetClassId] = React.useState<string>("");
 
+  // Subscription management
+  const [isSubDialogOpen, setIsSubDialogOpen] = React.useState(false);
+  const [editingSub, setEditingSub] = React.useState<any>(null);
+  const [subForm, setSubForm] = React.useState({
+    subscription_plan: "",
+    start_date: new Date().toISOString().split('T')[0],
+    notes: "",
+  });
+
+  // Edit personal info modal
+  const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
+  const [editForm, setEditForm] = React.useState({
+    first_name: "",
+    last_name: "",
+    middle_name: "",
+    gender: "unspecified" as "male" | "female" | "other" | "unspecified",
+    date_of_birth: "",
+    address: "",
+  });
+
+  // Relative CRUD
+  const [isRelativeDialogOpen, setIsRelativeDialogOpen] = React.useState(false);
+  const [editingRelative, setEditingRelative] = React.useState<StudentRelative | null>(null);
+  const [relativeForm, setRelativeForm] = React.useState<{
+    relationship_type: RelationshipType;
+    first_name: string;
+    last_name: string;
+    phone_number: string;
+    is_primary_contact: boolean;
+  }>({
+    relationship_type: "father",
+    first_name: "",
+    last_name: "",
+    phone_number: "",
+    is_primary_contact: false,
+  });
+
   const updateMutation = useMutation({
     mutationFn: (data: Partial<CreateStudentRequest>) => schoolApi.updateStudent(branchId!, studentId, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["student", studentId] });
       setStatusDialog(false);
       setPendingStatus(null);
+      setIsEditModalOpen(false);
+      toast.success("Ma'lumotlar saqlandi");
+    },
+    onError: () => {
+      toast.error("Xatolik yuz berdi");
     },
   });
 
@@ -686,7 +864,7 @@ export default function StudentDetailPage() {
     enabled:  !!branchId,
   });
 
-  const { data: relatives = [] } = useQuery({
+  const { data: relatives = [], refetch: refetchRelatives } = useQuery({
     queryKey: ["student-relatives", studentId],
     queryFn:  () => schoolApi.getStudentRelatives(studentId),
     enabled:  !!studentId,
@@ -697,6 +875,220 @@ export default function StudentDetailPage() {
     queryFn:  () => schoolApi.getClasses(branchId!),
     enabled:  !!branchId && transferDialog,
   });
+
+  const { data: subscriptionPlansData } = useQuery({
+    queryKey: ["subscription-plans", branchId],
+    queryFn:  () => financeApi.getSubscriptionPlans({ branch_id: branchId, is_active: true }),
+    enabled:  !!branchId,
+  });
+  const subscriptionPlans = subscriptionPlansData?.results || [];
+
+  const { data: subscriptionsData, refetch: refetchSubscriptions } = useQuery({
+    queryKey: ["student-subscriptions", studentId, branchId],
+    queryFn:  () => financeApi.getStudentSubscriptions({ student_profile: studentId, branch_id: branchId } as any),
+    enabled:  !!studentId && !!branchId,
+  });
+  const liveSubscriptions = subscriptionsData?.results || [];
+
+  // Relative mutations
+  const addRelativeMutation = useMutation({
+    mutationFn: (data: CreateStudentRelativeRequest) => schoolApi.addStudentRelative(studentId, data),
+    onSuccess: () => {
+      toast.success("Yaqin qo'shildi");
+      refetchRelatives();
+      setIsRelativeDialogOpen(false);
+      resetRelativeForm();
+    },
+    onError: () => toast.error("Yaqin qo'shishda xatolik"),
+  });
+
+  const updateRelativeMutation = useMutation({
+    mutationFn: ({ relativeId, data }: { relativeId: string; data: Partial<CreateStudentRelativeRequest> }) =>
+      schoolApi.updateStudentRelative(studentId, relativeId, data),
+    onSuccess: () => {
+      toast.success("Yaqin ma'lumotlari yangilandi");
+      refetchRelatives();
+      setIsRelativeDialogOpen(false);
+      setEditingRelative(null);
+      resetRelativeForm();
+    },
+    onError: () => toast.error("Yangilashda xatolik"),
+  });
+
+  const deleteRelativeMutation = useMutation({
+    mutationFn: (relativeId: string) => schoolApi.deleteStudentRelative(studentId, relativeId),
+    onSuccess: () => {
+      toast.success("Yaqin o'chirildi");
+      refetchRelatives();
+    },
+    onError: () => toast.error("O'chirishda xatolik"),
+  });
+
+  const createSubMutation = useMutation({
+    mutationFn: (data: any) =>
+      financeApi.createStudentSubscription({
+        student_profile: studentId,
+        subscription_plan: data.subscription_plan,
+        branch: branchId!,
+        start_date: data.start_date,
+        notes: data.notes || undefined,
+      }),
+    onSuccess: () => {
+      toast.success("Abonement muvaffaqiyatli qo'shildi");
+      refetchSubscriptions();
+      qc.invalidateQueries({ queryKey: ["student", studentId] });
+      setIsSubDialogOpen(false);
+      resetSubForm();
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.detail || "Abonement qo'shishda xatolik");
+    },
+  });
+
+  const updateSubMutation = useMutation({
+    mutationFn: ({ subId, data }: { subId: string; data: any }) =>
+      financeApi.updateStudentSubscription(subId, data),
+    onSuccess: () => {
+      toast.success("Abonement yangilandi");
+      refetchSubscriptions();
+      qc.invalidateQueries({ queryKey: ["student", studentId] });
+      setIsSubDialogOpen(false);
+      setEditingSub(null);
+      resetSubForm();
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.detail || "Abonement yangilashda xatolik");
+    },
+  });
+
+  const deleteSubMutation = useMutation({
+    mutationFn: (subId: string) => financeApi.deactivateStudentSubscription(subId),
+    onSuccess: () => {
+      toast.success("Abonement to'xtatildi");
+      refetchSubscriptions();
+      qc.invalidateQueries({ queryKey: ["student", studentId] });
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.detail || "Abonement to'xtatishda xatolik");
+    },
+  });
+
+  const resetSubForm = () => {
+    setSubForm({ subscription_plan: "", start_date: new Date().toISOString().split('T')[0], notes: "" });
+    setEditingSub(null);
+  };
+
+  const resetRelativeForm = () => {
+    setRelativeForm({
+      relationship_type: "father",
+      first_name: "",
+      last_name: "",
+      phone_number: "",
+      is_primary_contact: false,
+    });
+  };
+
+  const openAddSub = () => { resetSubForm(); setIsSubDialogOpen(true); };
+
+  const openEditSub = (sub: any) => {
+    setEditingSub(sub);
+    setSubForm({
+      subscription_plan: sub.subscription_plan || "",
+      start_date: sub.start_date || "",
+      notes: sub.notes || "",
+    });
+    setIsSubDialogOpen(true);
+  };
+
+  const openEditModal = () => {
+    if (!student) return;
+    setEditForm({
+      first_name: student.first_name || "",
+      last_name: student.last_name || "",
+      middle_name: student.middle_name || "",
+      gender: ((student as any).gender as "male" | "female" | "other" | "unspecified") || "unspecified",
+      date_of_birth: (student as any).date_of_birth || "",
+      address: (student as any).address || "",
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const openAddRelative = () => {
+    setEditingRelative(null);
+    resetRelativeForm();
+    setIsRelativeDialogOpen(true);
+  };
+
+  const openEditRelative = (rel: StudentRelative) => {
+    setEditingRelative(rel);
+    setRelativeForm({
+      relationship_type: rel.relationship_type,
+      first_name: rel.first_name,
+      last_name: rel.last_name,
+      phone_number: rel.phone_number || "",
+      is_primary_contact: rel.is_primary_contact,
+    });
+    setIsRelativeDialogOpen(true);
+  };
+
+  const handleSaveRelative = () => {
+    if (!relativeForm.first_name.trim()) { toast.error("Ism kiritilishi shart"); return; }
+    const payload: CreateStudentRelativeRequest = {
+      relationship_type: relativeForm.relationship_type,
+      first_name: relativeForm.first_name.trim(),
+      last_name: relativeForm.last_name.trim(),
+      phone_number: relativeForm.phone_number.trim() || undefined,
+      is_primary_contact: relativeForm.is_primary_contact,
+    };
+    if (editingRelative) {
+      updateRelativeMutation.mutate({ relativeId: editingRelative.id, data: payload });
+    } else {
+      addRelativeMutation.mutate(payload);
+    }
+  };
+
+  const handleDeleteRelative = (rel: StudentRelative) => {
+    if (confirm(`${rel.first_name} ${rel.last_name} ni o'chirishni tasdiqlaysizmi?`)) {
+      deleteRelativeMutation.mutate(rel.id);
+    }
+  };
+
+  const handleSaveSub = async () => {
+    if (!subForm.subscription_plan) { toast.error("Abonement rejasini tanlang"); return; }
+    if (!subForm.start_date) { toast.error("Boshlanish sanasini kiriting"); return; }
+    if (editingSub) {
+      updateSubMutation.mutate({ subId: editingSub.id, data: { notes: subForm.notes || undefined } });
+    } else {
+      const activeSubs = liveSubscriptions.filter((s: any) => s.is_active);
+      if (activeSubs.length > 0) {
+        const confirmed = confirm(
+          "Bu o'quvchida allaqachon aktiv abonement bor. Yangi biriktirish uchun avvalgisi to'xtatiladi. Davom etasizmi?"
+        );
+        if (!confirmed) return;
+        for (const sub of activeSubs) {
+          await financeApi.deactivateStudentSubscription(sub.id);
+        }
+      }
+      createSubMutation.mutate(subForm);
+    }
+  };
+
+  const handleDeleteSub = (sub: any) => {
+    if (confirm(`${sub.subscription_plan_name || "Abonement"} ni o'chirishni tasdiqlaysizmi?`)) {
+      deleteSubMutation.mutate(sub.id);
+    }
+  };
+
+  const handleSaveEdit = () => {
+    updateMutation.mutate({
+      first_name: editForm.first_name,
+      last_name: editForm.last_name,
+      middle_name: editForm.middle_name || undefined,
+      gender: editForm.gender,
+      date_of_birth: editForm.date_of_birth || undefined,
+      address: editForm.address || undefined,
+    } as Partial<CreateStudentRequest>);
+  };
 
   if (isLoading) {
     return (
@@ -736,18 +1128,27 @@ export default function StudentDetailPage() {
   const bal           = balance?.balance ?? 0;
   const transactions  = (student.recent_transactions ?? []) as any[];
   const subscriptions = (student.subscriptions      ?? []) as any[];
-  const groups        = ((student as any).groups ?? []) as any[];
+  const groups        = ((student as any).groups     ?? []) as any[];
   const membershipId  = (student as any).membership_id as string | undefined;
   const fullName = [student.first_name, student.middle_name, student.last_name].filter(Boolean).join(" ");
   const initials = `${student.first_name?.[0] ?? ""}${student.last_name?.[0] ?? ""}`.toUpperCase();
 
   const totalDebt = subscriptions.reduce((sum: number, s: any) => sum + (s.total_debt ?? 0), 0);
-  const balanceId = (balance as any)?.id ?? null;
   const currentClassId = (student.current_class as any)?.id as string | undefined;
 
   const transferableClasses = (allClasses as any[]).filter(
     (c: any) => !c.is_archived && c.is_active && c.id !== currentClassId
   );
+
+  const currentStatusCfg = STATUS_CONFIG[student.status] ?? STATUS_CONFIG.active;
+
+  // Moderator info
+  const moderatorName = (student as any).created_by_name
+    || (student as any).added_by_name
+    || (student as any).created_by?.full_name
+    || null;
+
+  const relativesList = (relatives as StudentRelative[]);
 
   return (
     <div className="space-y-4">
@@ -762,6 +1163,14 @@ export default function StudentDetailPage() {
           O&apos;quvchilar
         </button>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline" size="sm"
+            className="h-9 gap-1.5 border-gray-200 text-gray-700"
+            onClick={openEditModal}
+          >
+            <Edit2 className="w-3.5 h-3.5" />
+            Tahrirlash
+          </Button>
           {currentClassId && membershipId && (
             <Button
               variant="outline" size="sm"
@@ -773,12 +1182,12 @@ export default function StudentDetailPage() {
             </Button>
           )}
           <Button
-            variant="outline" size="sm"
-            className="h-9 gap-1.5 border-gray-200 text-gray-700"
+            size="sm"
+            className={`h-9 gap-1.5 border ${currentStatusCfg.btnColor}`}
             onClick={() => { setPendingStatus(student.status); setStatusDialog(true); }}
           >
             <Tag className="w-3.5 h-3.5" />
-            Status
+            {currentStatusCfg.label}
           </Button>
         </div>
       </div>
@@ -848,12 +1257,21 @@ export default function StudentDetailPage() {
       {/* ── 2-col: left info | right finance ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
 
-        {/* ── LEFT — personal info + groups + relatives ── */}
+        {/* ── LEFT — personal info + relatives ── */}
         <Card className="border-gray-200 shadow-none">
           <CardHeader className="px-5 pt-5 pb-2">
-            <CardTitle className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-              Shaxsiy ma&apos;lumotlar
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                Shaxsiy ma&apos;lumotlar
+              </CardTitle>
+              <button
+                onClick={openEditModal}
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                title="Tahrirlash"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </CardHeader>
           <CardContent className="px-5 pb-5 pt-0">
             <InfoRow icon={Phone} label="Telefon raqam"
@@ -866,13 +1284,78 @@ export default function StudentDetailPage() {
             <InfoRow icon={Calendar} label="Tug'ilgan sana"
               value={(student as any).date_of_birth ? formatDateUz((student as any).date_of_birth) : null} />
             <InfoRow icon={User} label="Jinsi"
-              value={student.gender ? (GENDER_MAP[student.gender] ?? student.gender) : null} />
+              value={
+                ((student as any).gender)
+                  ? (GENDER_MAP[(student as any).gender] ?? (student as any).gender)
+                  : null
+              } />
             <InfoRow icon={MapPin} label="Manzil"
               value={(student as any).address} />
+            {moderatorName && (
+              <InfoRow icon={Shield} label="Tizimga kiritgan"
+                value={moderatorName} />
+            )}
             <InfoRow icon={UserPlus} label="Qo'shilgan sana"
               value={(student as any).created_at ? formatDateFull((student as any).created_at) : null} />
 
-            {/* Groups */}
+            {/* ── Relatives CRUD ── */}
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Yaqinlar</p>
+                <button
+                  onClick={openAddRelative}
+                  className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Qo&apos;shish
+                </button>
+              </div>
+
+              {relativesList.length === 0 ? (
+                <div className="py-4 text-center">
+                  <User className="w-7 h-7 text-gray-200 mx-auto mb-1.5" />
+                  <p className="text-xs text-gray-400">Yaqinlar qo&apos;shilmagan</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {relativesList.map((rel) => (
+                    <div key={rel.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-gray-50 border border-transparent">
+                      <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center shrink-0">
+                        <User className="w-4 h-4 text-orange-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{rel.first_name} {rel.last_name}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {REL_MAP[rel.relationship_type] ?? rel.relationship_type_display}
+                          {rel.phone_number && (
+                            <> · <a href={`tel:${rel.phone_number}`} className="text-indigo-500 hover:underline">{formatPhoneDisplay(rel.phone_number)}</a></>
+                          )}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => openEditRelative(rel)}
+                          className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                          title="Tahrirlash"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteRelative(rel)}
+                          disabled={deleteRelativeMutation.isPending}
+                          className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
+                          title="O'chirish"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* ── Groups ── */}
             {groups.length > 0 && (
               <div className="mt-4 pt-4 border-t border-gray-100">
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Guruhlari</p>
@@ -902,91 +1385,359 @@ export default function StudentDetailPage() {
                 </div>
               </div>
             )}
-
-            {/* Relatives */}
-            {Array.isArray(relatives) && (relatives as any[]).length > 0 && (
-              <div className="mt-4 pt-4 border-t border-gray-100">
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Yaqinlar</p>
-                <div className="space-y-2">
-                  {(relatives as any[]).map((rel: any) => (
-                    <div key={rel.id} className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-orange-50 flex items-center justify-center shrink-0">
-                        <User className="w-4 h-4 text-orange-400" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-gray-900 truncate">{rel.first_name} {rel.last_name}</p>
-                        <p className="text-xs text-gray-500 mt-0.5 truncate">
-                          {rel.relation}{rel.phone_number && ` · ${rel.phone_number}`}
-                        </p>
-                      </div>
-                      {rel.phone_number && (
-                        <a
-                          href={`tel:${rel.phone_number}`}
-                          className="w-9 h-9 rounded-xl bg-gray-50 hover:bg-blue-50 border border-gray-100 hover:border-blue-200 flex items-center justify-center transition-colors shrink-0"
-                        >
-                          <Phone className="w-4 h-4 text-gray-400" />
-                        </a>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </CardContent>
         </Card>
 
-        {/* ── RIGHT — subscriptions + financial status ── */}
+        {/* ── RIGHT — subscriptions management ── */}
         <Card className="border-gray-200 shadow-none">
-          <CardHeader className="px-5 pt-5 pb-2">
+          <CardHeader className="px-5 pt-5 pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                Abonement va moliya
+              <CardTitle className="text-xs font-semibold text-gray-400 uppercase tracking-wide flex items-center gap-2">
+                <CreditCard className="w-4 h-4" />
+                Abonementlar
               </CardTitle>
-              {subscriptions.length > 0 && (
-                <span className="text-xs font-semibold text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
-                  {subscriptions.length} ta
-                </span>
-              )}
+              <Button
+                size="sm"
+                className="h-8 gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs"
+                onClick={openAddSub}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Biriktirish
+              </Button>
             </div>
           </CardHeader>
           <CardContent className="px-5 pb-5 pt-0">
-            {subscriptions.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
-                <div className="w-12 h-12 rounded-2xl bg-gray-50 flex items-center justify-center">
-                  <Package className="w-5 h-5 text-gray-300" />
-                </div>
-                <p className="text-sm text-gray-400">Abonement biriktirilmagan</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {subscriptions.map((sub: any) => {
-                  const price   = sub.subscription_plan?.price ?? 0;
-                  const hasDebt = sub.total_debt > 0;
+            {(() => {
+              const activeSubs = liveSubscriptions.filter((s: any) => s.is_active);
+              const inactiveSubs = liveSubscriptions.filter((s: any) => !s.is_active);
 
-                  return (
-                    <SubscriptionCard
-                      key={sub.id}
-                      sub={sub}
-                      price={price}
-                      hasDebt={hasDebt}
+              if (liveSubscriptions.length === 0) {
+                return (
+                  <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
+                    <div className="w-12 h-12 rounded-2xl bg-gray-50 flex items-center justify-center">
+                      <Package className="w-5 h-5 text-gray-300" />
+                    </div>
+                    <p className="text-sm text-gray-400">Abonement biriktirilmagan</p>
+                    <Button variant="outline" size="sm" className="gap-1.5 text-indigo-600 border-indigo-200 hover:bg-indigo-50" onClick={openAddSub}>
+                      <Plus className="w-3.5 h-3.5" />
+                      Abonement biriktirish
+                    </Button>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-4">
+                  {/* ── Aktiv abonementlar ── */}
+                  {activeSubs.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-gray-200 py-6 text-center">
+                      <p className="text-sm text-gray-400 mb-2">Aktiv abonement yo&apos;q</p>
+                      <Button variant="outline" size="sm" className="gap-1.5 text-indigo-600 border-indigo-200 hover:bg-indigo-50 text-xs" onClick={openAddSub}>
+                        <Plus className="w-3.5 h-3.5" />
+                        Biriktirish
+                      </Button>
+                    </div>
+                  ) : (
+                    activeSubs.map((sub: any) => {
+                      const price = sub.subscription_plan_price ?? 0;
+                      const hasDebt = sub.total_debt > 0;
+                      return (
+                        <div key={sub.id} className="rounded-xl border border-emerald-200 overflow-hidden">
+                          {/* Header row */}
+                          <div className={`flex items-center justify-between gap-2 px-4 py-3 ${hasDebt ? "bg-red-50" : "bg-emerald-50"}`}>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                                <p className="text-sm font-bold text-gray-900 truncate">{sub.subscription_plan_name}</p>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-0.5 ml-4">
+                                {formatCurrency(price)} / {sub.period_display ?? "oy"}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                onClick={() => openEditSub(sub)}
+                                className="w-7 h-7 rounded-lg flex items-center justify-center bg-white border border-gray-200 hover:border-indigo-300 hover:bg-indigo-50 transition-colors"
+                                title="Izoh tahrirlash"
+                              >
+                                <Edit2 className="w-3.5 h-3.5 text-gray-500" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteSub(sub)}
+                                disabled={deleteSubMutation.isPending}
+                                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white border border-red-200 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 text-[11px] font-semibold"
+                                title="Abonementni tugatish"
+                              >
+                                {deleteSubMutation.isPending
+                                  ? <Loader2 className="w-3 h-3 animate-spin" />
+                                  : <XCircle className="w-3 h-3" />}
+                                Tugatish
+                              </button>
+                            </div>
+                          </div>
+                          <SubscriptionCard
+                            sub={sub}
+                            price={price}
+                            hasDebt={hasDebt}
+                            bal={bal}
+                            studentId={studentId}
+                            branchId={branchId}
+                            isFirst={false}
+                          />
+                        </div>
+                      );
+                    })
+                  )}
+
+                  {/* ── Tugagan abonementlar (collapsible) ── */}
+                  {inactiveSubs.length > 0 && (
+                    <InactiveSubscriptions
+                      subs={inactiveSubs}
                       bal={bal}
-                      balanceId={balanceId}
+                      studentId={studentId}
                       branchId={branchId}
                     />
-                  );
-                })}
-              </div>
-            )}
+                  )}
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
       </div>
 
-      {/* ── Tranzaksiyalar ── */}
-      <TransactionsSection
-        transactions={transactions}
-        studentId={studentId}
-        onOpenTx={(tx) => setSelectedTx(tx as Transaction)}
-      />
+      {/* ── Edit Personal Info Dialog ── */}
+      <Dialog open={isEditModalOpen} onOpenChange={(open) => { if (!open) setIsEditModalOpen(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Ma&apos;lumotlarni tahrirlash</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Ism <span className="text-red-500">*</span></Label>
+                <Input
+                  value={editForm.first_name}
+                  onChange={(e) => setEditForm((f) => ({ ...f, first_name: e.target.value }))}
+                  placeholder="Ism"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Familiya</Label>
+                <Input
+                  value={editForm.last_name}
+                  onChange={(e) => setEditForm((f) => ({ ...f, last_name: e.target.value }))}
+                  placeholder="Familiya"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Otasining ismi</Label>
+              <Input
+                value={editForm.middle_name}
+                onChange={(e) => setEditForm((f) => ({ ...f, middle_name: e.target.value }))}
+                placeholder="Otasining ismi"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Jinsi</Label>
+              <Select
+                value={editForm.gender}
+                onValueChange={(v) => setEditForm((f) => ({ ...f, gender: v as "male" | "female" | "other" | "unspecified" }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Jinsi" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="male">Erkak</SelectItem>
+                  <SelectItem value="female">Ayol</SelectItem>
+                  <SelectItem value="other">Boshqa</SelectItem>
+                  <SelectItem value="unspecified">Belgilanmagan</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Tug&apos;ilgan sana</Label>
+              <Input
+                type="date"
+                value={editForm.date_of_birth}
+                onChange={(e) => setEditForm((f) => ({ ...f, date_of_birth: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Manzil</Label>
+              <Input
+                value={editForm.address}
+                onChange={(e) => setEditForm((f) => ({ ...f, address: e.target.value }))}
+                placeholder="Manzil"
+              />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" className="flex-1" onClick={() => setIsEditModalOpen(false)}>
+                Bekor qilish
+              </Button>
+              <Button
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700"
+                onClick={handleSaveEdit}
+                disabled={updateMutation.isPending || !editForm.first_name.trim()}
+              >
+                {updateMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                Saqlash
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Relative Add/Edit Dialog ── */}
+      <Dialog
+        open={isRelativeDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) { setIsRelativeDialogOpen(false); setEditingRelative(null); resetRelativeForm(); }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingRelative ? "Yaqinni tahrirlash" : "Yaqin qo'shish"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label>Munosabat turi <span className="text-red-500">*</span></Label>
+              <Select
+                value={relativeForm.relationship_type}
+                onValueChange={(v) => setRelativeForm((f) => ({ ...f, relationship_type: v as RelationshipType }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Tanlang" />
+                </SelectTrigger>
+                <SelectContent>
+                  {RELATIONSHIP_TYPES.map((rt) => (
+                    <SelectItem key={rt.value} value={rt.value}>{rt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Ism <span className="text-red-500">*</span></Label>
+                <Input
+                  value={relativeForm.first_name}
+                  onChange={(e) => setRelativeForm((f) => ({ ...f, first_name: e.target.value }))}
+                  placeholder="Ism"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Familiya</Label>
+                <Input
+                  value={relativeForm.last_name}
+                  onChange={(e) => setRelativeForm((f) => ({ ...f, last_name: e.target.value }))}
+                  placeholder="Familiya"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Telefon raqam</Label>
+              <Input
+                value={relativeForm.phone_number}
+                onChange={(e) => setRelativeForm((f) => ({ ...f, phone_number: e.target.value }))}
+                placeholder="+998 90 123 45 67"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                id="is_primary"
+                type="checkbox"
+                className="w-4 h-4 rounded border-gray-300 text-indigo-600"
+                checked={relativeForm.is_primary_contact}
+                onChange={(e) => setRelativeForm((f) => ({ ...f, is_primary_contact: e.target.checked }))}
+              />
+              <Label htmlFor="is_primary" className="cursor-pointer font-normal">Asosiy aloqa shaxsi</Label>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => { setIsRelativeDialogOpen(false); setEditingRelative(null); resetRelativeForm(); }}
+              >
+                Bekor qilish
+              </Button>
+              <Button
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700"
+                onClick={handleSaveRelative}
+                disabled={addRelativeMutation.isPending || updateRelativeMutation.isPending || !relativeForm.first_name.trim()}
+              >
+                {(addRelativeMutation.isPending || updateRelativeMutation.isPending) && (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                )}
+                {editingRelative ? "Saqlash" : "Qo'shish"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Subscription Dialog ── */}
+      <Dialog open={isSubDialogOpen} onOpenChange={(open) => { if (!open) { setIsSubDialogOpen(false); resetSubForm(); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingSub ? "Abonementni tahrirlash" : "Abonement biriktirish"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label>Abonement rejasi <span className="text-red-500">*</span></Label>
+              <Select
+                value={subForm.subscription_plan}
+                onValueChange={(v) => setSubForm((f) => ({ ...f, subscription_plan: v }))}
+                disabled={!!editingSub}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Reja tanlang" />
+                </SelectTrigger>
+                <SelectContent>
+                  {subscriptionPlans.map((plan: any) => (
+                    <SelectItem key={plan.id} value={plan.id}>
+                      {plan.name} — {formatCurrency(plan.price)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {!!editingSub && <p className="text-xs text-gray-400">Reja o&apos;zgartirib bo&apos;lmaydi</p>}
+            </div>
+            <div className="space-y-1.5">
+              <Label>Boshlanish sanasi <span className="text-red-500">*</span></Label>
+              <Input
+                type="date"
+                value={subForm.start_date}
+                onChange={(e) => setSubForm((f) => ({ ...f, start_date: e.target.value }))}
+                disabled={!!editingSub}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Izoh</Label>
+              <Input
+                placeholder="Qo'shimcha izoh..."
+                value={subForm.notes}
+                onChange={(e) => setSubForm((f) => ({ ...f, notes: e.target.value }))}
+              />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" className="flex-1" onClick={() => { setIsSubDialogOpen(false); resetSubForm(); }}>
+                Bekor qilish
+              </Button>
+              <Button
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700"
+                onClick={handleSaveSub}
+                disabled={createSubMutation.isPending || updateSubMutation.isPending}
+              >
+                {(createSubMutation.isPending || updateSubMutation.isPending) && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                {editingSub ? "Saqlash" : "Biriktirish"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Tranzaksiyalar (balans audit) ── */}
+      <TransactionsSection studentId={studentId} />
 
       {/* ── Fayllar va Faoliyat ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -994,8 +1745,6 @@ export default function StudentDetailPage() {
         <ActivitySection studentId={studentId} />
       </div>
 
-      {/* ── Tranzaksiya detail ── */}
-      <TransactionDetailSheet tx={selectedTx} onClose={() => setSelectedTx(null)} />
 
       {/* ── Status dialog ── */}
       {statusDialog && (
@@ -1005,25 +1754,33 @@ export default function StudentDetailPage() {
             <p className="text-sm text-gray-400 mb-4">{fullName}</p>
             <div className="space-y-2">
               {[
-                { value: "active",      label: "Aktiv",          dot: "bg-emerald-500" },
-                { value: "suspended",   label: "To'xtatilgan",   dot: "bg-red-500" },
-                { value: "archived",    label: "Arxivlangan",    dot: "bg-gray-400" },
-                { value: "graduated",   label: "Bitirgan",       dot: "bg-blue-500" },
-                { value: "transferred", label: "Ko'chirilgan",   dot: "bg-orange-500" },
+                { value: "active",      label: "Aktiv",             dot: "bg-emerald-500", icon: "✓", desc: "O'quvchi faol holda davom etadi",                         destructive: false },
+                { value: "suspended",   label: "To'xtatilgan",      dot: "bg-red-500",     icon: "⏸", desc: "O'quvchi vaqtincha to'xtatiladi",                          destructive: true  },
+                { value: "archived",    label: "Arxivlangan",       dot: "bg-gray-400",    icon: "📁", desc: "O'quvchi arxivga o'tkaziladi",                             destructive: true  },
+                { value: "graduated",   label: "Bitirgan",          dot: "bg-blue-500",    icon: "🎓", desc: "O'quvchi maktabni tamomlagan deb belgilanadi",             destructive: true  },
+                { value: "transferred", label: "Ko'chirilgan",      dot: "bg-orange-500",  icon: "➡", desc: "O'quvchi boshqa muassasaga o'tkazilgan",                   destructive: true  },
               ].map((opt) => (
                 <button
                   key={opt.value}
                   onClick={() => setPendingStatus(opt.value)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all text-left ${
+                  className={`w-full flex items-start gap-3 px-4 py-3 rounded-xl border transition-all text-left ${
                     pendingStatus === opt.value
                       ? "border-indigo-300 bg-indigo-50"
                       : "border-gray-100 hover:border-gray-200 hover:bg-gray-50"
                   }`}
                 >
-                  <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${opt.dot}`} />
-                  <span className="text-sm font-semibold text-gray-800">{opt.label}</span>
+                  <span className={`w-2.5 h-2.5 rounded-full shrink-0 mt-1.5 ${opt.dot}`} />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-semibold text-gray-800">{opt.label}</span>
+                    <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">{opt.desc}</p>
+                    {opt.destructive && pendingStatus === opt.value && (
+                      <p className="text-xs text-amber-600 mt-1 font-medium">
+                        ⚠ Diqqat: Bu amal o&apos;quvchining holati o&apos;zgaradi. Tasdiqlashdan oldin e&apos;tibor bering.
+                      </p>
+                    )}
+                  </div>
                   {pendingStatus === opt.value && (
-                    <span className="ml-auto text-indigo-600 text-xs font-bold">✓</span>
+                    <span className="ml-auto text-indigo-600 text-xs font-bold shrink-0">✓</span>
                   )}
                 </button>
               ))}
@@ -1041,11 +1798,25 @@ export default function StudentDetailPage() {
                 Bekor
               </button>
               <button
-                onClick={() => { if (pendingStatus) updateMutation.mutate({ status: pendingStatus } as Partial<CreateStudentRequest>); }}
+                onClick={() => {
+                  if (pendingStatus) {
+                    const cfg = STATUS_CONFIG[pendingStatus];
+                    updateMutation.mutate({ status: pendingStatus } as Partial<CreateStudentRequest>);
+                  }
+                }}
                 disabled={!pendingStatus || pendingStatus === student.status || updateMutation.isPending}
-                className="flex-1 py-2.5 rounded-xl bg-indigo-600 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                className={`flex-1 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 ${
+                  pendingStatus && STATUS_CONFIG[pendingStatus]
+                    ? STATUS_CONFIG[pendingStatus].btnColor
+                    : "bg-indigo-600 text-white hover:bg-indigo-700"
+                }`}
               >
-                {updateMutation.isPending ? "Saqlanmoqda..." : "Saqlash"}
+                {updateMutation.isPending
+                  ? "Saqlanmoqda..."
+                  : pendingStatus && STATUS_CONFIG[pendingStatus]
+                    ? STATUS_CONFIG[pendingStatus].actionLabel
+                    : "Saqlash"
+                }
               </button>
             </div>
           </div>
@@ -1118,66 +1889,132 @@ export default function StudentDetailPage() {
   );
 }
 
+// ── Inactive Subscriptions (collapsible) ─────────────────────────────────────
+
+function InactiveSubscriptions({
+  subs, bal, studentId, branchId,
+}: {
+  subs: any[];
+  bal: number;
+  studentId: string;
+  branchId?: string;
+}) {
+  const [expanded, setExpanded] = React.useState(false);
+
+  return (
+    <div className="rounded-xl border border-gray-100 overflow-hidden">
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="w-full flex items-center justify-between gap-2 px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+      >
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-gray-400 shrink-0" />
+          <span className="text-sm font-semibold text-gray-500">
+            Tugagan abonementlar ({subs.length} ta)
+          </span>
+        </div>
+        <ChevronRight className={cn("w-4 h-4 text-gray-400 transition-transform", expanded && "rotate-90")} />
+      </button>
+      {expanded && (
+        <div className="divide-y divide-gray-50">
+          {subs.map((sub: any) => (
+            <SubscriptionCard
+              key={sub.id}
+              sub={sub}
+              price={sub.subscription_plan_price ?? 0}
+              hasDebt={sub.total_debt > 0}
+              bal={bal}
+              studentId={studentId}
+              branchId={branchId}
+              isFirst={true}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Subscription Card ─────────────────────────────────────────────────────────
 
 function SubscriptionCard({
-  sub, price, hasDebt, bal, balanceId, branchId,
+  sub, price, hasDebt, bal, studentId, branchId, isFirst = true,
 }: {
   sub: any;
   price: number;
   hasDebt: boolean;
   bal: number;
-  balanceId?: string | null;
+  studentId: string;
   branchId?: string;
+  isFirst?: boolean;
 }) {
   const [showHistory, setShowHistory] = React.useState(false);
 
-  const { data: balTxHistory = [], isLoading: historyLoading } = useQuery({
-    queryKey: ["sub-billing-history", sub.id, balanceId],
+  // Fetch income transactions for this student that have period_month set
+  const { data: paymentHistory = [], isLoading: historyLoading } = useQuery({
+    queryKey: ["sub-tx-history", studentId],
     queryFn: async () => {
-      if (!balanceId) return [];
-      const txs = await financeApi.getStudentBalanceTransactions(balanceId, { branch_id: branchId });
-      return txs.filter((t: any) =>
-        t.subscription === sub.id &&
-        t.reason === "subscription_charge" &&
-        t.metadata && Object.keys(t.metadata).length > 0
-      );
+      const data = await financeApi.getTransactions({
+        student_profile: studentId,
+        page_size: 200,
+        ordering: "-transaction_date",
+      } as any);
+      const results: any[] = (data as any)?.results ?? [];
+      // Collect all paid period months from income/payment transactions
+      const entries: { period: string; amount: number; date: string; method: string }[] = [];
+      for (const tx of results) {
+        if (tx.transaction_type !== "income" && tx.transaction_type !== "payment") continue;
+        if (tx.status === "cancelled") continue;
+        const periods: string[] =
+          tx.period_months?.length > 0
+            ? tx.period_months
+            : tx.period_month
+            ? [tx.period_month]
+            : [];
+        for (const p of periods) {
+          entries.push({
+            period: p,
+            amount: tx.amount,
+            date: tx.transaction_date,
+            method: tx.payment_method,
+          });
+        }
+      }
+      // Sort descending by period
+      return entries.sort((a, b) => b.period.localeCompare(a.period));
     },
-    enabled: showHistory && !!balanceId,
+    enabled: showHistory && !!studentId,
   });
-
-  const UZ_MAP: Record<string, string> = {
-    "01":"Yanvar","02":"Fevral","03":"Mart","04":"Aprel","05":"May","06":"Iyun",
-    "07":"Iyul","08":"Avgust","09":"Sentabr","10":"Oktabr","11":"Noyabr","12":"Dekabr",
-  };
 
   return (
     <div
-      className={`rounded-xl border overflow-hidden ${
+      className={`border overflow-hidden ${isFirst ? "rounded-xl" : "rounded-b-xl border-t-0"} ${
         !sub.is_active ? "border-gray-200"
         : hasDebt ? "border-red-200"
         : "border-emerald-200"
       }`}
     >
-      {/* Sub header */}
-      <div className={`flex items-center justify-between gap-3 px-4 py-3 ${
-        !sub.is_active ? "bg-gray-50" : hasDebt ? "bg-red-50" : "bg-emerald-50"
-      }`}>
-        <div className="min-w-0">
-          <p className="text-sm font-bold text-gray-900 truncate">{sub.subscription_plan?.name}</p>
-          <p className="text-xs text-gray-500 mt-0.5">
-            {formatCurrency(price)} / {sub.subscription_plan?.period_display ?? "oy"}
-          </p>
-        </div>
-        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border shrink-0 ${
-          sub.is_active
-            ? "bg-white text-emerald-700 border-emerald-200"
-            : "bg-white text-gray-500 border-gray-200"
+      {/* Sub header — only shown when standalone (isFirst=true) */}
+      {isFirst && (
+        <div className={`flex items-center justify-between gap-3 px-4 py-3 ${
+          !sub.is_active ? "bg-gray-50" : hasDebt ? "bg-red-50" : "bg-emerald-50"
         }`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${sub.is_active ? "bg-emerald-500" : "bg-gray-400"}`} />
-          {sub.is_active ? "Aktiv" : "Tugagan"}
-        </span>
-      </div>
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-gray-900 truncate">{sub.subscription_plan_name}</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {formatCurrency(price)} / {sub.period_display ?? "oy"}
+            </p>
+          </div>
+          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border shrink-0 ${
+            sub.is_active
+              ? "bg-white text-emerald-700 border-emerald-200"
+              : "bg-white text-gray-500 border-gray-200"
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${sub.is_active ? "bg-emerald-500" : "bg-gray-400"}`} />
+            {sub.is_active ? "Aktiv" : "Tugagan"}
+          </span>
+        </div>
+      )}
 
       {/* Info rows */}
       <div className="px-4 divide-y divide-gray-50">
@@ -1331,30 +2168,28 @@ function SubscriptionCard({
                 <div className="space-y-1.5">
                   {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-8 rounded-lg" />)}
                 </div>
-              ) : balTxHistory.length === 0 ? (
+              ) : paymentHistory.length === 0 ? (
                 <p className="text-xs text-gray-400 py-2 text-center">To&apos;lov tarixi yo&apos;q</p>
               ) : (
                 <div className="space-y-1.5 mt-1">
-                  {balTxHistory.map((tx: any) => {
-                    const meta = tx.metadata || {};
-                    const mn = String(meta.month ?? "").padStart(2, "0");
-                    const monthName = meta.year && meta.month
-                      ? `${UZ_MAP[mn] ?? mn} ${meta.year}`
-                      : tx.occurred_at ? `${new Date(tx.occurred_at).toLocaleDateString("uz")}` : "—";
+                  {paymentHistory.map((item, idx) => {
+                    const method = METHOD_BADGE[item.method as string];
                     return (
-                      <div key={tx.id} className="flex items-center justify-between px-3 py-2 bg-emerald-50 rounded-lg border border-emerald-100">
+                      <div key={`${item.period}-${idx}`} className="flex items-center justify-between px-3 py-2 bg-emerald-50 rounded-lg border border-emerald-100">
                         <div className="flex items-center gap-2">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                          <span className="text-[11px] font-semibold text-emerald-700">{monthName}</span>
+                          <div>
+                            <span className="text-[11px] font-semibold text-emerald-700">{fmtPeriod(item.period)}</span>
+                            {method && (
+                              <span className={cn("ml-1.5 text-[10px] font-medium border px-1 py-0.5 rounded-full", method.cls)}>
+                                {method.label}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <span className="text-[11px] font-bold text-emerald-700 tabular-nums">
-                            {formatCurrency(meta.base ?? tx.amount)}
-                          </span>
-                          {meta.discount > 0 && (
-                            <span className="text-[10px] text-orange-600 ml-1">(-{formatCurrency(meta.discount)})</span>
-                          )}
-                        </div>
+                        <span className="text-[11px] font-bold text-emerald-700 tabular-nums">
+                          {formatCurrency(item.amount)}
+                        </span>
                       </div>
                     );
                   })}

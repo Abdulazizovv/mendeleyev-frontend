@@ -457,6 +457,18 @@ export interface StudentSubscription {
   next_payment_date: string;
   total_debt: number;
   last_payment_date: string | null;
+  last_payment_info?: {
+    amount: number;
+    period_month: string | null;
+    date: string;
+    by: string | null;
+  } | null;
+  unpaid_months?: {
+    month: string;
+    owed: number;
+    paid: number;
+    is_partial: boolean;
+  }[];
   notes?: string;
   created_at: string;
   updated_at: string;
@@ -468,7 +480,7 @@ export interface CreateStudentSubscriptionRequest {
   branch: string;
   start_date: string;
   end_date?: string | null;
-  next_payment_date: string;
+  next_payment_date?: string;
   notes?: string;
 }
 

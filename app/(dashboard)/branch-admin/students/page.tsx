@@ -58,6 +58,7 @@ import {
   Clock,
   FileText,
   Edit,
+  Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -661,6 +662,7 @@ export default function StudentsManagement() {
                           {getSortIcon("balance")}
                         </button>
                       </TableHead>
+                      <TableHead className="text-right w-28">Amallar</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -728,6 +730,28 @@ export default function StudentsManagement() {
                             ) : (
                               <span className="text-gray-400 text-sm">—</span>
                             )}
+                          </TableCell>
+                          <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-gray-500 hover:text-blue-600 hover:bg-blue-50"
+                                onClick={() => router.push(`/branch-admin/students/${student.id}`)}
+                                title="Ko'rish"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50"
+                                onClick={() => router.push(`/branch-admin/students/${student.id}/edit`)}
+                                title="Tahrirlash"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
