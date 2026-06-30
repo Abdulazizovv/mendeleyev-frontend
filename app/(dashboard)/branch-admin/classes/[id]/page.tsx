@@ -332,17 +332,17 @@ export default function ClassDetailPage() {
 													<div className="space-y-2">
 														<Label className="text-sm">Maosh turi</Label>
 														<Select
-															value={subjectForm.teacher_salary_type ?? ""}
+															value={subjectForm.teacher_salary_type || "none"}
 															onValueChange={(v) => setSubjectForm((s) => ({
 																...s,
-																teacher_salary_type: v === "" ? undefined : v as 'percentage' | 'per_lesson',
+																teacher_salary_type: v === "none" ? undefined : v as 'percentage' | 'per_lesson',
 															}))}
 														>
 															<SelectTrigger>
 																<SelectValue placeholder="Tanlang" />
 															</SelectTrigger>
 															<SelectContent>
-																<SelectItem value="">Belgilanmagan</SelectItem>
+																<SelectItem value="none">Belgilanmagan</SelectItem>
 																<SelectItem value="percentage">Foizga (%)</SelectItem>
 																<SelectItem value="per_lesson">Dars uchun (so'm)</SelectItem>
 															</SelectContent>

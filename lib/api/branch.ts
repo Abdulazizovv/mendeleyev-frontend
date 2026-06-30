@@ -221,6 +221,7 @@ export const branchApi = {
       salary_type?: string;
       user_id?: string;
       is_active?: boolean;
+      "teachable_subjects__id"?: string;
       balance?: number;
       balance__lt?: number;
       balance__lte?: number;

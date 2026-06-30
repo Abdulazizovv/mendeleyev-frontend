@@ -50,12 +50,6 @@ export default function ClassDetailPage() {
 		enabled: !!branchId,
 	});
 
-	const { data: teachersData } = useQuery({
-		queryKey: ["teachers", branchId],
-		queryFn: () => branchApi.getMemberships(branchId!, { role: "teacher", is_active: true, page_size: 100 }),
-		enabled: !!branchId,
-	});
-	const teachers = teachersData?.results || [];
 
 	const { data: classSubjects = [], isLoading: csLoading } = useQuery<ClassSubject[]>({
 		queryKey: ["classSubjects", classId],
@@ -187,6 +181,19 @@ export default function ClassDetailPage() {
 		queryFn: () => schoolApi.getSubjectLevels(branchId!, subjectForm.subject!),
 		enabled: !!branchId && !!subjectForm.subject,
 	});
+
+	// Load teachers filtered by selected subject
+	const { data: teachersData } = useQuery({
+		queryKey: ["teachers", branchId, subjectForm.subject],
+		queryFn: () => branchApi.getMemberships(branchId!, {
+			role: "teacher",
+			is_active: true,
+			page_size: 100,
+			...(subjectForm.subject ? { "teachable_subjects__id": subjectForm.subject } : {}),
+		}),
+		enabled: !!branchId && !!subjectForm.subject,
+	});
+	const teachers = teachersData?.results || [];
 
 	// Auto-select level when levels load
 	React.useEffect(() => {
@@ -681,7 +688,7 @@ export default function ClassDetailPage() {
 												<Label>Fan <span className="text-red-500">*</span></Label>
 												<Select
 													value={subjectForm.subject}
-													onValueChange={(v) => setSubjectForm((s) => ({ ...s, subject: v, subject_level: undefined }))}
+													onValueChange={(v) => setSubjectForm((s) => ({ ...s, subject: v, subject_level: undefined, teacher: undefined }))}
 												>
 													<SelectTrigger>
 														<SelectValue placeholder="Fanni tanlang" />
@@ -760,17 +767,17 @@ export default function ClassDetailPage() {
 													<div className="space-y-2">
 														<Label>Maosh turi</Label>
 														<Select
-															value={subjectForm.teacher_salary_type ?? ""}
+															value={subjectForm.teacher_salary_type || "none"}
 															onValueChange={(v) => setSubjectForm((s) => ({
 																...s,
-																teacher_salary_type: v === "" ? undefined : v as 'percentage' | 'per_lesson',
+																teacher_salary_type: v === "none" ? undefined : v as 'percentage' | 'per_lesson',
 															}))}
 														>
 															<SelectTrigger>
 																<SelectValue placeholder="Tanlang" />
 															</SelectTrigger>
 															<SelectContent>
-																<SelectItem value="">Belgilanmagan</SelectItem>
+																<SelectItem value="none">Belgilanmagan</SelectItem>
 																<SelectItem value="percentage">Foizga (%)</SelectItem>
 																<SelectItem value="per_lesson">Dars uchun (so'm)</SelectItem>
 															</SelectContent>

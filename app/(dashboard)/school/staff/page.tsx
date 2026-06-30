@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { useDebounce } from "@/lib/hooks/useDebounce";
 import { staffApi } from "@/lib/api";
+import { schoolApi } from "@/lib/api/school";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   StaffMember,
@@ -26,6 +27,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -264,11 +266,18 @@ export default function StaffPage() {
     salary_type: "monthly",
     monthly_salary: 0,
   });
+  const [selectedSubjectIds, setSelectedSubjectIds] = React.useState<string[]>([]);
 
   // ── Queries ────────────────────────────────────────────────────────────────
   const { data: rolesData = [] } = useQuery({
     queryKey: ["roles", branchId],
     queryFn: () => staffApi.getRoles(branchId),
+    enabled: !!branchId,
+  });
+
+  const { data: subjectsData = [] } = useQuery({
+    queryKey: ["subjects", branchId],
+    queryFn: () => schoolApi.getSubjects(branchId),
     enabled: !!branchId,
   });
 
@@ -333,6 +342,7 @@ export default function StaffPage() {
       monthly_salary: 0,
       phone_number: "+998",
     });
+    setSelectedSubjectIds([]);
     setEditSheet({ open: true, mode: "create" });
   };
 
@@ -349,6 +359,7 @@ export default function StaffPage() {
       salary_percentage: m.salary_percentage ?? 0,
       title: m.title ?? "",
     });
+    setSelectedSubjectIds(m.teachable_subject_ids ?? []);
     setEditSheet({ open: true, mode: "edit", data: m });
   };
 
@@ -387,6 +398,7 @@ export default function StaffPage() {
         passport_number: form.passport_number,
         address: form.address,
         emergency_contact: form.emergency_contact,
+        subject_ids: form.role === "teacher" ? selectedSubjectIds : undefined,
       });
     } else if (editSheet.data) {
       updateMutation.mutate({
@@ -407,6 +419,7 @@ export default function StaffPage() {
           passport_number: form.passport_number,
           address: form.address,
           emergency_contact: form.emergency_contact,
+          subject_ids: form.role === "teacher" ? selectedSubjectIds : undefined,
         },
       });
     }
@@ -1018,6 +1031,38 @@ export default function StaffPage() {
                     )}
                   </div>
                 </section>
+
+                {/* Subjects — only for teachers */}
+                {form.role === "teacher" && subjectsData.length > 0 && (
+                  <section className="space-y-3">
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                      O&apos;tiladigan fanlar
+                    </p>
+                    <div className="space-y-1.5 max-h-40 overflow-y-auto border rounded-md p-2">
+                      {subjectsData.map((subj) => (
+                        <label
+                          key={subj.id}
+                          className="flex items-center gap-2 cursor-pointer py-0.5"
+                        >
+                          <Checkbox
+                            checked={selectedSubjectIds.includes(subj.id)}
+                            onCheckedChange={(checked) => {
+                              setSelectedSubjectIds((prev) =>
+                                checked
+                                  ? [...prev, subj.id]
+                                  : prev.filter((id) => id !== subj.id)
+                              );
+                            }}
+                          />
+                          <span className="text-sm">{subj.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-400">
+                      Tanlangan fanlar sinfga fan biriktirishda o&apos;qituvchi sifatida ko&apos;rsatiladi
+                    </p>
+                  </section>
+                )}
 
                 {/* Personal */}
                 <section className="space-y-3">

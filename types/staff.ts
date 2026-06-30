@@ -68,6 +68,7 @@ export interface StaffMember {
   salary_type?: string; // "monthly", "hourly", "per_lesson", "percentage"
   salary_percentage?: number; // 0-100
   is_active: boolean; // termination_date is null
+  teachable_subject_ids?: string[]; // UUIDs of subjects this teacher teaches
 }
 
 /**
@@ -191,26 +192,29 @@ export interface CreateStaffRequest {
   last_name: string; // REQUIRED
   email?: string;
   password?: string; // Optional, auto-generated if omitted
-  
+
   // Membership fields
   branch_id: string; // UUID - REQUIRED
   role: string; // BranchRole - REQUIRED (teacher, branch_admin, other, etc.)
   role_ref_id?: string; // UUID - REQUIRED if role="other"
   title?: string;
-  
+
   // Salary fields
   monthly_salary?: number; // Default: 0
   salary_type?: string; // Default: "monthly"
   salary_percentage?: number; // 0-100, used when salary_type="percentage"
   hire_date?: string; // ISO date
   employment_type?: EmploymentType; // Default: "full_time"
-  
+
   // Personal info
   passport_serial?: string;
   passport_number?: string;
   address?: string;
   emergency_contact?: string;
   notes?: Record<string, any>; // JSON object
+
+  // Subjects (only for teachers)
+  subject_ids?: string[]; // UUIDs of subjects this teacher teaches
 }
 
 /**
@@ -245,6 +249,9 @@ export interface UpdateStaffRequest {
 
   // Termination
   termination_date?: string | null;
+
+  // Subjects (only for teachers)
+  subject_ids?: string[]; // UUIDs of subjects this teacher teaches
 }
 
 /**
